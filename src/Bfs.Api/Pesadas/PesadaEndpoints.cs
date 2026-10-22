@@ -60,6 +60,7 @@ public record EntradaRequest(
     string? Tipo,
     int? PesoEntrada,
     int TaraPallets,
-    Guid? ClienteId = null);
+    Guid? ClienteId = null,
+    Guid? BalanzaId = null);
 
-public record SalidaRequest(int? PesoSalida, int? TaraPallets);
+public record SalidaRequest(int? PesoSalida, int? TaraPallets, Guid? BalanzaId = null);

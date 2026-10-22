@@ -35,8 +35,12 @@ const state = {
   config: {},
   branding: {},
   campos: DEFAULT_FIELDS,
-  scale: { kilogramos: 0, puerto: "SIM", estado: "simulada" },
-  scaleMeta: { status: "", lastError: "", puertos: [] },
+  scale: { kilogramos: 0, puerto: "", estado: "sin balanza", estable: false, nombre: "" },
+  balanzas: [],
+  balanzaSel: localStorage.getItem("bfs_balanza") || "",
+  cfgBalanzas: [],
+  modelos: [],
+  balEdit: null,
   selectedPesadaId: null,
   licencia: null,
   rolesAsignables: [],
@@ -146,10 +150,32 @@ function bfsLogo(extraClass = "brand-logo") {
   return `<img class="${extraClass}" src="/images/bfs_logo.png" alt="BFS Balanzas Full Service" />`;
 }
 
+function balanzaActual() {
+  return state.balanzas.find(b => b.balanzaId === state.balanzaSel) || state.balanzas[0] || state.scale;
+}
+
+function elegirBalanza(id) {
+  state.balanzaSel = id;
+  try { localStorage.setItem("bfs_balanza", id); } catch {}
+  pintarPeso();
+}
+
+function pintarPeso() {
+  const p = balanzaActual();
+  state.scale = p;
+  const led = document.getElementById("pesoLed");
+  if (led) led.innerHTML = `${p.kilogramos} <small>${esc(p.nombre || p.puerto)} · ${esc(p.estado)}${p.estable ? " · estable" : ""}</small>`;
+  const st = document.getElementById("scalePill");
+  if (st) st.innerHTML = pillForScale(p.estado) + (p.estable ? ` <span class="pill pill-ok">Estable</span>` : "");
+  const kg = document.getElementById("scaleKg");
+  if (kg) kg.textContent = p.kilogramos + " kg";
+}
+
 function pillForScale(estado) {
   if (estado === "abierta") return `<span class="pill pill-ok">Serie abierta</span>`;
   if (estado === "simulada") return `<span class="pill pill-info">Simulada</span>`;
   if (estado === "error") return `<span class="pill pill-err">Error</span>`;
+  if (estado === "sin señal") return `<span class="pill pill-err">Sin señal</span>`;
   return `<span class="pill pill-warn">${esc(estado || "sin señal")}</span>`;
 }
 
@@ -256,14 +282,8 @@ async function boot() {
 async function pollPeso() {
   if (!state.token) return;
   try {
-    const p = await api("/api/scale/peso");
-    state.scale = p;
-    const led = document.getElementById("pesoLed");
-    if (led) led.innerHTML = `${p.kilogramos} <small>${esc(p.puerto)} · ${esc(p.estado)}</small>`;
-    const st = document.getElementById("scalePill");
-    if (st) st.innerHTML = pillForScale(p.estado);
-    const kg = document.getElementById("scaleKg");
-    if (kg) kg.textContent = p.kilogramos + " kg";
+    state.balanzas = await api("/api/balanzas/lecturas");
+    pintarPeso();
   } catch {}
   setTimeout(pollPeso, 500);
 }
@@ -321,7 +341,10 @@ async function renderPesaje() {
         <div class="status-box"><span>Empresa en curso</span>
           <select id="empresa">${empresas}</select>
         </div>
-        <div class="status-box"><span>Peso vivo</span><strong id="scaleKg">${state.scale.kilogramos} kg</strong></div>
+        ${state.balanzas.length > 1 ? `<div class="status-box"><span>Balanza</span>
+          <select id="balanza" onchange="elegirBalanza(this.value)">${state.balanzas.map(b =>
+            `<option value="${b.balanzaId}" ${b.balanzaId === balanzaActual().balanzaId ? "selected" : ""}>${esc(b.nombre)}</option>`).join("")}</select>
+        </div>` : `<div class="status-box"><span>Peso vivo</span><strong id="scaleKg">${state.scale.kilogramos} kg</strong></div>`}
       </div>
     </div>
     <div class="card">
@@ -378,6 +401,7 @@ function collectPesaje() {
   if (missing.length) throw new Error("Completá: " + missing.map(f => f.label).join(", "));
   return {
     empresaId: val("empresa"),
+    balanzaId: balanzaActual().balanzaId || null,
     tipo: visible("tipo") ? val("tipo") : undefined,
     patenteChasis: val("patenteChasis"),
     patenteAcoplado: val("patenteAcoplado") || null,
@@ -415,7 +439,7 @@ async function guardarSalida() {
   try {
     const pesada = await api(`/api/pesadas/${state.selectedPesadaId}/salida`, {
       method: "POST",
-      body: JSON.stringify({ taraPallets: visible("taraPallets") ? num("taraPallets") : null })
+      body: JSON.stringify({ taraPallets: visible("taraPallets") ? num("taraPallets") : null, balanzaId: balanzaActual().balanzaId || null })
     });
     state.selectedPesadaId = null;
     toast(`Ticket ${pesada.ticketNumero} cerrado · neto ${pesada.neto} kg`);
@@ -779,10 +803,9 @@ async function renderConfig() {
     document.getElementById("main").innerHTML = `<div class="card">Solo BFS puede cambiar esta configuración.</div>`;
     return;
   }
-  state.scaleMeta = await api("/api/scale/estado");
   const tabs = [
     ["general", "General"],
-    ["balanza", "Balanza"],
+    ["balanza", "Balanzas"],
     ["campos", "Campos"],
     ["ticket", "Ticket y logo"],
     ["api", "API"],
@@ -841,55 +864,151 @@ function renderConfigGeneral() {
     </div>`;
 }
 
-function renderConfigBalanza() {
-  const c = state.config;
-  const ports = state.scaleMeta.puertos || [];
-  const portOpts = [`<option value="">Elegir puerto</option>`]
-    .concat(ports.map(p => `<option value="${esc(p)}" ${c.scale_port === p ? "selected" : ""}>${esc(p)}</option>`))
-    .join("");
+const PARAMS_BALANZA = ["baudios", "dataBits", "paridad", "stopBits", "protocolo", "extraccion"];
+
+async function renderConfigBalanza() {
+  const [lista, modelos, puertos] = await Promise.all([
+    api("/api/balanzas"),
+    api("/api/balanzas/modelos"),
+    api("/api/balanzas/puertos")
+  ]);
+  state.cfgBalanzas = lista;
+  state.modelos = modelos;
+  const editando = lista.find(x => x.balanza.id === state.balEdit)?.balanza;
+  const b = editando || { nombre: "", modo: "serial", puerto: "", modelo: "", baudios: 9600, dataBits: 8, paridad: "None", stopBits: 1, protocolo: "STX", extraccion: "", orden: lista.length + 1, activa: true };
+  const opt = (values, sel) => values.map(v => `<option value="${esc(v)}" ${String(v) === String(sel) ? "selected" : ""}>${esc(v)}</option>`).join("");
+  const puertosOpts = [...new Set([...(puertos || []), b.puerto].filter(Boolean))];
+
   document.getElementById("configBody").innerHTML = `
     <div class="card">
+      <h3 style="margin-top:0">Balanzas del nodo</h3>
+      <table>
+        <tr><th>Nombre</th><th>Modo</th><th>Puerto</th><th>Modelo</th><th>Estado</th><th>Peso</th><th></th></tr>
+        ${lista.length ? lista.map(({ balanza: x, lectura: l }) => `<tr class="${x.id === state.balEdit ? "selected" : ""}">
+          <td>${esc(x.nombre)}${x.activa ? "" : " (inactiva)"}</td>
+          <td>${x.modo === "sim" ? "Simulada" : "Serie"}</td>
+          <td>${esc(x.puerto || "-")}</td>
+          <td>${esc(x.modelo || "-")}</td>
+          <td>${l ? pillForScale(l.estado) + (l.error ? `<br><small>${esc(l.error)}</small>` : "") : "-"}</td>
+          <td>${l ? `${l.kilogramos} kg ${l.estable ? "· estable" : ""}` : "-"}</td>
+          <td><div class="btn-row" style="margin:0">
+            <button class="btn" onclick="editarBalanza('${x.id}')">Editar</button>
+            <button class="btn" onclick="verTramas('${x.id}')">Tramas</button>
+            <button class="btn-danger" onclick="borrarBalanza('${x.id}')">Borrar</button>
+          </div></td>
+        </tr>`).join("") : `<tr><td colspan="7">No hay balanzas.</td></tr>`}
+      </table>
+      <div class="btn-row"><button class="btn" onclick="reconectarBalanzas()">Reconectar todas</button></div>
+      <pre id="tramas" style="white-space:pre-wrap;margin:0"></pre>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">${editando ? "Editar balanza" : "Nueva balanza"}</h3>
       <div class="grid2">
-        <div class="status-box"><span>Estado actual</span><strong>${esc(state.scaleMeta.status || state.scale.estado)}</strong></div>
-        <div class="status-box"><span>Último error</span><strong>${esc(state.scaleMeta.lastError || "ninguno")}</strong></div>
-      </div>
-      <div class="grid2" style="margin-top:14px">
-        <div><label>Modo</label>
-          <select id="s_mode">
-            <option value="sim" ${c.scale_mode !== "serial" ? "selected" : ""}>Simulada</option>
-            <option value="serial" ${c.scale_mode === "serial" ? "selected" : ""}>Puerto serie</option>
-          </select>
-        </div>
-        <div><label>Puerto COM</label><select id="s_port">${portOpts}</select></div>
-        <div><label>Baudios</label><input id="s_baud" value="${esc(c.scale_baud || "9600")}" /></div>
-        <div><label>Data bits</label>
-          <select id="s_bits">
-            ${[7,8].map(n => `<option ${String(c.scale_databits || "8") === String(n) ? "selected" : ""}>${n}</option>`).join("")}
-          </select>
-        </div>
-        <div><label>Stop bits</label>
-          <select id="s_stop">
-            ${[1,2].map(n => `<option ${String(c.scale_stopbits || "1") === String(n) ? "selected" : ""}>${n}</option>`).join("")}
-          </select>
-        </div>
-        <div><label>Paridad</label>
-          <select id="s_par">
-            ${["None","Even","Odd"].map(n => `<option ${ (c.scale_parity || "None") === n ? "selected" : ""}>${n}</option>`).join("")}
-          </select>
-        </div>
-        <div><label>Protocolo</label>
-          <select id="s_proto">
-            <option value="Line" ${c.scale_protocol !== "STX" ? "selected" : ""}>Línea (CR/LF)</option>
-            <option value="STX" ${c.scale_protocol === "STX" ? "selected" : ""}>STX / ETX</option>
-          </select>
-        </div>
-        <div><label>Extracción (inicio:fin, opcional)</label><input id="s_extract" value="${esc(c.scale_extract || "")}" placeholder="ej. 4:10" /></div>
+        <div><label>Nombre</label><input id="b_nombre" value="${esc(b.nombre)}" /></div>
+        <div><label>Modo</label><select id="b_modo">
+          <option value="serial" ${b.modo === "serial" ? "selected" : ""}>Puerto serie</option>
+          <option value="sim" ${b.modo === "sim" ? "selected" : ""}>Simulada</option>
+        </select></div>
+        <div><label>Puerto COM</label><input id="b_puerto" list="dl_puertos" value="${esc(b.puerto)}" placeholder="${puertos.length ? "" : "No se detectaron puertos"}" />
+          <datalist id="dl_puertos">${puertosOpts.map(p => `<option value="${esc(p)}"></option>`).join("")}</datalist></div>
+        <div><label>Modelo (completa los parámetros)</label><select id="b_modelo" onchange="aplicarModelo(this.value)">
+          <option value="">— personalizado —</option>${opt(modelos.map(m => m.nombre), b.modelo)}
+        </select></div>
+        <div><label>Baudios</label><select id="b_baudios">${opt([1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200], b.baudios)}</select></div>
+        <div><label>Data bits</label><select id="b_dataBits">${opt([7, 8], b.dataBits)}</select></div>
+        <div><label>Paridad</label><select id="b_paridad">${opt(["None", "Even", "Odd", "Mark", "Space"], b.paridad)}</select></div>
+        <div><label>Stop bits</label><select id="b_stopBits">${opt([1, 2], b.stopBits)}</select></div>
+        <div><label>Protocolo</label><select id="b_protocolo">
+          <option value="STX" ${b.protocolo === "STX" ? "selected" : ""}>STX / ETX</option>
+          <option value="Line" ${b.protocolo === "Line" ? "selected" : ""}>Línea (CR/LF)</option>
+        </select></div>
+        <div><label>Extracción (inicio:fin, vacío = todos los dígitos)</label><input id="b_extraccion" value="${esc(b.extraccion || "")}" placeholder="ej. 5:10" /></div>
+        <div><label>Orden</label><input id="b_orden" type="number" value="${b.orden}" /></div>
+        <div><label class="check"><input type="checkbox" id="b_activa" ${b.activa ? "checked" : ""} /> Activa</label></div>
       </div>
       <div class="btn-row">
-        <button class="btn-primary" onclick="saveBalanza()">Guardar y abrir puerto</button>
-        <button class="btn" onclick="probarBalanza()">Probar de nuevo</button>
+        <button class="btn-primary" onclick="guardarBalanza()">${editando ? "Guardar y reconectar" : "Agregar balanza"}</button>
+        ${editando ? `<button class="btn" onclick="editarBalanza(null)">Cancelar</button>` : ""}
       </div>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Probar extracción</h3>
+      <p>Pegá una trama (de "Tramas" o del manual del indicador; se aceptan <code>\\x02</code>, <code>\\r</code>) y la extracción.</p>
+      <div class="grid2">
+        <div><label>Trama</label><input id="p_trama" placeholder="\\x02 +012480kg\\x03" /></div>
+        <div><label>Extracción</label><input id="p_extraccion" placeholder="5:10" /></div>
+      </div>
+      <div class="btn-row"><button class="btn" onclick="probarExtraccion()">Probar</button> <strong id="p_resultado"></strong></div>
     </div>`;
+}
+
+function aplicarModelo(nombre) {
+  const m = state.modelos.find(x => x.nombre === nombre);
+  if (!m) return;
+  for (const key of PARAMS_BALANZA) {
+    const el = document.getElementById("b_" + key);
+    if (el) el.value = m[key] ?? "";
+  }
+}
+
+function editarBalanza(id) {
+  state.balEdit = id;
+  renderConfigBalanza();
+}
+
+async function guardarBalanza() {
+  const body = {
+    nombre: val("b_nombre"),
+    modo: val("b_modo"),
+    puerto: val("b_puerto"),
+    modelo: val("b_modelo") || null,
+    baudios: num("b_baudios"),
+    dataBits: num("b_dataBits"),
+    paridad: val("b_paridad"),
+    stopBits: num("b_stopBits"),
+    protocolo: val("b_protocolo"),
+    extraccion: val("b_extraccion") || null,
+    orden: num("b_orden"),
+    activa: document.getElementById("b_activa").checked
+  };
+  try {
+    await api("/api/balanzas" + (state.balEdit ? `/${state.balEdit}` : ""), { method: state.balEdit ? "PUT" : "POST", body: JSON.stringify(body) });
+    toast("Balanza guardada");
+    state.balEdit = null;
+    setTimeout(renderConfigBalanza, 800);
+  } catch (e) {
+    toast(limpiarError(e), "err");
+  }
+}
+
+async function borrarBalanza(id) {
+  if (!confirm("¿Borrar esta balanza?")) return;
+  await api(`/api/balanzas/${id}`, { method: "DELETE" });
+  toast("Balanza borrada");
+  state.balEdit = null;
+  renderConfigBalanza();
+}
+
+async function reconectarBalanzas() {
+  await api("/api/balanzas/reconectar", { method: "POST" });
+  toast("Reconectando...");
+  setTimeout(renderConfigBalanza, 1500);
+}
+
+async function verTramas(id) {
+  const tramas = await api(`/api/balanzas/${id}/tramas`);
+  document.getElementById("tramas").textContent = tramas.length
+    ? "Últimas tramas recibidas:\n" + tramas.join("\n")
+    : "Todavía no llegó ninguna trama. Revisá puerto, baudios y cable.";
+}
+
+async function probarExtraccion() {
+  try {
+    const r = await api("/api/balanzas/probar", { method: "POST", body: JSON.stringify({ trama: val("p_trama"), extraccion: val("p_extraccion") || null }) });
+    document.getElementById("p_resultado").textContent = r.kilogramos == null ? "No se encontró un número" : `${r.kilogramos} kg`;
+  } catch (e) {
+    document.getElementById("p_resultado").textContent = limpiarError(e);
+  }
 }
 
 function renderConfigCampos() {
@@ -1001,26 +1120,6 @@ async function saveGeneral() {
     ingreso_manual: val("c_manual")
   });
   state.funciones = await api("/api/funciones");
-  renderConfig();
-}
-
-async function saveBalanza() {
-  await saveConfig({
-    scale_mode: val("s_mode"),
-    scale_port: val("s_port"),
-    scale_baud: val("s_baud"),
-    scale_databits: val("s_bits"),
-    scale_stopbits: val("s_stop"),
-    scale_parity: val("s_par"),
-    scale_protocol: val("s_proto"),
-    scale_extract: val("s_extract")
-  });
-  renderConfig();
-}
-
-async function probarBalanza() {
-  state.scaleMeta = await api("/api/scale/aplicar", { method: "POST" });
-  toast(state.scaleMeta.lastError ? "No se pudo abrir el puerto" : "Puerto reaplicado", state.scaleMeta.lastError ? "err" : "ok");
   renderConfig();
 }
 

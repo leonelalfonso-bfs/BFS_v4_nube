@@ -76,6 +76,66 @@ public static class DbInitializer
         await EnsureConfig(db, ConfigKeys.LogoFile, "");
 
         await db.SaveChangesAsync();
+
+        await SembrarModelos(db);
+        await PasarBalanzaDelSpike(db);
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>Los modelos de <c>default_models.sql</c> de la 3.x.</summary>
+    public static IReadOnlyList<ModeloBalanza> ModelosDe3x { get; } =
+    [
+        Modelo("Moretti W-180", 9600, "5:10", 7, "Even", ProtocolosBalanza.Stx),
+        Modelo("Sipel Aries", 9600, "14:25", 8, "None", ProtocolosBalanza.Stx),
+        Modelo("Gama A12", 9600, "1:7", 8, "None", ProtocolosBalanza.Line),
+        Modelo("IND-100", 9600, "1:6", 8, "None", ProtocolosBalanza.Stx),
+        Modelo("CONDEC", 9600, "1:9", 8, "None", ProtocolosBalanza.Stx),
+        Modelo("EL05", 9600, "2:7", 8, "None", ProtocolosBalanza.Line),
+        Modelo("GaMa 2002e", 9600, "8:14", 8, "None", ProtocolosBalanza.Line),
+        Modelo("INGAPSA 768", 1200, "2:7", 8, "None", ProtocolosBalanza.Line)
+    ];
+
+    private static ModeloBalanza Modelo(string nombre, int baudios, string extraccion, int dataBits, string paridad, string protocolo) =>
+        new() { Nombre = nombre, Baudios = baudios, Extraccion = extraccion, DataBits = dataBits, Paridad = paridad, StopBits = 1, Protocolo = protocolo };
+
+    private static async Task SembrarModelos(BfsDbContext db)
+    {
+        if (await db.ModelosBalanza.IgnoreQueryFilters().AnyAsync()) return;
+        foreach (var m in ModelosDe3x)
+        {
+            db.ModelosBalanza.Add(new ModeloBalanza
+            {
+                Id = Guid.NewGuid(), Nombre = m.Nombre, Baudios = m.Baudios, DataBits = m.DataBits, Paridad = m.Paridad,
+                StopBits = m.StopBits, Protocolo = m.Protocolo, Extraccion = m.Extraccion
+            });
+        }
+    }
+
+    /// <summary>
+    /// El spike guardaba una sola balanza en claves sueltas (scale_*). La primera vez se pasa a la tabla de balanzas;
+    /// en una base nueva queda una balanza simulada para poder probar.
+    /// </summary>
+    private static async Task PasarBalanzaDelSpike(BfsDbContext db)
+    {
+        if (await db.Balanzas.IgnoreQueryFilters().AnyAsync()) return;
+        var c = await db.Configuraciones.Where(x => x.EmpresaId == null).ToDictionaryAsync(x => x.Clave, x => x.Valor);
+        int Num(string k, int def) => int.TryParse(c.GetValueOrDefault(k), out var v) ? v : def;
+        var serie = c.GetValueOrDefault(ConfigKeys.ScaleMode) == ModosBalanza.Serie && !string.IsNullOrWhiteSpace(c.GetValueOrDefault(ConfigKeys.ScalePort));
+
+        db.Balanzas.Add(new Balanza
+        {
+            Id = Guid.NewGuid(),
+            Nombre = "Balanza 1",
+            Modo = serie ? ModosBalanza.Serie : ModosBalanza.Simulada,
+            Puerto = c.GetValueOrDefault(ConfigKeys.ScalePort, ""),
+            Baudios = Num(ConfigKeys.ScaleBaud, 9600),
+            DataBits = Num(ConfigKeys.ScaleDataBits, 8),
+            StopBits = Num(ConfigKeys.ScaleStopBits, 1),
+            Paridad = c.GetValueOrDefault(ConfigKeys.ScaleParity, "None"),
+            Protocolo = c.GetValueOrDefault(ConfigKeys.ScaleProtocol, ProtocolosBalanza.Line),
+            Extraccion = c.GetValueOrDefault(ConfigKeys.ScaleExtract),
+            Orden = 1
+        });
     }
 
     private static async Task EnsureConfig(BfsDbContext db, string clave, string valor)

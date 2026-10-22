@@ -17,11 +17,10 @@ public static class ConfigEndpoints
                 c => c.Key is ConfigKeys.WormsApiKey or ConfigKeys.ClaveManualHash && c.Value.Length > 0 ? "********" : c.Value));
         }).RequireAuthorization(Permisos.ConfigBfs);
 
-        api.MapPut("/config", async (Dictionary<string, string> body, ConfigService config, IScaleController scale) =>
+        api.MapPut("/config", async (Dictionary<string, string> body, ConfigService config) =>
         {
             await config.GuardarAsync(body);
-            scale.Apply(config.ScaleSettings());
-            return Results.Ok(new { status = scale.Status, lastError = scale.LastError });
+            return Results.NoContent();
         }).RequireAuthorization(Permisos.ConfigBfs);
     }
 }

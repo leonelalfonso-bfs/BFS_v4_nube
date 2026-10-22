@@ -17,6 +17,79 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.13");
 
+            modelBuilder.Entity("Bfs.Core.Entities.Balanza", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Activa")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Baudios")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CreadoEn")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("DataBits")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Eliminado")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Extraccion")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Modelo")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ModificadoEn")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Modo")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Orden")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("OrigenNodoId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Paridad")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Protocolo")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Puerto")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("StopBits")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ModificadoEn");
+
+                    b.HasIndex("Nombre")
+                        .IsUnique();
+
+                    b.ToTable("Balanzas");
+                });
+
             modelBuilder.Entity("Bfs.Core.Entities.Cliente", b =>
                 {
                     b.Property<Guid>("Id")
@@ -249,6 +322,62 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                         .IsUnique();
 
                     b.ToTable("Exportadores");
+                });
+
+            modelBuilder.Entity("Bfs.Core.Entities.ModeloBalanza", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Baudios")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CreadoEn")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("DataBits")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Eliminado")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Extraccion")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ModificadoEn")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("OrigenNodoId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Paridad")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Protocolo")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("StopBits")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ModificadoEn");
+
+                    b.HasIndex("Nombre")
+                        .IsUnique();
+
+                    b.ToTable("ModelosBalanza");
                 });
 
             modelBuilder.Entity("Bfs.Core.Entities.OutboxMessage", b =>

@@ -186,6 +186,8 @@ Cada fase termina compilando y con algo que se pueda demostrar. Las fases 0 a 6 
 
 ### Fase 3 — Balanza
 
+> **Estado (2026-10-22):** hecha en la rama `fase-3`, **salvo la prueba en hardware real** (puntos 4 con tramas de campo y 5). Varias balanzas por nodo con reconexión automática, estado "sin señal" y peso estable (sin cambios por 1,5 s). Extracción `inicio:fin` igual que la 3.x (el signo negativo ahora se respeta). Los 8 modelos de `default_models.sql` se siembran solos y la balanza que tenía el spike pasa a "Balanza 1". En Configuración BFS → Balanzas: ABM, últimas tramas recibidas y probador de extracción. El pesaje no toma peso de una balanza que no está leyendo. Pendiente para la Fase 4: decidir si se exige peso estable para capturar.
+
 1. Protocolos **STX** y **Line** con regex de extracción, portados de `SerialReader.java` / `SerialPortHelper.java`.
 2. **Varias balanzas** por instalación y catálogo de **modelos** (importar `default_models.sql`).
 3. Estabilidad del peso, reconexión automática, log con muestreo (sin escribir a disco en cada byte).

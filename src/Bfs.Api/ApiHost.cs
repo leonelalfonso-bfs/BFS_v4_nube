@@ -6,7 +6,7 @@ using Bfs.Api.Config;
 using Bfs.Api.Licencias;
 using Bfs.Api.Pesadas;
 using Bfs.Api.Planta;
-using Bfs.Api.Balanza;
+using Bfs.Api.Balanzas;
 using Bfs.Api.Usuarios;
 using Bfs.Core;
 using Bfs.Core.Entities;
@@ -76,8 +76,7 @@ public static class ApiHost
         {
             var db = scope.ServiceProvider.GetRequiredService<BfsDbContext>();
             DbInitializer.SeedAsync(db).GetAwaiter().GetResult();
-            var config = scope.ServiceProvider.GetRequiredService<ConfigService>();
-            app.Services.GetRequiredService<IScaleController>().Apply(config.ScaleSettings());
+            BalanzaEndpoints.AplicarAsync(db, app.Services.GetRequiredService<IBalanzas>()).GetAwaiter().GetResult();
         }
 
         app.UseCors();
@@ -96,7 +95,7 @@ public static class ApiHost
 
         var api = app.MapGroup("/api").RequireAuthorization();
         api.MapGet("/health", () => Results.Ok(new { status = "ok", version = "4.0.0-spike", modo = options.Modo.ToString() })).AllowAnonymous();
-        api.MapScaleEndpoints();
+        api.MapBalanzaEndpoints();
         api.MapConfigEndpoints();
         api.MapCatalogoEndpoints();
         api.MapPlantaEndpoints();
@@ -121,9 +120,7 @@ public static class ApiHost
             builder.Services.AddSingleton(NodoInfo.Ninguno);
             builder.Services.AddBfsDatabase(ModoDespliegue.Nube, cs);
 
-            var sinBalanza = new SinBalanzaScaleReader();
-            builder.Services.AddSingleton<IScaleReader>(sinBalanza);
-            builder.Services.AddSingleton<IScaleController>(sinBalanza);
+            builder.Services.AddSingleton<IBalanzas, SinBalanzas>();
             return;
         }
 
@@ -136,8 +133,8 @@ public static class ApiHost
         builder.Services.AddSingleton(new NodoInfo(paths.NodoId()));
         builder.Services.AddBfsDatabase(ModoDespliegue.Nodo, BfsDatabase.SqliteConnectionString(paths.BaseSqlite));
 
-        builder.Services.AddSingleton<ConfigurableScaleReader>();
-        builder.Services.AddSingleton<IScaleReader>(sp => sp.GetRequiredService<ConfigurableScaleReader>());
-        builder.Services.AddSingleton<IScaleController>(sp => sp.GetRequiredService<ConfigurableScaleReader>());
+        builder.Services.AddSingleton<IPuertoSerieFactory, PuertoSerieFactory>();
+        builder.Services.AddSingleton<IBalanzas>(sp => new BalanzaManager(
+            sp.GetRequiredService<IPuertoSerieFactory>(), sp.GetRequiredService<ILogger<BalanzaManager>>()));
     }
 }

@@ -63,6 +63,27 @@ public class DatosTests
     }
 
     [Fact]
+    public async Task La_balanza_configurada_en_el_spike_pasa_a_la_tabla_de_balanzas()
+    {
+        using var tmp = new TempDir();
+        await using var db = Sqlite(tmp.File("bfs.db"));
+        await db.Database.MigrateAsync();
+        db.Configuraciones.AddRange(
+            new Configuracion { Clave = ConfigKeys.ScaleMode, Valor = "serial" },
+            new Configuracion { Clave = ConfigKeys.ScalePort, Valor = "COM5" },
+            new Configuracion { Clave = ConfigKeys.ScaleBaud, Valor = "4800" },
+            new Configuracion { Clave = ConfigKeys.ScaleExtract, Valor = "4:10" });
+        await db.SaveChangesAsync();
+
+        await DbInitializer.SeedAsync(db);
+        await DbInitializer.SeedAsync(db);
+
+        var b = await db.Balanzas.SingleAsync();
+        Assert.Equal(("Balanza 1", "serial", "COM5", 4800, "4:10"), (b.Nombre, b.Modo, b.Puerto, b.Baudios, b.Extraccion));
+        Assert.Equal(DbInitializer.ModelosDe3x.Count, await db.ModelosBalanza.CountAsync());
+    }
+
+    [Fact]
     public async Task Guardar_completa_columnas_de_sync_y_borrar_es_logico()
     {
         using var tmp = new TempDir();

@@ -45,16 +45,4 @@ public class ConfigService
         await _db.SaveChangesAsync();
     }
 
-    public ScaleSettings ScaleSettings() => ScaleSettingsFrom(Global());
-
-    public static ScaleSettings ScaleSettingsFrom(Dictionary<string, string> c) =>
-        new(
-            c.GetValueOrDefault(ConfigKeys.ScaleMode, "sim"),
-            c.GetValueOrDefault(ConfigKeys.ScalePort, ""),
-            int.TryParse(c.GetValueOrDefault(ConfigKeys.ScaleBaud, "9600"), out var baud) ? baud : 9600,
-            int.TryParse(c.GetValueOrDefault(ConfigKeys.ScaleDataBits, "8"), out var bits) ? bits : 8,
-            int.TryParse(c.GetValueOrDefault(ConfigKeys.ScaleStopBits, "1"), out var stop) ? stop : 1,
-            c.GetValueOrDefault(ConfigKeys.ScaleParity, "None"),
-            c.GetValueOrDefault(ConfigKeys.ScaleProtocol, "Line"),
-            c.GetValueOrDefault(ConfigKeys.ScaleExtract, ""));
 }

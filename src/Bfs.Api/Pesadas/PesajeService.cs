@@ -19,14 +19,14 @@ public record ResultadoPesaje(Pesada? Pesada, string? Error = null, bool NoEncon
 public class PesajeService
 {
     private readonly BfsDbContext _db;
-    private readonly IScaleReader _scale;
+    private readonly IBalanzas _balanzas;
     private readonly ConfigService _config;
     private readonly LicenciaService _licencia;
 
-    public PesajeService(BfsDbContext db, IScaleReader scale, ConfigService config, LicenciaService licencia)
+    public PesajeService(BfsDbContext db, IBalanzas balanzas, ConfigService config, LicenciaService licencia)
     {
         _db = db;
-        _scale = scale;
+        _balanzas = balanzas;
         _config = config;
         _licencia = licencia;
     }
@@ -48,6 +48,9 @@ public class PesajeService
 
         var empresa = await _db.Empresas.FirstOrDefaultAsync(e => e.Id == req.EmpresaId);
         if (empresa == null) return ResultadoPesaje.Invalida("Empresa inexistente");
+
+        var lectura = _balanzas.Lectura(req.BalanzaId);
+        if (req.PesoEntrada == null && LecturaInvalida(lectura) is { } errorBalanza) return ResultadoPesaje.Invalida(errorBalanza);
 
         var configs = await _config.GlobalAsync();
         var clienteId = await ResolverCliente(req.ClienteId, req.Cliente);
@@ -73,8 +76,8 @@ public class PesajeService
             Comprobante = req.Comprobante,
             Observaciones = req.Observaciones,
             Operador = operador,
-            Balanza = configs.GetValueOrDefault(ConfigKeys.WormsBalanza, "1"),
-            PesoEntrada = req.PesoEntrada ?? _scale.Current.Kilogramos,
+            Balanza = string.IsNullOrEmpty(lectura.Nombre) ? null : lectura.Nombre,
+            PesoEntrada = req.PesoEntrada ?? lectura.Kilogramos,
             TaraPallets = req.TaraPallets,
             EntradaEn = DateTimeOffset.UtcNow
         };
@@ -92,8 +95,11 @@ public class PesajeService
         if (pesada == null) return ResultadoPesaje.Inexistente();
         if (pesada.Estado == "SALIDA") return ResultadoPesaje.Invalida("Ya tiene salida");
 
+        var lectura = _balanzas.Lectura(req.BalanzaId);
+        if (req.PesoSalida == null && LecturaInvalida(lectura) is { } errorBalanza) return ResultadoPesaje.Invalida(errorBalanza);
+
         var configs = await _config.GlobalAsync();
-        pesada.PesoSalida = req.PesoSalida ?? _scale.Current.Kilogramos;
+        pesada.PesoSalida = req.PesoSalida ?? lectura.Kilogramos;
         pesada.TaraPallets = req.TaraPallets ?? pesada.TaraPallets;
         pesada.SalidaEn = DateTimeOffset.UtcNow;
         pesada.Estado = "SALIDA";
@@ -105,6 +111,14 @@ public class PesajeService
         await _db.SaveChangesAsync();
         return ResultadoPesaje.Ok(pesada);
     }
+
+    /// <summary>No se toma el peso de una balanza que no está leyendo: guardaría el último valor o cero.</summary>
+    private static string? LecturaInvalida(LecturaBalanza l) => l.Estado switch
+    {
+        "abierta" or "simulada" => null,
+        "sin balanza" => "No hay ninguna balanza configurada",
+        _ => $"La balanza {l.Nombre} no está leyendo ({l.Estado}{(l.Error is null ? "" : ": " + l.Error)})"
+    };
 
     /// <summary>Guarda los datos de esta patente para autocompletar la próxima vez. Lo vacío no pisa lo que había.</summary>
     private async Task RecordarVehiculo(Pesada p)

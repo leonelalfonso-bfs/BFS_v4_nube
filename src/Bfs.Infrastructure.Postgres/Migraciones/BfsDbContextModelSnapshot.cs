@@ -22,6 +22,79 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Bfs.Core.Entities.Balanza", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("Activa")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Baudios")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("CreadoEn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("DataBits")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("Eliminado")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Extraccion")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Modelo")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("ModificadoEn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Modo")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Orden")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("OrigenNodoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Paridad")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Protocolo")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Puerto")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("StopBits")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ModificadoEn");
+
+                    b.HasIndex("Nombre")
+                        .IsUnique();
+
+                    b.ToTable("Balanzas");
+                });
+
             modelBuilder.Entity("Bfs.Core.Entities.Cliente", b =>
                 {
                     b.Property<Guid>("Id")
@@ -254,6 +327,62 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                         .IsUnique();
 
                     b.ToTable("Exportadores");
+                });
+
+            modelBuilder.Entity("Bfs.Core.Entities.ModeloBalanza", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Baudios")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("CreadoEn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("DataBits")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("Eliminado")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Extraccion")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("ModificadoEn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("OrigenNodoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Paridad")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Protocolo")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("StopBits")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ModificadoEn");
+
+                    b.HasIndex("Nombre")
+                        .IsUnique();
+
+                    b.ToTable("ModelosBalanza");
                 });
 
             modelBuilder.Entity("Bfs.Core.Entities.OutboxMessage", b =>
