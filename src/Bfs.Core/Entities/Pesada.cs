@@ -1,8 +1,7 @@
 namespace Bfs.Core.Entities;
 
-public class Pesada
+public class Pesada : EntidadSync
 {
-    public Guid Id { get; set; }
     public Guid EmpresaId { get; set; }
     public Empresa? Empresa { get; set; }
     public string TicketNumero { get; set; } = "";

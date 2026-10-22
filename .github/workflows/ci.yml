@@ -1,0 +1,19 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "fase-*"]
+  pull_request:
+
+jobs:
+  build:
+    # Bfs.Desktop es WPF: necesita Windows.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet restore Bfs.Pesaje.slnx
+      - run: dotnet build Bfs.Pesaje.slnx --no-restore -c Release -warnaserror
+      - run: dotnet test tests/Bfs.Tests --no-build -c Release

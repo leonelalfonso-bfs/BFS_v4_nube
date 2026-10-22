@@ -1,8 +1,7 @@
 namespace Bfs.Core.Entities;
 
-public class Usuario
+public class Usuario : EntidadSync
 {
-    public Guid Id { get; set; }
     public string Username { get; set; } = "";
     public string PasswordHash { get; set; } = "";
     public string Rol { get; set; } = Roles.Operador;

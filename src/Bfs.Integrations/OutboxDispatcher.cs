@@ -59,7 +59,7 @@ public class OutboxDispatcher : BackgroundService
         }
 
         var pending = await db.Outbox
-            .Where(o => o.Destino == "worms" && o.Estado == "pendiente" && o.ProximoIntento <= DateTimeOffset.Now)
+            .Where(o => o.Destino == "worms" && o.Estado == "pendiente" && o.ProximoIntento <= DateTimeOffset.UtcNow)
             .OrderBy(o => o.CreadoEn)
             .Take(10)
             .ToListAsync(ct);
@@ -95,14 +95,14 @@ public class OutboxDispatcher : BackgroundService
                 else
                 {
                     item.Intentos++;
-                    item.ProximoIntento = DateTimeOffset.Now.AddMinutes(1);
+                    item.ProximoIntento = DateTimeOffset.UtcNow.AddMinutes(1);
                     item.UltimoError = $"{code}";
                 }
             }
             catch (Exception ex)
             {
                 item.Intentos++;
-                item.ProximoIntento = DateTimeOffset.Now.AddMinutes(1);
+                item.ProximoIntento = DateTimeOffset.UtcNow.AddMinutes(1);
                 item.UltimoError = ex.Message;
             }
         }

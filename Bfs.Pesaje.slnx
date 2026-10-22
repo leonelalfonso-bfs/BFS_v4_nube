@@ -3,6 +3,13 @@
   <Project Path="src/Bfs.Infrastructure/Bfs.Infrastructure.csproj" />
   <Project Path="src/Bfs.Scale/Bfs.Scale.csproj" />
   <Project Path="src/Bfs.Integrations/Bfs.Integrations.csproj" />
+  <Folder Name="/src/">
+    <Project Path="src/Bfs.Infrastructure.Postgres/Bfs.Infrastructure.Postgres.csproj" />
+    <Project Path="src/Bfs.Infrastructure.Sqlite/Bfs.Infrastructure.Sqlite.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Bfs.Tests/Bfs.Tests.csproj" />
+  </Folder>
   <Project Path="src/Bfs.Api/Bfs.Api.csproj" />
   <Project Path="src/Bfs.Desktop/Bfs.Desktop.csproj" />
 </Solution>

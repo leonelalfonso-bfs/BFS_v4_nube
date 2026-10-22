@@ -9,7 +9,7 @@ public static class DbInitializer
 {
     public static async Task SeedAsync(BfsDbContext db)
     {
-        await db.Database.EnsureCreatedAsync();
+        await db.Database.MigrateAsync();
 
         if (!await db.Empresas.AnyAsync())
         {

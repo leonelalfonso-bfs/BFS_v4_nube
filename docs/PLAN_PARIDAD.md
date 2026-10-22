@@ -17,8 +17,11 @@ Este documento reemplaza, para la 4.0, a `MIGRACION_DOTNET.md` de la 3.0. Ese pl
 | 4 | Sistema operativo | La 4.0 exige **Windows 10 u 11** en la PC de portería. Windows 7 solo como navegador para consultar reportes (ver §2.4). Los clientes que necesiten pesar en Win7 siguen con la 3.x. |
 | 5 | Datos de la 3.x | **Se importan** desde `truckscale.db` a la base 4.0, sin modificar la original. |
 | 6 | Hosting | **El VPS propio** donde corre Leal Control, en contenedores aislados y con límites de memoria (ver §2.5). |
-| 7 | Dominio y tenant | **Un solo subdominio** (ej. `pesaje.<dominio BFS>`). El tenant **se detecta por el usuario** al iniciar sesión, sin subdominio por cliente (ver §2.6). |
+| 7 | Dominio y tenant | **Un solo subdominio** (`pesaje.` + dominio de Balanzas Full Service). El tenant **se detecta por el usuario** al iniciar sesión, sin subdominio por cliente (ver §2.6). |
 | 8 | Licencias | Las da de alta BFS a mano al contratar: crea el tenant y el usuario administrador del cliente, que después carga sus usuarios. Si no paga, el **superadmin lo suspende** (ver §2.7). |
+| 9 | Dominio | Subdominio `pesaje.` del dominio de **Balanzas Full Service**. |
+| 10 | Usuario de login | **Email**, único en todo el sistema. |
+| 11 | Gracia del nodo | **15 días** sin sincronizar o suspendido antes de bloquear pesadas nuevas. |
 
 ---
 
@@ -102,7 +105,7 @@ Con 2 GB de RAM libres y 2 vCPU compartidos con Leal Control alcanza holgado par
 Como en Leal Control, hay una **base central** separada de las bases de cada cliente. La diferencia es que en vez de un subdominio por cliente se usa uno solo y el tenant sale del usuario:
 
 1. La base central tiene un **índice de logins**: `usuario → tenant`. Solo guarda el nombre de usuario y a qué tenant pertenece; la contraseña y los datos del usuario viven en la base del cliente.
-2. El nombre de usuario es **único en todo el sistema**. Se recomienda usar el **email**. Si se prefieren nombres cortos, hay que evitar choques (`admin` en dos clientes): el alta de usuario consulta el índice central y rechaza los repetidos.
+2. El usuario es el **email**, único en todo el sistema: el alta de usuario consulta el índice central y rechaza los repetidos.
 3. Login: la API busca el usuario en el índice, abre la base de ese tenant, valida la contraseña ahí y emite un token con el `tenant_id`. Cada pedido posterior usa la base de ese tenant.
 4. El **superadmin** vive solo en la base central, con su propia pantalla (`/admin`), y no tiene acceso operativo a los datos de los clientes.
 5. **Nodo local**: no depende del índice. Se registra contra un tenant una sola vez con un **código de activación** que genera el superadmin, y desde ahí sincroniza con un token de nodo. Los usuarios se validan contra su copia local, así que el login funciona sin internet.
@@ -112,7 +115,7 @@ Como en Leal Control, hay una **base central** separada de las bases de cada cli
 - Alta (superadmin): crear tenant → se crea la base y se corren las migraciones → se crea el usuario administrador del cliente → se genera el código de activación para cada nodo de portería.
 - Estados del tenant: `Activo`, `Suspendido`, `Baja`.
 - **Suspendido en la nube**: la web rechaza el login con un mensaje ("Cuenta suspendida, comuníquese con BFS") y la sincronización deja de aceptar datos.
-- **Suspendido en el nodo local**: como el nodo trabaja sin internet, recibe una **licencia firmada con vencimiento** en cada sincronización (ej. válida 15 días). Si deja de sincronizar o recibe estado suspendido, al vencer **bloquea las pesadas nuevas** pero deja consultar, reimprimir y exportar lo que ya tiene. Así una suspensión no hace perder datos y un corte de internet largo no frena la portería antes de tiempo.
+- **Suspendido en el nodo local**: como el nodo trabaja sin internet, recibe una **licencia firmada con vencimiento** en cada sincronización (válida 15 días). Si deja de sincronizar o recibe estado suspendido, al vencer **bloquea las pesadas nuevas** pero deja consultar, reimprimir y exportar lo que ya tiene. Así una suspensión no hace perder datos y un corte de internet largo no frena la portería antes de tiempo.
 - Reactivar = volver a `Activo` en el superadmin; el nodo se desbloquea en la siguiente sincronización.
 - Modo Local (sin nube): sigue la licencia por máquina (`license.key`), generada por BFS.
 
@@ -144,6 +147,8 @@ Como en Leal Control, hay una **base central** separada de las bases de cada cli
 Cada fase termina compilando y con algo que se pueda demostrar. Las fases 0 a 6 dejan listo el **modo Local**, que sirve para reemplazar a la 3.x. Las fases 7 y 8 suman la nube. Desde la fase 0 el modelo de datos ya contempla la sincronización, para no rehacer nada después.
 
 ### Fase 0 — Bases
+
+> **Estado (2026-10-22):** hecha en la rama `fase-0`, salvo el repo remoto. Los servicios quedaron en carpetas por módulo dentro de `Bfs.Api` (ej. `Pesadas/PesajeService.cs`) porque usan EF y WORMS, que `Core` no conoce; `Core` mantiene las reglas puras (`NetoCalculator`). PostgreSQL se verificó a nivel modelo y migraciones; falta correrlo contra un servidor real.
 
 1. Primer commit y repo remoto. Proyecto de tests (`Bfs.Tests`, xUnit) y CI con build + tests.
 2. **Migraciones de EF Core** en lugar de `EnsureCreated`, con dos proveedores: **SQLite** (nodo) y **PostgreSQL** (nube). Migraciones separadas por proveedor.
@@ -261,9 +266,6 @@ Cada fase termina compilando y con algo que se pueda demostrar. Las fases 0 a 6 
 | # | Decisión | Opciones | Afecta |
 |---|----------|----------|--------|
 | 1 | Datos del VPS para confirmar la capacidad | RAM, vCPU, disco libre, sistema operativo, si ya tiene Docker | Fase 7 |
-| 2 | Dominio | `pesaje.` con el dominio de Balanzas Full Service (recomendado, es la marca del producto) o con el de Leal Control | Fase 7 |
-| 3 | Formato del usuario | Email (recomendado) / nombre corto único en todo el sistema | Fases 1 y 7 |
-| 4 | Días de gracia del nodo sin sincronizar o suspendido | Ej. 15 días | Fase 7 |
 
 ---
 

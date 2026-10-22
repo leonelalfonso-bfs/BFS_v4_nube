@@ -11,6 +11,8 @@
     <ProjectReference Include="..\Bfs.Infrastructure\Bfs.Infrastructure.csproj" />
     <ProjectReference Include="..\Bfs.Scale\Bfs.Scale.csproj" />
     <ProjectReference Include="..\Bfs.Integrations\Bfs.Integrations.csproj" />
+    <ProjectReference Include="..\Bfs.Infrastructure.Sqlite\Bfs.Infrastructure.Sqlite.csproj" />
+    <ProjectReference Include="..\Bfs.Infrastructure.Postgres\Bfs.Infrastructure.Postgres.csproj" />
   </ItemGroup>
 
   <ItemGroup>

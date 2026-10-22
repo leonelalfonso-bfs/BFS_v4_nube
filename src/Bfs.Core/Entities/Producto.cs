@@ -1,8 +1,7 @@
 namespace Bfs.Core.Entities;
 
-public class Producto
+public class Producto : EntidadSync
 {
-    public Guid Id { get; set; }
     public string Nombre { get; set; } = "";
     public string? Codigo { get; set; }
 }

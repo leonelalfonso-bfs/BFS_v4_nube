@@ -1,5 +1,6 @@
 using Bfs.Core.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Bfs.Infrastructure.Data;
 
@@ -18,6 +19,14 @@ public class BfsDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        ConfigurarSync<Empresa>(modelBuilder);
+        ConfigurarSync<Usuario>(modelBuilder);
+        ConfigurarSync<Configuracion>(modelBuilder);
+        ConfigurarSync<Cliente>(modelBuilder);
+        ConfigurarSync<Producto>(modelBuilder);
+        ConfigurarSync<Transporte>(modelBuilder);
+        ConfigurarSync<Pesada>(modelBuilder);
+
         modelBuilder.Entity<Empresa>().HasIndex(e => e.Nombre).IsUnique();
         modelBuilder.Entity<Usuario>().HasIndex(u => u.Username).IsUnique();
         modelBuilder.Entity<Configuracion>().HasIndex(c => new { c.Clave, c.EmpresaId }).IsUnique();
@@ -26,5 +35,30 @@ public class BfsDbContext : DbContext
         modelBuilder.Entity<Pesada>().HasIndex(p => new { p.EmpresaId, p.TicketNumero }).IsUnique();
         modelBuilder.Entity<OutboxMessage>().HasIndex(o => new { o.Estado, o.ProximoIntento });
         modelBuilder.Entity<OutboxMessage>().HasIndex(o => new { o.Destino, o.TicketNumero, o.Evento });
+
+        if (Database.IsNpgsql())
+        {
+            modelBuilder.Entity<Pesada>().Property(p => p.DatosExtraJson).HasColumnType("jsonb");
+        }
+
+        if (Database.IsSqlite())
+        {
+            // SQLite no ordena ni compara DateTimeOffset; guardado como entero conserva el orden por UTC.
+            foreach (var property in modelBuilder.Model.GetEntityTypes().SelectMany(t => t.GetProperties()))
+            {
+                if (property.ClrType == typeof(DateTimeOffset) || property.ClrType == typeof(DateTimeOffset?))
+                {
+                    property.SetValueConverter(new DateTimeOffsetToBinaryConverter());
+                }
+            }
+        }
+    }
+
+    private static void ConfigurarSync<T>(ModelBuilder modelBuilder) where T : EntidadSync
+    {
+        var entity = modelBuilder.Entity<T>();
+        entity.Property(e => e.Version).IsConcurrencyToken();
+        entity.HasQueryFilter(e => !e.Eliminado);
+        entity.HasIndex(e => e.ModificadoEn);
     }
 }
