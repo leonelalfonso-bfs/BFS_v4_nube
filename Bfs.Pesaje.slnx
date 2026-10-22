@@ -4,6 +4,7 @@
   <Project Path="src/Bfs.Scale/Bfs.Scale.csproj" />
   <Project Path="src/Bfs.Integrations/Bfs.Integrations.csproj" />
   <Folder Name="/src/">
+    <Project Path="src/Bfs.Documents/Bfs.Documents.csproj" />
     <Project Path="src/Bfs.Infrastructure.Postgres/Bfs.Infrastructure.Postgres.csproj" />
     <Project Path="src/Bfs.Infrastructure.Sqlite/Bfs.Infrastructure.Sqlite.csproj" />
   </Folder>

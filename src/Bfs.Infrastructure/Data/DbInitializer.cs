@@ -74,7 +74,7 @@ public static class DbInitializer
         await EnsureConfig(db, ConfigKeys.ScaleExtract, "");
         await EnsureConfig(db, ConfigKeys.FieldsJson, FieldCatalog.DefaultJson());
         await EnsureConfig(db, ConfigKeys.TicketTitulo, "Comprobante de pesaje");
-        await EnsureConfig(db, ConfigKeys.TicketPie, "Balanzas Full Service");
+        await EnsureConfig(db, ConfigKeys.TicketPie, "");
         await EnsureConfig(db, ConfigKeys.LogoFile, "");
 
         await db.SaveChangesAsync();

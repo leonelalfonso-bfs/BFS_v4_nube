@@ -215,6 +215,8 @@ Cada fase termina compilando y con algo que se pueda demostrar. Las fases 0 a 6 
 
 ### Fase 5 — Tickets y documentos
 
+> **Estado (2026-10-22):** hecha en la rama `fase-5`, **salvo la prueba con una impresora térmica real**. Ticket A4 comparado contra uno real de la 3.x (Kraft): mismo formato, original y duplicado, pie "Desarrollado por" de BFS; el de aduana con sus secciones. Producto y código ya no salen invertidos (bug de la 3.x). Térmica ESC/POS por el spooler de Windows (RAW), 32/48 columnas, sin acentos, con corte. Excel con filtros por fecha, total y autofiltro; el usuario cliente exporta solo lo suyo. Reimpresión: botones Ticket / Térmica en Pesaje y Pesadas; al cerrar una pesada el ticket se abre solo. **Licencia QuestPDF:** Community, gratis mientras BFS facture menos de USD 1 millón al año (si no, hay que comprar la licencia o cambiar a otra librería).
+
 1. Ticket PDF A4 con QuestPDF (layout de `TicketGenerator.java`, logo, título y pie configurables).
 2. Ticket térmico ESC/POS (`ThermalTicketGenerator.java`) desde el nodo.
 3. Reimpresión desde reportes.

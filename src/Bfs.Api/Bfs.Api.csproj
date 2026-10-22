@@ -13,6 +13,7 @@
     <ProjectReference Include="..\Bfs.Integrations\Bfs.Integrations.csproj" />
     <ProjectReference Include="..\Bfs.Infrastructure.Sqlite\Bfs.Infrastructure.Sqlite.csproj" />
     <ProjectReference Include="..\Bfs.Infrastructure.Postgres\Bfs.Infrastructure.Postgres.csproj" />
+    <ProjectReference Include="..\Bfs.Documents\Bfs.Documents.csproj" />
   </ItemGroup>
 
   <ItemGroup>

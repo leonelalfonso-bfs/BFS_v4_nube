@@ -502,7 +502,7 @@ async function renderPesaje() {
     <div class="card">
       <h3 style="margin-top:0">Pendientes de salida (${pendientes.length})</h3>
       <table>
-        <tr><th></th><th>Ticket</th><th>Empresa</th><th>Patente</th><th>Entrada</th><th>Hora</th><th>Pallets</th>${can("pesaje.anular") ? "<th></th>" : ""}</tr>
+        <tr><th></th><th>Ticket</th><th>Empresa</th><th>Patente</th><th>Entrada</th><th>Hora</th><th>Pallets</th><th></th></tr>
         ${pendientes.length ? pendientes.map(p => `<tr class="${state.selectedPesadaId === p.id ? "selected" : ""}" onclick="selectPesada('${p.id}')">
           <td>${state.selectedPesadaId === p.id ? "●" : ""}</td>
           <td>${esc(p.ticketNumero)}${p.tipoOperacion === "Aduana" ? ` <span class="pill pill-info">Aduana</span>` : ""}</td>
@@ -511,11 +511,74 @@ async function renderPesaje() {
           <td>${p.pesoEntrada}${p.entradaManualPor ? " ✎" : ""}</td>
           <td>${esc(hora(p.entradaEn))}</td>
           <td>${p.taraPallets}</td>
-          ${can("pesaje.anular") ? `<td><button class="btn-danger" onclick="event.stopPropagation();anularPesada('${p.id}')">Anular</button></td>` : ""}
+          <td><div class="btn-row" style="margin:0">${botonesTicket(p.id)}${can("pesaje.anular") ? `<button class="btn-danger" onclick="event.stopPropagation();anularPesada('${p.id}')">Anular</button>` : ""}</div></td>
         </tr>`).join("") : `<tr><td colspan="8">No hay entradas pendientes.</td></tr>`}
       </table>
     </div>` : ""}
   `;
+}
+
+async function bajarArchivo(path) {
+  const res = await fetch(path, { headers: { Authorization: "Bearer " + state.token } });
+  if (!res.ok) throw new Error((await res.text()) || res.statusText);
+  const nombre = /filename="?([^";]+)"?/.exec(res.headers.get("content-disposition") || "")?.[1] || "archivo";
+  return { blob: await res.blob(), nombre };
+}
+
+async function verTicket(id) {
+  try {
+    const { blob, nombre } = await bajarArchivo(`/api/pesadas/${id}/ticket`);
+    const url = URL.createObjectURL(blob);
+    // Se abre en el visor (desde ahí se imprime o reimprime). Si el navegador bloquea la ventana, se descarga.
+    if (!window.open(url, "_blank")) guardarComo(url, nombre);
+  } catch (e) {
+    toast("No se pudo generar el ticket: " + limpiarError(e), "err");
+  }
+}
+
+async function imprimirTermica(id) {
+  try {
+    await api(`/api/pesadas/${id}/termica`, { method: "POST" });
+    toast("Ticket enviado a la impresora");
+  } catch (e) {
+    toast(limpiarError(e), "err");
+  }
+}
+
+function guardarComo(url, nombre) {
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nombre;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+async function exportarExcel() {
+  const q = new URLSearchParams();
+  if (val("x_desde")) q.set("desde", val("x_desde"));
+  if (val("x_hasta")) q.set("hasta", val("x_hasta"));
+  try {
+    const { blob, nombre } = await bajarArchivo(`/api/pesadas/excel?${q}`);
+    guardarComo(URL.createObjectURL(blob), nombre);
+  } catch (e) {
+    toast("No se pudo exportar: " + limpiarError(e), "err");
+  }
+}
+
+function usaTermica() {
+  return state.funciones.termica && can("pesaje.reimprimir");
+}
+
+/** Al cerrar una pesada: el ticket se abre solo y, si hay térmica, también sale por ahí. */
+function ticketAlCerrar(pesada) {
+  verTicket(pesada.id);
+  if (usaTermica()) imprimirTermica(pesada.id);
+}
+
+function botonesTicket(id) {
+  return `<button class="btn" onclick="event.stopPropagation();verTicket('${id}')">Ticket</button>` +
+    (usaTermica() ? `<button class="btn" onclick="event.stopPropagation();imprimirTermica('${id}')">Térmica</button>` : "");
 }
 
 function hora(iso) {
@@ -599,6 +662,7 @@ async function guardarSalida() {
     });
     state.selectedPesadaId = null;
     toast(`Ticket ${pesada.ticketNumero} cerrado · neto ${pesada.neto} kg`);
+    ticketAlCerrar(pesada);
     await renderPesaje();
     document.getElementById("ultimo").textContent =
       `Ticket ${pesada.ticketNumero} cerrado · neto ${pesada.neto} kg (pallets ${pesada.taraPallets})` +
@@ -617,6 +681,7 @@ async function guardarTaraConocida() {
       body: JSON.stringify({ datos, taraManual, claveManual: datos.claveManual })
     });
     toast(`Ticket ${pesada.ticketNumero} · neto ${pesada.neto} kg`);
+    ticketAlCerrar(pesada);
     await renderPesaje();
     document.getElementById("ultimo").textContent =
       `Ticket ${pesada.ticketNumero} · bruto ${pesada.bruto} − tara ${pesada.tara} = neto ${pesada.neto} kg`;
@@ -673,9 +738,16 @@ function pillEstado(p) {
 
 async function renderReportes() {
   const rows = await api("/api/pesadas");
-  const acciones = can("pesaje.operar") || can("pesaje.anular");
+  const acciones = true;
   document.getElementById("main").innerHTML = `
     <div class="page-head"><div><h2>Pesadas</h2><p>${can("pesadas.ver") ? "Últimos 200 movimientos de la planta." : "Tus últimos 200 movimientos."} ✎ = peso cargado a mano.</p></div></div>
+    <div class="card">
+      <div class="grid2">
+        <div><label>Desde</label><input id="x_desde" type="date" /></div>
+        <div><label>Hasta</label><input id="x_hasta" type="date" /></div>
+      </div>
+      <div class="btn-row"><button class="btn-primary" onclick="exportarExcel()">Exportar a Excel</button></div>
+    </div>
     <div class="card" style="overflow-x:auto">
       <table>
         <tr><th>Ticket</th><th>Fecha</th><th>Empresa</th><th>Patente</th><th>Producto</th><th>Estado</th><th>Entrada</th><th>Salida</th><th>Pallets</th><th>Neto</th>${acciones ? "<th></th>" : ""}</tr>
@@ -691,6 +763,7 @@ async function renderReportes() {
           <td>${p.taraPallets}</td>
           <td>${p.estado === "ANULADA" ? "-" : (p.neto ?? "-")}</td>
           ${acciones ? `<td><div class="btn-row" style="margin:0">
+            ${botonesTicket(p.id)}
             ${p.estado === "ENTRADA" && can("pesaje.operar") ? `<button class="btn" onclick="retomarPesada('${p.id}')">Retomar</button>` : ""}
             ${p.estado !== "ANULADA" && can("pesaje.anular") ? `<button class="btn-danger" onclick="anularPesada('${p.id}')">Anular</button>` : ""}
           </div></td>` : ""}
@@ -1072,8 +1145,11 @@ function yesNo(id, value) {
   </select>`;
 }
 
-function renderConfigGeneral() {
+async function renderConfigGeneral() {
   const c = state.config;
+  let impresoras = [];
+  try { impresoras = await api("/api/impresoras"); } catch {}
+  const opcionesImpresora = [...new Set([...(impresoras || []), c.termica_impresora].filter(Boolean))];
   document.getElementById("configBody").innerHTML = `
     <div class="card">
       <div class="grid2">
@@ -1083,7 +1159,10 @@ function renderConfigGeneral() {
         <div><label>Aduana</label>${yesNo("c_adu", c.aduana)}</div>
         <div><label>Contenedores</label>${yesNo("c_cont", c.contenedores)}</div>
         <div><label>Impresora térmica</label>${yesNo("c_term", c.termica)}</div>
-        <div><label>Nombre de la impresora térmica</label><input id="c_term_imp" value="${esc(c.termica_impresora || "")}" /></div>
+        <div><label>Impresora térmica</label><select id="c_term_imp">
+          <option value="">${impresoras.length ? "Elegir..." : "No se encontraron impresoras"}</option>
+          ${opcionesImpresora.map(n => `<option value="${esc(n)}" ${n === c.termica_impresora ? "selected" : ""}>${esc(n)}</option>`).join("")}
+        </select></div>
         <div><label>Ancho de papel</label>
           <select id="c_term_ancho">
             ${["58", "80"].map(a => `<option value="${a}" ${(c.termica_ancho || "80") === a ? "selected" : ""}>${a} mm</option>`).join("")}

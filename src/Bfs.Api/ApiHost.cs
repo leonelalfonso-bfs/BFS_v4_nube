@@ -3,6 +3,7 @@ using Bfs.Api.Auth;
 using Bfs.Api.Branding;
 using Bfs.Api.Catalogos;
 using Bfs.Api.Config;
+using Bfs.Api.Documentos;
 using Bfs.Api.Licencias;
 using Bfs.Api.Pesadas;
 using Bfs.Api.Planta;
@@ -10,6 +11,7 @@ using Bfs.Api.Balanzas;
 using Bfs.Api.Usuarios;
 using Bfs.Core;
 using Bfs.Core.Entities;
+using Bfs.Documents;
 using Bfs.Infrastructure.Data;
 using Bfs.Integrations;
 using Bfs.Scale;
@@ -47,6 +49,7 @@ public static class ApiHost
         builder.Services.AddSingleton<PasswordHasher<Usuario>>();
         builder.Services.AddScoped<ConfigService>();
         builder.Services.AddScoped<PesajeService>();
+        builder.Services.AddScoped<DocumentosService>();
         builder.Services.AddSingleton(_ => new LicenciaService(options, paths, builder.Configuration, builder.Environment));
 
         var jwtKey = builder.Configuration["Jwt:Key"] ?? "bfs-dev-key-cambiar-en-produccion-32bytes!!";
@@ -102,6 +105,7 @@ public static class ApiHost
         api.MapUsuarioEndpoints();
         api.MapPesadaEndpoints();
         api.MapLicenciaEndpoints();
+        api.MapDocumentoEndpoints();
 
         app.MapFallbackToFile("index.html");
         return app;
@@ -121,6 +125,7 @@ public static class ApiHost
             builder.Services.AddBfsDatabase(ModoDespliegue.Nube, cs);
 
             builder.Services.AddSingleton<IBalanzas, SinBalanzas>();
+            builder.Services.AddSingleton<IImpresoraTermica, SinImpresora>();
             return;
         }
 
@@ -133,6 +138,7 @@ public static class ApiHost
         builder.Services.AddSingleton(new NodoInfo(paths.NodoId()));
         builder.Services.AddBfsDatabase(ModoDespliegue.Nodo, BfsDatabase.SqliteConnectionString(paths.BaseSqlite));
 
+        builder.Services.AddSingleton<IImpresoraTermica, ImpresoraWindows>();
         builder.Services.AddSingleton<IPuertoSerieFactory, PuertoSerieFactory>();
         builder.Services.AddSingleton<IBalanzas>(sp => new BalanzaManager(
             sp.GetRequiredService<IPuertoSerieFactory>(), sp.GetRequiredService<ILogger<BalanzaManager>>()));

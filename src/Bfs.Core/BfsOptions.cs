@@ -18,6 +18,21 @@ public class BfsOptions
 
     /// <summary>Carpeta de datos. Vacío = %ProgramData%\bfs-4.</summary>
     public string? DataPath { get; set; }
+
+    /// <summary>Zona para mostrar fechas en tickets y Excel (en la base todo está en UTC).</summary>
+    public string ZonaHoraria { get; set; } = "America/Argentina/Buenos_Aires";
+
+    public DateTime HoraLocal(DateTimeOffset utc)
+    {
+        try
+        {
+            return TimeZoneInfo.ConvertTime(utc, TimeZoneInfo.FindSystemTimeZoneById(ZonaHoraria)).DateTime;
+        }
+        catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException)
+        {
+            return utc.ToLocalTime().DateTime;
+        }
+    }
 }
 
 /// <summary>Identidad del puesto que genera los datos. En la nube no hay nodo.</summary>
