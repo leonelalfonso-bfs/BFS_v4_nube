@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="src/Bfs.Core/Bfs.Core.csproj" />
+  <Project Path="src/Bfs.Infrastructure/Bfs.Infrastructure.csproj" />
+  <Project Path="src/Bfs.Scale/Bfs.Scale.csproj" />
+  <Project Path="src/Bfs.Integrations/Bfs.Integrations.csproj" />
+  <Project Path="src/Bfs.Api/Bfs.Api.csproj" />
+  <Project Path="src/Bfs.Desktop/Bfs.Desktop.csproj" />
+</Solution>

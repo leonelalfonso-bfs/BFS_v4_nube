@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Bfs.Core\Bfs.Core.csproj" />
+    <ProjectReference Include="..\Bfs.Infrastructure\Bfs.Infrastructure.csproj" />
+    <ProjectReference Include="..\Bfs.Scale\Bfs.Scale.csproj" />
+    <ProjectReference Include="..\Bfs.Integrations\Bfs.Integrations.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.13" />
+    <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
+  </ItemGroup>
+
+</Project>
