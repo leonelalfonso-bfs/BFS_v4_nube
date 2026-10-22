@@ -98,6 +98,60 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                     b.ToTable("Configuraciones");
                 });
 
+            modelBuilder.Entity("Bfs.Core.Entities.DatosVehiculo", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Conductor")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreadoEn")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Documento")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Eliminado")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ModificadoEn")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Nacionalidad")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("OrigenNodoId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PatenteAcoplado")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PatenteChasis")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TipoDocumento")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Transporte")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ModificadoEn");
+
+                    b.HasIndex("PatenteChasis")
+                        .IsUnique();
+
+                    b.ToTable("DatosVehiculos");
+                });
+
             modelBuilder.Entity("Bfs.Core.Entities.Empresa", b =>
                 {
                     b.Property<Guid>("Id")
@@ -113,8 +167,17 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                     b.Property<string>("Cuit")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Direccion")
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("Eliminado")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("Email")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Localidad")
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("ModificadoEn")
                         .HasColumnType("INTEGER");
@@ -126,8 +189,14 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                     b.Property<Guid?>("OrigenNodoId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Provincia")
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("ProximoTicket")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("Telefono")
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
@@ -141,6 +210,45 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                         .IsUnique();
 
                     b.ToTable("Empresas");
+                });
+
+            modelBuilder.Entity("Bfs.Core.Entities.Exportador", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreadoEn")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Cuit")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Eliminado")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ModificadoEn")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("OrigenNodoId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RazonSocial")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ModificadoEn");
+
+                    b.HasIndex("RazonSocial")
+                        .IsUnique();
+
+                    b.ToTable("Exportadores");
                 });
 
             modelBuilder.Entity("Bfs.Core.Entities.OutboxMessage", b =>
@@ -353,10 +461,58 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                     b.ToTable("Productos");
                 });
 
+            modelBuilder.Entity("Bfs.Core.Entities.TaraConocida", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreadoEn")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Descripcion")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Eliminado")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Identificador")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Kilogramos")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ModificadoEn")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("OrigenNodoId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("TomadaEn")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Identificador")
+                        .IsUnique();
+
+                    b.HasIndex("ModificadoEn");
+
+                    b.ToTable("Taras");
+                });
+
             modelBuilder.Entity("Bfs.Core.Entities.Transporte", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CodigoAta")
                         .HasColumnType("TEXT");
 
                     b.Property<long>("CreadoEn")
@@ -366,6 +522,9 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("Eliminado")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("EsAta")
                         .HasColumnType("INTEGER");
 
                     b.Property<long>("ModificadoEn")
@@ -385,6 +544,8 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                     b.HasKey("Id");
 
                     b.HasIndex("ModificadoEn");
+
+                    b.HasIndex("RazonSocial");
 
                     b.ToTable("Transportes");
                 });

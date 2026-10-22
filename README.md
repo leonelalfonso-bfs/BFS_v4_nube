@@ -75,5 +75,7 @@ Las bases creadas por el spike anterior (sin migraciones) se renombran a `bfs.sp
 - Outbox + mapper WORMS (se activa desde Configuración BFS)
 - Login por email; roles vendor / admin / supervisor / operador / cliente con permisos por acción (`Bfs.Core/Permisos.cs`)
 - Usuario cliente: solo ve las pesadas de su cliente del catálogo
+- Catálogos: clientes, transportes (ATA), productos, exportadores, taras conocidas; búsqueda y CUIT validado
+- Planta: datos de empresas, aduana y clave de ingreso manual; autocompletado por patente
 - Licencia firmada por PC
 - Columnas de sincronización en todas las entidades (`Version`, `ModificadoEn`, borrado lógico, nodo de origen)

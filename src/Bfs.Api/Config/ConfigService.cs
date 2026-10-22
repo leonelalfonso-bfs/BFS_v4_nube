@@ -28,10 +28,9 @@ public class ConfigService
     {
         foreach (var (clave, valor) in valores)
         {
-            if (clave == ConfigKeys.WormsApiKey && valor is "********" or "")
-            {
-                continue;
-            }
+            // Los secretos se muestran enmascarados: si vuelven así, no se tocan.
+            if (clave == ConfigKeys.WormsApiKey && valor is "********" or "") continue;
+            if (clave == ConfigKeys.ClaveManualHash && valor == "********") continue;
 
             var row = await _db.Configuraciones.FirstOrDefaultAsync(c => c.Clave == clave && c.EmpresaId == null);
             if (row == null)

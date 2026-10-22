@@ -17,6 +17,9 @@ public static class Permisos
     public const string UsuariosGestionar = "usuarios.gestionar";
     public const string EmpresasGestionar = "empresas.gestionar";
     public const string ConfigBfs = "config.bfs";
+
+    /// <summary>Datos de la planta que carga el cliente: empresas, aduana, clave de ingreso manual.</summary>
+    public const string ConfigPlanta = "config.planta";
     public const string LicenciaGestionar = "licencia.gestionar";
 
     public static IReadOnlyList<string> Todos { get; } =
@@ -24,12 +27,12 @@ public static class Permisos
         PesajeOperar, PesajePesoManual, PesajeAnular, PesajeReimprimir,
         PesadasVer, PesadasVerPropias,
         CatalogosVer, CatalogosEditar,
-        UsuariosGestionar, EmpresasGestionar, ConfigBfs, LicenciaGestionar
+        UsuariosGestionar, EmpresasGestionar, ConfigBfs, ConfigPlanta, LicenciaGestionar
     ];
 
     private static readonly string[] Operador = [PesajeOperar, PesajeReimprimir, PesadasVer, CatalogosVer];
     private static readonly string[] Supervisor = [.. Operador, PesajePesoManual, PesajeAnular, CatalogosEditar];
-    private static readonly string[] Admin = [.. Supervisor, UsuariosGestionar];
+    private static readonly string[] Admin = [.. Supervisor, UsuariosGestionar, ConfigPlanta];
 
     private static readonly IReadOnlyDictionary<string, string[]> PorRol = new Dictionary<string, string[]>
     {

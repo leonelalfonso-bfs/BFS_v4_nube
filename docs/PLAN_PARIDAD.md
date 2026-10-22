@@ -173,6 +173,8 @@ Cada fase termina compilando y con algo que se pueda demostrar. Las fases 0 a 6 
 
 ### Fase 2 — Catálogos y configuración
 
+> **Estado (2026-10-22):** hecha en la rama `fase-2`. Catálogos con un mismo CRUD (`/api/catalogos/{tipo}`: búsqueda, nombre sin repetir, CUIT validado, borrado lógico que se recupera al volver a darlo de alta). Pantalla **Planta** para el admin del cliente (empresas, aduana, clave de ingreso manual con hash). Las funciones (aduana, tara conocida, térmica, ingreso manual) son de toda la instalación y las habilita BFS; por empresa queda para cuando un cliente lo pida. Autocompletado por patente y búsqueda rápida con listas desplegables en el pesaje. La clave de ingreso manual se exige en la Fase 4.
+
 1. Clientes (CUIT), transportes (CUIT, `es_ata`, `codigo_ata`), productos (código), **exportadores**, **taras conocidas** (`taras`).
 2. Datos de la empresa: razón social, CUIT, dirección, localidad, provincia, teléfono, mail y logo (hoy `client_config`).
 3. Funciones que se activan por empresa: tara conocida, ingreso manual (+ clave), térmica (impresora, ancho), aduana, contenedores, pallets.

@@ -60,8 +60,8 @@ public class PesajeService
             TicketNumero = ticket.ToString(),
             Tipo = string.IsNullOrWhiteSpace(req.Tipo) ? configs.GetValueOrDefault(ConfigKeys.WormsTipoDefault, "INGRESO") : req.Tipo,
             Estado = "ENTRADA",
-            PatenteChasis = req.PatenteChasis.Replace(" ", ""),
-            PatenteAcoplado = req.PatenteAcoplado,
+            PatenteChasis = Patente.Normalizar(req.PatenteChasis),
+            PatenteAcoplado = string.IsNullOrWhiteSpace(req.PatenteAcoplado) ? null : Patente.Normalizar(req.PatenteAcoplado),
             Conductor = req.Conductor,
             Documento = req.Documento,
             Cliente = req.Cliente,
@@ -78,7 +78,9 @@ public class PesajeService
             TaraPallets = req.TaraPallets,
             EntradaEn = DateTimeOffset.UtcNow
         };
+        if (string.IsNullOrEmpty(pesada.PatenteChasis)) return ResultadoPesaje.Invalida("Falta la patente");
         _db.Pesadas.Add(pesada);
+        await RecordarVehiculo(pesada);
         WormsOutbox.Encolar(_db, configs, pesada, "ENTRADA");
         await _db.SaveChangesAsync();
         return ResultadoPesaje.Ok(pesada);
@@ -103,6 +105,24 @@ public class PesajeService
         await _db.SaveChangesAsync();
         return ResultadoPesaje.Ok(pesada);
     }
+
+    /// <summary>Guarda los datos de esta patente para autocompletar la próxima vez. Lo vacío no pisa lo que había.</summary>
+    private async Task RecordarVehiculo(Pesada p)
+    {
+        var datos = await _db.DatosVehiculos.IgnoreQueryFilters().FirstOrDefaultAsync(d => d.PatenteChasis == p.PatenteChasis);
+        if (datos == null)
+        {
+            datos = new DatosVehiculo { Id = Guid.NewGuid(), PatenteChasis = p.PatenteChasis };
+            _db.DatosVehiculos.Add(datos);
+        }
+        datos.Eliminado = false;
+        datos.PatenteAcoplado = p.PatenteAcoplado ?? datos.PatenteAcoplado;
+        datos.Conductor = Vacio(p.Conductor) ?? datos.Conductor;
+        datos.Documento = Vacio(p.Documento) ?? datos.Documento;
+        datos.Transporte = Vacio(p.Transporte) ?? datos.Transporte;
+    }
+
+    private static string? Vacio(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 
     /// <summary>Por id, o por razón social exacta (sin distinguir mayúsculas) si el operador la escribió a mano.</summary>
     private async Task<Guid?> ResolverCliente(Guid? id, string? razonSocial)

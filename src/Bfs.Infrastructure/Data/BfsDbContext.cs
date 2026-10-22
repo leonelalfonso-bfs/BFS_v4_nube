@@ -14,6 +14,9 @@ public class BfsDbContext : DbContext
     public DbSet<Cliente> Clientes => Set<Cliente>();
     public DbSet<Producto> Productos => Set<Producto>();
     public DbSet<Transporte> Transportes => Set<Transporte>();
+    public DbSet<Exportador> Exportadores => Set<Exportador>();
+    public DbSet<TaraConocida> Taras => Set<TaraConocida>();
+    public DbSet<DatosVehiculo> DatosVehiculos => Set<DatosVehiculo>();
     public DbSet<Pesada> Pesadas => Set<Pesada>();
     public DbSet<OutboxMessage> Outbox => Set<OutboxMessage>();
 
@@ -26,6 +29,9 @@ public class BfsDbContext : DbContext
         ConfigurarSync<Producto>(modelBuilder);
         ConfigurarSync<Transporte>(modelBuilder);
         ConfigurarSync<Pesada>(modelBuilder);
+        ConfigurarSync<Exportador>(modelBuilder);
+        ConfigurarSync<TaraConocida>(modelBuilder);
+        ConfigurarSync<DatosVehiculo>(modelBuilder);
 
         modelBuilder.Entity<Empresa>().HasIndex(e => e.Nombre).IsUnique();
         modelBuilder.Entity<Usuario>().HasIndex(u => u.Email).IsUnique();
@@ -35,6 +41,10 @@ public class BfsDbContext : DbContext
         modelBuilder.Entity<Configuracion>().HasIndex(c => new { c.Clave, c.EmpresaId }).IsUnique();
         modelBuilder.Entity<Cliente>().HasIndex(c => c.RazonSocial);
         modelBuilder.Entity<Producto>().HasIndex(p => p.Nombre).IsUnique();
+        modelBuilder.Entity<Transporte>().HasIndex(t => t.RazonSocial);
+        modelBuilder.Entity<Exportador>().HasIndex(e => e.RazonSocial).IsUnique();
+        modelBuilder.Entity<TaraConocida>().HasIndex(t => t.Identificador).IsUnique();
+        modelBuilder.Entity<DatosVehiculo>().HasIndex(d => d.PatenteChasis).IsUnique();
         modelBuilder.Entity<Pesada>().HasIndex(p => new { p.EmpresaId, p.TicketNumero }).IsUnique();
         modelBuilder.Entity<OutboxMessage>().HasIndex(o => new { o.Estado, o.ProximoIntento });
         modelBuilder.Entity<OutboxMessage>().HasIndex(o => new { o.Destino, o.TicketNumero, o.Evento });

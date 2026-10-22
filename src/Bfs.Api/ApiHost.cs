@@ -5,6 +5,7 @@ using Bfs.Api.Catalogos;
 using Bfs.Api.Config;
 using Bfs.Api.Licencias;
 using Bfs.Api.Pesadas;
+using Bfs.Api.Planta;
 using Bfs.Api.Balanza;
 using Bfs.Api.Usuarios;
 using Bfs.Core;
@@ -98,6 +99,7 @@ public static class ApiHost
         api.MapScaleEndpoints();
         api.MapConfigEndpoints();
         api.MapCatalogoEndpoints();
+        api.MapPlantaEndpoints();
         api.MapUsuarioEndpoints();
         api.MapPesadaEndpoints();
         api.MapLicenciaEndpoints();

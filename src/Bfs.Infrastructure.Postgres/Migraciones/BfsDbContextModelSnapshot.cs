@@ -103,6 +103,60 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                     b.ToTable("Configuraciones");
                 });
 
+            modelBuilder.Entity("Bfs.Core.Entities.DatosVehiculo", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Conductor")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreadoEn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Documento")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("Eliminado")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset>("ModificadoEn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Nacionalidad")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("OrigenNodoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PatenteAcoplado")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PatenteChasis")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TipoDocumento")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Transporte")
+                        .HasColumnType("text");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ModificadoEn");
+
+                    b.HasIndex("PatenteChasis")
+                        .IsUnique();
+
+                    b.ToTable("DatosVehiculos");
+                });
+
             modelBuilder.Entity("Bfs.Core.Entities.Empresa", b =>
                 {
                     b.Property<Guid>("Id")
@@ -118,8 +172,17 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                     b.Property<string>("Cuit")
                         .HasColumnType("text");
 
+                    b.Property<string>("Direccion")
+                        .HasColumnType("text");
+
                     b.Property<bool>("Eliminado")
                         .HasColumnType("boolean");
+
+                    b.Property<string>("Email")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Localidad")
+                        .HasColumnType("text");
 
                     b.Property<DateTimeOffset>("ModificadoEn")
                         .HasColumnType("timestamp with time zone");
@@ -131,8 +194,14 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                     b.Property<Guid?>("OrigenNodoId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Provincia")
+                        .HasColumnType("text");
+
                     b.Property<int>("ProximoTicket")
                         .HasColumnType("integer");
+
+                    b.Property<string>("Telefono")
+                        .HasColumnType("text");
 
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
@@ -146,6 +215,45 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                         .IsUnique();
 
                     b.ToTable("Empresas");
+                });
+
+            modelBuilder.Entity("Bfs.Core.Entities.Exportador", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreadoEn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Cuit")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("Eliminado")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset>("ModificadoEn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("OrigenNodoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RazonSocial")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ModificadoEn");
+
+                    b.HasIndex("RazonSocial")
+                        .IsUnique();
+
+                    b.ToTable("Exportadores");
                 });
 
             modelBuilder.Entity("Bfs.Core.Entities.OutboxMessage", b =>
@@ -358,7 +466,7 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                     b.ToTable("Productos");
                 });
 
-            modelBuilder.Entity("Bfs.Core.Entities.Transporte", b =>
+            modelBuilder.Entity("Bfs.Core.Entities.TaraConocida", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -367,10 +475,61 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                     b.Property<DateTimeOffset>("CreadoEn")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("Descripcion")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("Eliminado")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Identificador")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Kilogramos")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("ModificadoEn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("OrigenNodoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("TomadaEn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Identificador")
+                        .IsUnique();
+
+                    b.HasIndex("ModificadoEn");
+
+                    b.ToTable("Taras");
+                });
+
+            modelBuilder.Entity("Bfs.Core.Entities.Transporte", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CodigoAta")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreadoEn")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Cuit")
                         .HasColumnType("text");
 
                     b.Property<bool>("Eliminado")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("EsAta")
                         .HasColumnType("boolean");
 
                     b.Property<DateTimeOffset>("ModificadoEn")
@@ -390,6 +549,8 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                     b.HasKey("Id");
 
                     b.HasIndex("ModificadoEn");
+
+                    b.HasIndex("RazonSocial");
 
                     b.ToTable("Transportes");
                 });

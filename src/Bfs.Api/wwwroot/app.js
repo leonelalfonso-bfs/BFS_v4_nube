@@ -3,6 +3,7 @@ const ICONS = {
   reportes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V5h12l4 4v10H4z"/><path d="M16 5v4h4M8 13h8M8 17h5"/></svg>',
   catalogos: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M4 12h16M4 17h10"/></svg>',
   usuarios: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4z"/><path d="M4 20a8 8 0 0 1 16 0"/></svg>',
+  planta: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 21V9l6-4v4l6-4v16"/><path d="M15 21V3h6v18M3 21h18M7 13h2M7 17h2M11 13h2M11 17h2"/></svg>',
   config: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>'
 };
 
@@ -38,7 +39,12 @@ const state = {
   scaleMeta: { status: "", lastError: "", puertos: [] },
   selectedPesadaId: null,
   licencia: null,
-  rolesAsignables: []
+  rolesAsignables: [],
+  funciones: {},
+  catTab: "clientes",
+  catEdit: null,
+  catQ: "",
+  catItems: []
 };
 
 async function api(path, options = {}) {
@@ -99,6 +105,7 @@ function navItems() {
   if (can("catalogos.ver")) nav.push(["catalogos", "Catálogos"]);
   const admin = [];
   if (can("usuarios.gestionar")) admin.push(["usuarios", "Usuarios"]);
+  if (can("config.planta")) admin.push(["planta", "Planta"]);
   if (can("config.bfs")) admin.push(["config", "Configuración"]);
   return { nav, admin };
 }
@@ -183,7 +190,7 @@ function render() {
       <main class="workspace" id="main"></main>
     </div>
   `;
-  const views = { pesaje: renderPesaje, reportes: renderReportes, catalogos: renderCatalogos, usuarios: renderUsuarios, config: renderConfig };
+  const views = { pesaje: renderPesaje, reportes: renderReportes, catalogos: renderCatalogos, usuarios: renderUsuarios, planta: renderPlanta, config: renderConfig };
   views[state.view]?.();
 }
 
@@ -228,13 +235,15 @@ async function doLogin() {
 }
 
 async function boot() {
-  const [empresas, config, branding, campos, licencia] = await Promise.all([
+  const [empresas, config, branding, campos, licencia, funciones] = await Promise.all([
     api("/api/empresas"),
     can("config.bfs") ? api("/api/config") : Promise.resolve({}),
     api("/api/branding"),
     api("/api/campos"),
-    api("/api/licencia")
+    api("/api/licencia"),
+    api("/api/funciones")
   ]);
+  state.funciones = funciones;
   state.empresas = empresas;
   state.config = config;
   state.branding = branding;
@@ -264,14 +273,31 @@ function inputField(id, label, opts = {}) {
   if (opts.type === "select") {
     return `<div><label>${esc(label)}${req}</label><select id="${id}">${opts.options}</select></div>`;
   }
+  if (opts.list) {
+    return `<div><label>${esc(label)}${req}</label><input id="${id}" list="${opts.list}" autocomplete="off" /></div>`;
+  }
+  if (opts.blur) {
+    return `<div><label>${esc(label)}${req}</label><input id="${id}" onblur="${opts.blur}" autocomplete="off" /></div>`;
+  }
   if (opts.type === "textarea") {
     return `<div style="grid-column:1/-1"><label>${esc(label)}${req}</label><textarea id="${id}"></textarea></div>`;
   }
   return `<div><label>${esc(label)}${req}</label><input id="${id}" ${opts.type ? `type="${opts.type}"` : ""} value="${opts.value ?? ""}" /></div>`;
 }
 
+function datalist(id, items) {
+  return `<datalist id="${id}">${items.map(x => `<option value="${esc(x)}"></option>`).join("")}</datalist>`;
+}
+
 async function renderPesaje() {
-  state.pesadas = await api("/api/pesadas");
+  const [pesadas, clientes, transportes, productos] = await Promise.all([
+    api("/api/pesadas"),
+    api("/api/catalogos/clientes"),
+    api("/api/catalogos/transportes"),
+    api("/api/catalogos/productos")
+  ]);
+  state.pesadas = pesadas;
+  state.catalogos = { clientes, transportes, productos };
   const empresas = state.empresas.map(e => `<option value="${e.id}">${esc(e.nombre)}</option>`).join("");
   const f = (key, html) => visible(key) ? html : "";
   const abiertas = state.pesadas.filter(p => p.estado === "ENTRADA");
@@ -302,19 +328,22 @@ async function renderPesaje() {
       <h3 style="margin-top:0">Datos del vehículo</h3>
       <div class="grid2">
         ${f("tipo", inputField("tipo", field("tipo")?.label || "Tipo", { type: "select", options: "<option>INGRESO</option><option>EGRESO</option>" }))}
-        ${f("patenteChasis", inputField("patenteChasis", field("patenteChasis")?.label || "Patente chasis"))}
+        ${f("patenteChasis", inputField("patenteChasis", field("patenteChasis")?.label || "Patente chasis", { blur: "autocompletarPatente()" }))}
         ${f("patenteAcoplado", inputField("patenteAcoplado", field("patenteAcoplado")?.label || "Patente acoplado"))}
         ${f("conductor", inputField("conductor", field("conductor")?.label || "Conductor"))}
         ${f("documento", inputField("documento", field("documento")?.label || "Documento"))}
-        ${f("cliente", inputField("cliente", field("cliente")?.label || "Cliente"))}
-        ${f("transporte", inputField("transporte", field("transporte")?.label || "Transporte"))}
-        ${f("producto", inputField("producto", field("producto")?.label || "Producto"))}
+        ${f("cliente", inputField("cliente", field("cliente")?.label || "Cliente", { list: "dl_clientes" }))}
+        ${f("transporte", inputField("transporte", field("transporte")?.label || "Transporte", { list: "dl_transportes" }))}
+        ${f("producto", inputField("producto", field("producto")?.label || "Producto", { list: "dl_productos" }))}
         ${f("procedencia", inputField("procedencia", field("procedencia")?.label || "Procedencia"))}
         ${f("destino", inputField("destino", field("destino")?.label || "Destino"))}
         ${f("comprobante", inputField("comprobante", field("comprobante")?.label || "Remito"))}
         ${f("taraPallets", inputField("taraPallets", field("taraPallets")?.label || "Tara pallets (kg)", { type: "number", value: "0" }))}
         ${f("observaciones", inputField("observaciones", field("observaciones")?.label || "Observaciones", { type: "textarea" }))}
       </div>
+      ${datalist("dl_clientes", clientes.map(c => c.razonSocial))}
+      ${datalist("dl_transportes", transportes.map(t => t.razonSocial))}
+      ${datalist("dl_productos", productos.map(p => p.nombre))}
       <p class="error" id="err"></p>
       <div class="btn-row">
         <button class="btn-primary" onclick="guardarEntrada()" ${state.licencia && !state.licencia.puedePesar ? "disabled" : ""}>Capturar entrada</button>
@@ -420,49 +449,224 @@ async function renderReportes() {
     </div>`;
 }
 
+const CATALOGOS = {
+  clientes: { titulo: "Clientes", campos: [["razonSocial", "Razón social"], ["cuit", "CUIT"]] },
+  transportes: { titulo: "Transportes", campos: [["razonSocial", "Razón social"], ["cuit", "CUIT"], ["esAta", "Es ATA", "check"], ["codigoAta", "Código ATA"]] },
+  productos: { titulo: "Productos", campos: [["nombre", "Nombre"], ["codigo", "Código"]] },
+  exportadores: { titulo: "Exportadores", campos: [["razonSocial", "Razón social"], ["cuit", "CUIT"]], visible: () => state.funciones.aduana },
+  taras: { titulo: "Taras conocidas", campos: [["identificador", "Patente / carro"], ["kilogramos", "Tara (kg)", "number"], ["descripcion", "Descripción"]], visible: () => state.funciones.taraConocida }
+};
+
+function catalogosVisibles() {
+  return Object.entries(CATALOGOS).filter(([, c]) => !c.visible || c.visible() || isVendor());
+}
+
 async function renderCatalogos() {
-  const [clientes, productos, transportes] = await Promise.all([
-    api("/api/catalogos/clientes"),
-    api("/api/catalogos/productos"),
-    api("/api/catalogos/transportes")
-  ]);
-  state.catalogos = { clientes, productos, transportes };
+  const tabs = catalogosVisibles();
+  if (!tabs.some(([id]) => id === state.catTab)) state.catTab = tabs[0][0];
+  const cat = CATALOGOS[state.catTab];
+  const q = state.catQ || "";
+  const items = await api(`/api/catalogos/${state.catTab}${q ? "?q=" + encodeURIComponent(q) : ""}`);
+  state.catItems = items;
+  const editando = items.find(x => x.id === state.catEdit);
+  const editable = can("catalogos.editar");
+  const celda = (item, [key, , tipo]) =>
+    tipo === "check" ? (item[key] ? "Sí" : "No") : esc(item[key] ?? "");
+
   document.getElementById("main").innerHTML = `
     <div class="page-head"><div><h2>Catálogos</h2><p>Compartidos por las empresas de esta planta.</p></div></div>
-    <div class="grid3">
-      ${catalogBlock("Productos", "np", "altaProducto", productos.map(p => p.nombre))}
-      ${catalogBlock("Clientes", "nc", "altaCliente", clientes.map(c => c.razonSocial))}
-      ${catalogBlock("Transportes", "nt", "altaTransporte", transportes.map(t => t.razonSocial))}
+    <div class="tabs">
+      ${tabs.map(([id, c]) => `<button class="tab ${state.catTab === id ? "active" : ""}" onclick="goCatalogo('${id}')">${c.titulo}</button>`).join("")}
+    </div>
+    ${editable ? `
+    <div class="card">
+      <h3 style="margin-top:0">${editando ? "Editar" : "Nuevo"}</h3>
+      <div class="grid2">
+        ${cat.campos.map(([key, label, tipo]) => tipo === "check"
+          ? `<div><label class="check"><input type="checkbox" id="cf_${key}" ${editando?.[key] ? "checked" : ""} /> ${label}</label></div>`
+          : `<div><label>${label}</label><input id="cf_${key}" ${tipo ? `type="${tipo}"` : ""} value="${esc(editando?.[key] ?? "")}" /></div>`
+        ).join("")}
+      </div>
+      <div class="btn-row">
+        <button class="btn-primary" onclick="guardarCatalogo()">${editando ? "Guardar cambios" : "Agregar"}</button>
+        ${editando ? `<button class="btn" onclick="editarCatalogo(null)">Cancelar</button>` : ""}
+      </div>
+    </div>` : ""}
+    <div class="card">
+      <input id="catQ" placeholder="Buscar..." value="${esc(q)}" oninput="buscarCatalogo(this.value)" />
+      <table style="margin-top:14px">
+        <tr>${cat.campos.map(([, label]) => `<th>${label}</th>`).join("")}${editable ? "<th></th>" : ""}</tr>
+        ${items.length ? items.map(item => `<tr class="${item.id === state.catEdit ? "selected" : ""}">
+          ${cat.campos.map(c => `<td>${celda(item, c)}</td>`).join("")}
+          ${editable ? `<td><div class="btn-row" style="margin:0">
+            <button class="btn" onclick="editarCatalogo('${item.id}')">Editar</button>
+            <button class="btn-danger" onclick="borrarCatalogo('${item.id}')">Borrar</button>
+          </div></td>` : ""}
+        </tr>`).join("") : `<tr><td colspan="${cat.campos.length + 1}">Sin datos</td></tr>`}
+      </table>
     </div>`;
+  if (q) {
+    const input = document.getElementById("catQ");
+    input.focus();
+    input.setSelectionRange(q.length, q.length);
+  }
 }
 
-function catalogBlock(title, inputId, fn, items) {
-  return `<div class="card">
-    <h3 style="margin-top:0">${title}</h3>
-    ${can("catalogos.editar") ? `
-    <input id="${inputId}" placeholder="Nuevo..." />
-    <button class="btn-primary" style="margin-top:10px" onclick="${fn}()">${title === "Productos" ? "Agregar producto" : "Agregar"}</button>` : ""}
-    <table style="margin-top:14px">${items.length ? items.map(x => `<tr><td>${esc(x)}</td></tr>`).join("") : "<tr><td>Sin datos</td></tr>"}</table>
-  </div>`;
+function goCatalogo(id) {
+  state.catTab = id;
+  state.catEdit = null;
+  state.catQ = "";
+  renderCatalogos();
 }
 
-async function altaProducto() {
-  if (!val("np")) return;
-  await api("/api/catalogos/productos", { method: "POST", body: JSON.stringify({ nombre: val("np") }) });
-  toast("Producto creado");
+function buscarCatalogo(q) {
+  state.catQ = q;
+  clearTimeout(buscarCatalogo._t);
+  buscarCatalogo._t = setTimeout(renderCatalogos, 250);
+}
+
+function editarCatalogo(id) {
+  state.catEdit = id;
   renderCatalogos();
 }
-async function altaCliente() {
-  if (!val("nc")) return;
-  await api("/api/catalogos/clientes", { method: "POST", body: JSON.stringify({ razonSocial: val("nc") }) });
-  toast("Cliente creado");
-  renderCatalogos();
+
+async function guardarCatalogo() {
+  const body = {};
+  for (const [key, , tipo] of CATALOGOS[state.catTab].campos) {
+    const el = document.getElementById("cf_" + key);
+    body[key] = tipo === "check" ? el.checked : tipo === "number" ? Number(el.value || 0) : el.value;
+  }
+  try {
+    const ruta = `/api/catalogos/${state.catTab}` + (state.catEdit ? `/${state.catEdit}` : "");
+    await api(ruta, { method: state.catEdit ? "PUT" : "POST", body: JSON.stringify(body) });
+    toast(state.catEdit ? "Cambios guardados" : "Agregado");
+    state.catEdit = null;
+    renderCatalogos();
+  } catch (e) {
+    toast(limpiarError(e), "err");
+  }
 }
-async function altaTransporte() {
-  if (!val("nt")) return;
-  await api("/api/catalogos/transportes", { method: "POST", body: JSON.stringify({ razonSocial: val("nt") }) });
-  toast("Transporte creado");
-  renderCatalogos();
+
+async function borrarCatalogo(id) {
+  if (!confirm("¿Borrar este registro?")) return;
+  try {
+    await api(`/api/catalogos/${state.catTab}/${id}`, { method: "DELETE" });
+    toast("Borrado");
+    if (state.catEdit === id) state.catEdit = null;
+    renderCatalogos();
+  } catch (e) {
+    toast(limpiarError(e), "err");
+  }
+}
+
+function limpiarError(e) {
+  return String(e.message || e).replace(/^"|"$/g, "");
+}
+
+async function renderPlanta() {
+  const [empresas, aduana] = await Promise.all([
+    api("/api/empresas"),
+    api("/api/planta/aduana")
+  ]);
+  state.empresas = empresas;
+  const campoEmp = (e, key, label) =>
+    `<div><label>${label}</label><input id="em_${key}_${e.id}" value="${esc(e[key] ?? "")}" /></div>`;
+  const fecha = d => d ? String(d).slice(0, 10) : "";
+  document.getElementById("main").innerHTML = `
+    <div class="page-head"><div><h2>Planta</h2><p>Datos que salen en los tickets y en los documentos de aduana.</p></div></div>
+    ${empresas.map(e => `
+    <div class="card">
+      <h3 style="margin-top:0">${esc(e.nombre)}</h3>
+      <div class="grid2">
+        ${campoEmp(e, "nombre", "Razón social")}
+        ${campoEmp(e, "cuit", "CUIT")}
+        ${campoEmp(e, "direccion", "Dirección")}
+        ${campoEmp(e, "localidad", "Localidad")}
+        ${campoEmp(e, "provincia", "Provincia")}
+        ${campoEmp(e, "telefono", "Teléfono")}
+        ${campoEmp(e, "email", "Email")}
+      </div>
+      <div class="btn-row"><button class="btn-primary" onclick="guardarEmpresa('${e.id}')">Guardar empresa</button></div>
+    </div>`).join("")}
+    ${state.funciones.aduana || isVendor() ? `
+    <div class="card">
+      <h3 style="margin-top:0">Aduana</h3>
+      <div class="grid2">
+        <div><label>Código de aduana</label><input id="ad_codigo" value="${esc(aduana.codigo ?? "")}" /></div>
+        <div><label>Código LOT</label><input id="ad_lot" value="${esc(aduana.lot ?? "")}" /></div>
+        <div><label>Certificado balanza 1</label><input id="ad_c1" value="${esc(aduana.certificado1 ?? "")}" /></div>
+        <div><label>Vence</label><input id="ad_c1v" type="date" value="${fecha(aduana.certificado1Vence)}" /></div>
+        <div><label>Certificado balanza 2</label><input id="ad_c2" value="${esc(aduana.certificado2 ?? "")}" /></div>
+        <div><label>Vence</label><input id="ad_c2v" type="date" value="${fecha(aduana.certificado2Vence)}" /></div>
+      </div>
+      <div class="btn-row"><button class="btn-primary" onclick="guardarAduana()">Guardar aduana</button></div>
+    </div>` : ""}
+    ${state.funciones.ingresoManual ? `
+    <div class="card">
+      <h3 style="margin-top:0">Clave de ingreso manual</h3>
+      <p>${state.funciones.claveManual ? "Hay una clave configurada." : "Sin clave: alcanza con el permiso de supervisor."} Dejala vacía para quitarla.</p>
+      <div class="grid2"><div><label>Nueva clave</label><input id="cm_clave" type="password" autocomplete="new-password" /></div></div>
+      <div class="btn-row"><button class="btn-primary" onclick="guardarClaveManual()">Guardar clave</button></div>
+    </div>` : ""}`;
+}
+
+async function guardarEmpresa(id) {
+  const body = {};
+  for (const key of ["nombre", "cuit", "direccion", "localidad", "provincia", "telefono", "email"]) {
+    body[key] = val(`em_${key}_${id}`);
+  }
+  try {
+    await api(`/api/empresas/${id}`, { method: "PUT", body: JSON.stringify(body) });
+    toast("Empresa guardada");
+    renderPlanta();
+  } catch (e) {
+    toast(limpiarError(e), "err");
+  }
+}
+
+async function guardarAduana() {
+  try {
+    await api("/api/planta/aduana", { method: "PUT", body: JSON.stringify({
+      codigo: val("ad_codigo"),
+      lot: val("ad_lot"),
+      certificado1: val("ad_c1"),
+      certificado1Vence: val("ad_c1v") || null,
+      certificado2: val("ad_c2"),
+      certificado2Vence: val("ad_c2v") || null
+    })});
+    toast("Datos de aduana guardados");
+  } catch (e) {
+    toast(limpiarError(e), "err");
+  }
+}
+
+async function guardarClaveManual() {
+  try {
+    const r = await api("/api/planta/clave-manual", { method: "PUT", body: JSON.stringify({ clave: val("cm_clave") }) });
+    state.funciones.claveManual = r.claveManual;
+    toast(r.claveManual ? "Clave guardada" : "Clave quitada");
+    renderPlanta();
+  } catch (e) {
+    toast(limpiarError(e), "err");
+  }
+}
+
+async function autocompletarPatente() {
+  const patente = val("patenteChasis").trim();
+  if (patente.length < 5) return;
+  let r;
+  try { r = await api(`/api/vehiculos/${encodeURIComponent(patente)}`); } catch { return; }
+  const d = r?.datos;
+  if (!d) return;
+  const fill = (id, value) => {
+    const el = document.getElementById(id);
+    if (el && !el.value && value) el.value = value;
+  };
+  fill("patenteAcoplado", d.patenteAcoplado);
+  fill("conductor", d.conductor);
+  fill("documento", d.documento);
+  fill("transporte", d.transporte);
+  toast("Datos de la última vez completados");
 }
 
 function rolOptions(selected) {
@@ -625,6 +829,13 @@ function renderConfigGeneral() {
         <div><label>Aduana</label>${yesNo("c_adu", c.aduana)}</div>
         <div><label>Contenedores</label>${yesNo("c_cont", c.contenedores)}</div>
         <div><label>Impresora térmica</label>${yesNo("c_term", c.termica)}</div>
+        <div><label>Nombre de la impresora térmica</label><input id="c_term_imp" value="${esc(c.termica_impresora || "")}" /></div>
+        <div><label>Ancho de papel</label>
+          <select id="c_term_ancho">
+            ${["58", "80"].map(a => `<option value="${a}" ${(c.termica_ancho || "80") === a ? "selected" : ""}>${a} mm</option>`).join("")}
+          </select>
+        </div>
+        <div><label>Ingreso manual de peso</label>${yesNo("c_manual", c.ingreso_manual ?? "true")}</div>
       </div>
       <div class="btn-row"><button class="btn-primary" onclick="saveGeneral()">Guardar general</button></div>
     </div>`;
@@ -784,8 +995,12 @@ async function saveGeneral() {
     tara_conocida: val("c_tara"),
     aduana: val("c_adu"),
     contenedores: val("c_cont"),
-    termica: val("c_term")
+    termica: val("c_term"),
+    termica_impresora: val("c_term_imp"),
+    termica_ancho: val("c_term_ancho"),
+    ingreso_manual: val("c_manual")
   });
+  state.funciones = await api("/api/funciones");
   renderConfig();
 }
 

@@ -7,6 +7,19 @@ public static class ConfigKeys
     public const string TaraConocida = "tara_conocida";
     public const string TaraPallets = "tara_pallets";
     public const string Termica = "termica";
+    public const string TermicaImpresora = "termica_impresora";
+    public const string TermicaAncho = "termica_ancho";
+    public const string IngresoManual = "ingreso_manual";
+
+    /// <summary>Hash de la clave que pide el ingreso manual de peso (la 3.x la guardaba en texto plano).</summary>
+    public const string ClaveManualHash = "clave_manual_hash";
+
+    public const string AduanaCodigo = "aduana_codigo";
+    public const string AduanaLot = "aduana_lot";
+    public const string AduanaCertificado1 = "aduana_certificado_1";
+    public const string AduanaCertificado1Vence = "aduana_certificado_1_vence";
+    public const string AduanaCertificado2 = "aduana_certificado_2";
+    public const string AduanaCertificado2Vence = "aduana_certificado_2_vence";
     public const string WormsEnabled = "worms_enabled";
     public const string WormsEndpoint = "worms_endpoint";
     public const string WormsApiKey = "worms_api_key";

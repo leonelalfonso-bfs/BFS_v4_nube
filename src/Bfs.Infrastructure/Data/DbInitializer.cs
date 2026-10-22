@@ -54,6 +54,9 @@ public static class DbInitializer
         await EnsureConfig(db, ConfigKeys.TaraConocida, "false");
         await EnsureConfig(db, ConfigKeys.TaraPallets, "true");
         await EnsureConfig(db, ConfigKeys.Termica, "false");
+        await EnsureConfig(db, ConfigKeys.TermicaImpresora, "");
+        await EnsureConfig(db, ConfigKeys.TermicaAncho, "80");
+        await EnsureConfig(db, ConfigKeys.IngresoManual, "true");
         await EnsureConfig(db, ConfigKeys.WormsEnabled, "false");
         await EnsureConfig(db, ConfigKeys.WormsEndpoint, "");
         await EnsureConfig(db, ConfigKeys.WormsApiKey, "");

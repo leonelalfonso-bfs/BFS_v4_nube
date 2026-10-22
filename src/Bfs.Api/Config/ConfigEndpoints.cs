@@ -14,7 +14,7 @@ public static class ConfigEndpoints
             var items = await config.GlobalAsync();
             return Results.Ok(items.ToDictionary(
                 c => c.Key,
-                c => c.Key == ConfigKeys.WormsApiKey && c.Value.Length > 0 ? "********" : c.Value));
+                c => c.Key is ConfigKeys.WormsApiKey or ConfigKeys.ClaveManualHash && c.Value.Length > 0 ? "********" : c.Value));
         }).RequireAuthorization(Permisos.ConfigBfs);
 
         api.MapPut("/config", async (Dictionary<string, string> body, ConfigService config, IScaleController scale) =>
