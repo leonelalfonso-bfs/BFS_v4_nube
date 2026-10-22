@@ -198,6 +198,8 @@ Cada fase termina compilando y con algo que se pueda demostrar. Las fases 0 a 6 
 
 ### Fase 4 — Pesaje (corazón del sistema)
 
+> **Estado (2026-10-22):** hecha en la rama `fase-4`. Normal, Tara conocida (un paso), Tomar tara, Aduana (escenarios y contenedor con la regla de la 3.x), ingreso manual (permiso + habilitación + clave, queda registrado quién), anulación con motivo (no borra como la 3.x; el ticket no se reutiliza), pendientes sin límite y "Retomar" desde Pesadas. Tickets `PP-NNNNNN` con contador por empresa y puesto (control de versión + reintento). **Decisión:** por defecto solo se captura con peso estable (BFS lo puede apagar; el ingreso manual no lo necesita). Pendiente: la anulación no se avisa a WORMS (ver Fase 8).
+
 `PesajeScene.java` tiene 3.600 líneas: **no se clona**. Se separa en servicio de dominio + componentes de UI.
 
 1. Selector: **Normal / Tara conocida / Tomar tara**.

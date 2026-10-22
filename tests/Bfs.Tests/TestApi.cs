@@ -25,7 +25,8 @@ public sealed class TestApi : IAsyncDisposable
     public string DataPath => _tmp.Path;
 
     /// <param name="sinLicencia">true = entorno Development con licencia desactivada; false = como una instalación real.</param>
-    public static async Task<TestApi> Iniciar(bool sinLicencia = true, params string[] extra)
+    /// <param name="exigirEstable">La balanza simulada recién arrancada todavía no está estable: por defecto no se exige.</param>
+    public static async Task<TestApi> Iniciar(bool sinLicencia = true, bool exigirEstable = false, params string[] extra)
     {
         var tmp = new TempDir();
         var args = new List<string> { "--Urls=http://127.0.0.1:0", $"--Bfs:DataPath={tmp.Path}" };
@@ -35,7 +36,16 @@ public sealed class TestApi : IAsyncDisposable
 
         var app = ApiHost.Create(args.ToArray());
         await app.StartAsync();
-        return new TestApi(tmp, app);
+        var api = new TestApi(tmp, app);
+        if (!exigirEstable) await api.Configurar(new() { ["exigir_estable"] = "false" });
+        return api;
+    }
+
+    /// <summary>Cambia la configuración de BFS (como vendor).</summary>
+    public async Task Configurar(Dictionary<string, string> valores)
+    {
+        using var vendor = await LoginVendor();
+        (await vendor.PutAsJsonAsync("/api/config", valores)).EnsureSuccessStatusCode();
     }
 
     public HttpClient Cliente() => new() { BaseAddress = new Uri(_app.Urls.First()) };

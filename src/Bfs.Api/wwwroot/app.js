@@ -41,6 +41,8 @@ const state = {
   cfgBalanzas: [],
   modelos: [],
   balEdit: null,
+  modoPesaje: "normal",
+  pendientes: [],
   selectedPesadaId: null,
   licencia: null,
   rolesAsignables: [],
@@ -309,28 +311,173 @@ function datalist(id, items) {
   return `<datalist id="${id}">${items.map(x => `<option value="${esc(x)}"></option>`).join("")}</datalist>`;
 }
 
+const ESCENARIOS_ADUANA = ["Ingresa con Contenedor", "Carga Contenedor Lleno"];
+
+function puedeManual() {
+  return can("pesaje.peso_manual") && state.funciones.ingresoManual;
+}
+
+function modosPesaje() {
+  const modos = [["normal", "Normal"]];
+  if (state.funciones.taraConocida) modos.push(["tara", "Tara conocida"], ["tomar", "Tomar tara"]);
+  return modos;
+}
+
+function bloqueManual(titulo) {
+  if (!puedeManual()) return "";
+  return `
+    <details style="margin-top:12px">
+      <summary>${titulo}</summary>
+      <div class="grid2" style="margin-top:8px">
+        <div><label>Peso (kg) — vacío = balanza</label><input id="pm_kg" type="number" min="1" /></div>
+        ${state.funciones.claveManual ? `<div><label>Clave de ingreso manual</label><input id="pm_clave" type="password" autocomplete="off" /></div>` : ""}
+      </div>
+    </details>`;
+}
+
+function manual() {
+  const kg = val("pm_kg");
+  return { peso: kg ? Number(kg) : null, clave: val("pm_clave") || null };
+}
+
+function bloqueAduana() {
+  if (!state.funciones.aduana) return "";
+  const opt = values => values.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join("");
+  return `
+    <div class="grid2" style="margin-top:12px">
+      <div><label>Operación</label><select id="tipoOperacion" onchange="toggleAduana()">
+        <option value="Normal">Normal</option><option value="Aduana">Aduana</option>
+      </select></div>
+    </div>
+    <div id="aduanaBox" style="display:none;margin-top:12px">
+      <h4 style="margin:0 0 8px">Operación aduanera</h4>
+      <div class="grid2">
+        <div><label>Escenario *</label><select id="ad_escenario"><option value="">Elegir...</option>${opt(ESCENARIOS_ADUANA)}</select></div>
+        <div><label>Exportador</label><input id="ad_exportador" list="dl_exportadores" autocomplete="off" onchange="completarExportador()" /></div>
+        <div><label>CUIT exportador</label><input id="ad_exportadorCuit" /></div>
+        <div><label>N° de operación</label><input id="ad_operacionId" /></div>
+        <div><label>Tipo de documento del chofer</label><select id="ad_tipoDoc"><option></option>${opt(["DNI", "Pasaporte", "Otro"])}</select></div>
+        <div><label>Nacionalidad del chofer</label><input id="ad_nacionalidad" /></div>
+        <div><label>Contenedor</label><input id="ad_contenedorId" /></div>
+        <div><label>Tara contenedor (kg)</label><input id="ad_contenedorTara" type="number" value="0" /></div>
+        <div><label>Bulto</label><input id="ad_bultoId" /></div>
+        <div><label>Bulto bruto (kg)</label><input id="ad_bultoBruto" type="number" /></div>
+        <div><label>Bulto tara (kg)</label><input id="ad_bultoTara" type="number" /></div>
+      </div>
+      ${datalist("dl_exportadores", (state.catalogos.exportadores || []).map(x => x.razonSocial))}
+    </div>`;
+}
+
+function toggleAduana() {
+  const box = document.getElementById("aduanaBox");
+  if (box) box.style.display = val("tipoOperacion") === "Aduana" ? "" : "none";
+}
+
+function completarExportador() {
+  const x = (state.catalogos.exportadores || []).find(e => e.razonSocial === val("ad_exportador"));
+  if (x?.cuit && !val("ad_exportadorCuit")) document.getElementById("ad_exportadorCuit").value = x.cuit;
+}
+
+function datosAduana() {
+  if (val("tipoOperacion") !== "Aduana") return { tipoOperacion: null, aduana: null };
+  const n = id => val(id) === "" ? null : Number(val(id));
+  return {
+    tipoOperacion: "Aduana",
+    aduana: {
+      escenario: val("ad_escenario"),
+      exportador: val("ad_exportador") || null,
+      exportadorCuit: val("ad_exportadorCuit") || null,
+      operacionId: val("ad_operacionId") || null,
+      choferTipoDocumento: val("ad_tipoDoc") || null,
+      choferNacionalidad: val("ad_nacionalidad") || null,
+      contenedorId: val("ad_contenedorId") || null,
+      contenedorTara: n("ad_contenedorTara") || 0,
+      bultoId: val("ad_bultoId") || null,
+      bultoBruto: n("ad_bultoBruto"),
+      bultoTara: n("ad_bultoTara")
+    }
+  };
+}
+
 async function renderPesaje() {
-  const [pesadas, clientes, transportes, productos] = await Promise.all([
-    api("/api/pesadas"),
+  const pedidos = [
+    api("/api/pesadas/pendientes"),
     api("/api/catalogos/clientes"),
     api("/api/catalogos/transportes"),
-    api("/api/catalogos/productos")
-  ]);
-  state.pesadas = pesadas;
-  state.catalogos = { clientes, transportes, productos };
+    api("/api/catalogos/productos"),
+    state.funciones.aduana ? api("/api/catalogos/exportadores") : Promise.resolve([])
+  ];
+  const [pendientes, clientes, transportes, productos, exportadores] = await Promise.all(pedidos);
+  state.pendientes = pendientes;
+  state.catalogos = { clientes, transportes, productos, exportadores };
+  if (!modosPesaje().some(([id]) => id === state.modoPesaje)) state.modoPesaje = "normal";
+  const modo = state.modoPesaje;
+  const sinLicencia = state.licencia && !state.licencia.puedePesar;
   const empresas = state.empresas.map(e => `<option value="${e.id}">${esc(e.nombre)}</option>`).join("");
   const f = (key, html) => visible(key) ? html : "";
-  const abiertas = state.pesadas.filter(p => p.estado === "ENTRADA");
+
+  const datosVehiculo = `
+      <div class="grid2">
+        ${f("tipo", inputField("tipo", field("tipo")?.label || "Tipo", { type: "select", options: "<option>INGRESO</option><option>EGRESO</option>" }))}
+        ${f("patenteChasis", inputField("patenteChasis", modo === "tara" ? "Patente / carro" : field("patenteChasis")?.label || "Patente chasis", { blur: "autocompletarPatente()" }))}
+        ${modo === "tara" ? `<div class="status-box"><span>Tara guardada</span><strong id="taraGuardada">-</strong></div>` : ""}
+        ${f("patenteAcoplado", inputField("patenteAcoplado", field("patenteAcoplado")?.label || "Patente acoplado"))}
+        ${f("conductor", inputField("conductor", field("conductor")?.label || "Conductor"))}
+        ${f("documento", inputField("documento", field("documento")?.label || "Documento"))}
+        ${f("cliente", inputField("cliente", field("cliente")?.label || "Cliente", { list: "dl_clientes" }))}
+        ${f("transporte", inputField("transporte", field("transporte")?.label || "Transporte", { list: "dl_transportes" }))}
+        ${f("producto", inputField("producto", field("producto")?.label || "Producto", { list: "dl_productos" }))}
+        ${f("procedencia", inputField("procedencia", field("procedencia")?.label || "Procedencia"))}
+        ${f("destino", inputField("destino", field("destino")?.label || "Destino"))}
+        ${f("comprobante", inputField("comprobante", field("comprobante")?.label || "Remito"))}
+        ${f("taraPallets", inputField("taraPallets", field("taraPallets")?.label || "Tara pallets (kg)", { type: "number", value: "0" }))}
+        ${f("observaciones", inputField("observaciones", field("observaciones")?.label || "Observaciones", { type: "textarea" }))}
+      </div>
+      ${datalist("dl_clientes", clientes.map(c => c.razonSocial))}
+      ${datalist("dl_transportes", transportes.map(t => t.razonSocial))}
+      ${datalist("dl_productos", productos.map(p => p.nombre))}`;
+
+  const formulario = modo === "tomar" ? `
+    <div class="card">
+      <h3 style="margin-top:0">Tomar tara</h3>
+      <p>Subí el vehículo vacío a la balanza. La tara queda guardada para pesar después con "Tara conocida".</p>
+      <div class="grid2">
+        <div><label>Patente / carro *</label><input id="tt_id" autocomplete="off" /></div>
+        <div><label>Descripción</label><input id="tt_desc" placeholder="Batea, chasis, carro 12..." /></div>
+      </div>
+      ${bloqueManual("Cargar la tara a mano")}
+      <p class="error" id="err"></p>
+      <div class="btn-row"><button class="btn-primary" onclick="tomarTara()">Tomar tara</button></div>
+      <p id="ultimo"></p>
+    </div>` : `
+    <div class="card">
+      <h3 style="margin-top:0">${modo === "tara" ? "Pesar con tara conocida" : "Datos del vehículo"}</h3>
+      ${datosVehiculo}
+      ${bloqueAduana()}
+      ${modo === "tara" && puedeManual() ? `
+      <details style="margin-top:12px"><summary>Usar otra tara (ingreso manual)</summary>
+        <div class="grid2" style="margin-top:8px"><div><label>Tara (kg)</label><input id="tc_tara" type="number" min="1" /></div></div>
+      </details>` : ""}
+      ${bloqueManual(modo === "tara" ? "Cargar el bruto a mano" : "Cargar el peso a mano")}
+      <p class="error" id="err"></p>
+      <div class="btn-row">
+        ${modo === "tara"
+          ? `<button class="btn-primary" onclick="guardarTaraConocida()" ${sinLicencia ? "disabled" : ""}>Pesar</button>`
+          : `<button class="btn-primary" onclick="guardarEntrada()" ${sinLicencia ? "disabled" : ""}>Capturar entrada</button>
+             <button class="btn" onclick="guardarSalida()">Capturar salida</button>`}
+      </div>
+      <p id="ultimo"></p>
+    </div>`;
 
   document.getElementById("main").innerHTML = `
     <div class="page-head">
       <div>
         <h2>Pesaje</h2>
-        <p>Capturá entrada y salida. El neto descuenta tara de camión y pallets.</p>
+        <p>${modo === "tara" ? "Un solo paso: bruto de la balanza menos la tara guardada." : modo === "tomar" ? "Guardá la tara de un vehículo o carro." : "Capturá entrada y salida. El neto descuenta tara de camión y pallets."}</p>
       </div>
       <div id="scalePill">${pillForScale(state.scale.estado)}</div>
     </div>
-    ${state.licencia && !state.licencia.puedePesar ? `
+    ${sinLicencia ? `
     <div class="card" style="border-left:4px solid #c0392b">
       <strong>${esc(state.licencia.mensaje)}</strong>
       <p style="margin:6px 0 0">ID de máquina: <code>${esc(state.licencia.maquina)}</code>. No se pueden registrar entradas nuevas; sí cerrar las salidas pendientes.</p>
@@ -346,59 +493,54 @@ async function renderPesaje() {
             `<option value="${b.balanzaId}" ${b.balanzaId === balanzaActual().balanzaId ? "selected" : ""}>${esc(b.nombre)}</option>`).join("")}</select>
         </div>` : `<div class="status-box"><span>Peso vivo</span><strong id="scaleKg">${state.scale.kilogramos} kg</strong></div>`}
       </div>
+      ${state.funciones.exigirEstable ? `<p style="margin:8px 0 0;color:var(--muted)">Se captura solo con el peso estable.</p>` : ""}
     </div>
+    ${modosPesaje().length > 1 ? `<div class="tabs">${modosPesaje().map(([id, label]) =>
+      `<button class="tab ${modo === id ? "active" : ""}" onclick="cambiarModoPesaje('${id}')">${label}</button>`).join("")}</div>` : ""}
+    ${formulario}
+    ${modo === "normal" ? `
     <div class="card">
-      <h3 style="margin-top:0">Datos del vehículo</h3>
-      <div class="grid2">
-        ${f("tipo", inputField("tipo", field("tipo")?.label || "Tipo", { type: "select", options: "<option>INGRESO</option><option>EGRESO</option>" }))}
-        ${f("patenteChasis", inputField("patenteChasis", field("patenteChasis")?.label || "Patente chasis", { blur: "autocompletarPatente()" }))}
-        ${f("patenteAcoplado", inputField("patenteAcoplado", field("patenteAcoplado")?.label || "Patente acoplado"))}
-        ${f("conductor", inputField("conductor", field("conductor")?.label || "Conductor"))}
-        ${f("documento", inputField("documento", field("documento")?.label || "Documento"))}
-        ${f("cliente", inputField("cliente", field("cliente")?.label || "Cliente", { list: "dl_clientes" }))}
-        ${f("transporte", inputField("transporte", field("transporte")?.label || "Transporte", { list: "dl_transportes" }))}
-        ${f("producto", inputField("producto", field("producto")?.label || "Producto", { list: "dl_productos" }))}
-        ${f("procedencia", inputField("procedencia", field("procedencia")?.label || "Procedencia"))}
-        ${f("destino", inputField("destino", field("destino")?.label || "Destino"))}
-        ${f("comprobante", inputField("comprobante", field("comprobante")?.label || "Remito"))}
-        ${f("taraPallets", inputField("taraPallets", field("taraPallets")?.label || "Tara pallets (kg)", { type: "number", value: "0" }))}
-        ${f("observaciones", inputField("observaciones", field("observaciones")?.label || "Observaciones", { type: "textarea" }))}
-      </div>
-      ${datalist("dl_clientes", clientes.map(c => c.razonSocial))}
-      ${datalist("dl_transportes", transportes.map(t => t.razonSocial))}
-      ${datalist("dl_productos", productos.map(p => p.nombre))}
-      <p class="error" id="err"></p>
-      <div class="btn-row">
-        <button class="btn-primary" onclick="guardarEntrada()" ${state.licencia && !state.licencia.puedePesar ? "disabled" : ""}>Capturar entrada</button>
-        <button class="btn" onclick="guardarSalida()">Capturar salida</button>
-      </div>
-      <p id="ultimo"></p>
-    </div>
-    <div class="card">
-      <h3 style="margin-top:0">Tickets abiertos</h3>
+      <h3 style="margin-top:0">Pendientes de salida (${pendientes.length})</h3>
       <table>
-        <tr><th></th><th>Ticket</th><th>Empresa</th><th>Patente</th><th>Entrada</th><th>Pallets</th></tr>
-        ${abiertas.length ? abiertas.map(p => `<tr class="${state.selectedPesadaId === p.id ? "selected" : ""}" onclick="selectPesada('${p.id}')">
+        <tr><th></th><th>Ticket</th><th>Empresa</th><th>Patente</th><th>Entrada</th><th>Hora</th><th>Pallets</th>${can("pesaje.anular") ? "<th></th>" : ""}</tr>
+        ${pendientes.length ? pendientes.map(p => `<tr class="${state.selectedPesadaId === p.id ? "selected" : ""}" onclick="selectPesada('${p.id}')">
           <td>${state.selectedPesadaId === p.id ? "●" : ""}</td>
-          <td>${esc(p.ticketNumero)}</td>
+          <td>${esc(p.ticketNumero)}${p.tipoOperacion === "Aduana" ? ` <span class="pill pill-info">Aduana</span>` : ""}</td>
           <td>${esc(empresaName(p.empresaId))}</td>
           <td>${esc(p.patenteChasis)}</td>
-          <td>${p.pesoEntrada}</td>
+          <td>${p.pesoEntrada}${p.entradaManualPor ? " ✎" : ""}</td>
+          <td>${esc(hora(p.entradaEn))}</td>
           <td>${p.taraPallets}</td>
-        </tr>`).join("") : `<tr><td colspan="6">No hay entradas abiertas.</td></tr>`}
+          ${can("pesaje.anular") ? `<td><button class="btn-danger" onclick="event.stopPropagation();anularPesada('${p.id}')">Anular</button></td>` : ""}
+        </tr>`).join("") : `<tr><td colspan="8">No hay entradas pendientes.</td></tr>`}
       </table>
-    </div>
+    </div>` : ""}
   `;
 }
 
+function hora(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return d.toLocaleDateString() === new Date().toLocaleDateString()
+    ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : d.toLocaleString([], { dateStyle: "short", timeStyle: "short" });
+}
+
+function cambiarModoPesaje(modo) {
+  state.modoPesaje = modo;
+  state.selectedPesadaId = null;
+  renderPesaje();
+}
+
 function selectPesada(id) {
-  state.selectedPesadaId = id;
+  state.selectedPesadaId = state.selectedPesadaId === id ? null : id;
   renderPesaje();
 }
 
 function collectPesaje() {
   const missing = fields().filter(f => f.visible && f.required && !val(f.key) && f.key !== "taraPallets");
   if (missing.length) throw new Error("Completá: " + missing.map(f => f.label).join(", "));
+  const m = manual();
   return {
     empresaId: val("empresa"),
     balanzaId: balanzaActual().balanzaId || null,
@@ -414,60 +556,144 @@ function collectPesaje() {
     destino: val("destino") || null,
     comprobante: val("comprobante") || null,
     observaciones: val("observaciones") || null,
-    taraPallets: visible("taraPallets") ? num("taraPallets") : 0
+    taraPallets: visible("taraPallets") ? num("taraPallets") : 0,
+    pesoEntrada: m.peso,
+    claveManual: m.clave,
+    ...datosAduana()
   };
+}
+
+function mostrarError(e) {
+  const el = document.getElementById("err");
+  if (el) el.textContent = limpiarError(e);
+  else toast(limpiarError(e), "err");
 }
 
 async function guardarEntrada() {
   try {
-    const body = collectPesaje();
-    const pesada = await api("/api/pesadas/entrada", { method: "POST", body: JSON.stringify(body) });
-    state.selectedPesadaId = pesada.id;
+    const pesada = await api("/api/pesadas/entrada", { method: "POST", body: JSON.stringify(collectPesaje()) });
+    state.selectedPesadaId = null;
     toast(`Entrada ticket ${pesada.ticketNumero}`);
     await renderPesaje();
     document.getElementById("ultimo").textContent = `Entrada ticket ${pesada.ticketNumero} · ${pesada.pesoEntrada} kg`;
   } catch (e) {
-    document.getElementById("err").textContent = e.message;
+    mostrarError(e);
   }
 }
 
 async function guardarSalida() {
   if (!state.selectedPesadaId) {
-    document.getElementById("err").textContent = "Elegí un ticket abierto o capturá una entrada";
+    document.getElementById("err").textContent = "Elegí un ticket de la lista de pendientes";
     return;
   }
   try {
+    const m = manual();
     const pesada = await api(`/api/pesadas/${state.selectedPesadaId}/salida`, {
       method: "POST",
-      body: JSON.stringify({ taraPallets: visible("taraPallets") ? num("taraPallets") : null, balanzaId: balanzaActual().balanzaId || null })
+      body: JSON.stringify({
+        taraPallets: visible("taraPallets") ? num("taraPallets") : null,
+        balanzaId: balanzaActual().balanzaId || null,
+        pesoSalida: m.peso,
+        claveManual: m.clave
+      })
     });
     state.selectedPesadaId = null;
     toast(`Ticket ${pesada.ticketNumero} cerrado · neto ${pesada.neto} kg`);
     await renderPesaje();
     document.getElementById("ultimo").textContent =
-      `Ticket ${pesada.ticketNumero} cerrado · neto ${pesada.neto} kg (pallets ${pesada.taraPallets})`;
+      `Ticket ${pesada.ticketNumero} cerrado · neto ${pesada.neto} kg (pallets ${pesada.taraPallets})` +
+      (pesada.aduana?.contenedorNeto != null ? ` · contenedor neto ${pesada.aduana.contenedorNeto} kg` : "");
   } catch (e) {
-    document.getElementById("err").textContent = e.message;
+    mostrarError(e);
   }
+}
+
+async function guardarTaraConocida() {
+  try {
+    const datos = collectPesaje();
+    const taraManual = val("tc_tara") ? Number(val("tc_tara")) : null;
+    const pesada = await api("/api/pesadas/tara-conocida", {
+      method: "POST",
+      body: JSON.stringify({ datos, taraManual, claveManual: datos.claveManual })
+    });
+    toast(`Ticket ${pesada.ticketNumero} · neto ${pesada.neto} kg`);
+    await renderPesaje();
+    document.getElementById("ultimo").textContent =
+      `Ticket ${pesada.ticketNumero} · bruto ${pesada.bruto} − tara ${pesada.tara} = neto ${pesada.neto} kg`;
+  } catch (e) {
+    mostrarError(e);
+  }
+}
+
+async function tomarTara() {
+  try {
+    const m = manual();
+    const tara = await api("/api/taras/tomar", {
+      method: "POST",
+      body: JSON.stringify({
+        identificador: val("tt_id"),
+        descripcion: val("tt_desc") || null,
+        balanzaId: balanzaActual().balanzaId || null,
+        pesoManual: m.peso,
+        claveManual: m.clave
+      })
+    });
+    toast(`Tara de ${tara.identificador}: ${tara.kilogramos} kg`);
+    await renderPesaje();
+    document.getElementById("ultimo").textContent = `Tara guardada: ${tara.identificador} · ${tara.kilogramos} kg`;
+  } catch (e) {
+    mostrarError(e);
+  }
+}
+
+async function anularPesada(id) {
+  const motivo = prompt("Motivo de la anulación");
+  if (motivo == null) return;
+  try {
+    const p = await api(`/api/pesadas/${id}/anular`, { method: "POST", body: JSON.stringify({ motivo }) });
+    toast(`Ticket ${p.ticketNumero} anulado`);
+    if (state.selectedPesadaId === id) state.selectedPesadaId = null;
+    render();
+  } catch (e) {
+    toast(limpiarError(e), "err");
+  }
+}
+
+function retomarPesada(id) {
+  state.modoPesaje = "normal";
+  state.selectedPesadaId = id;
+  go("pesaje");
+}
+
+function pillEstado(p) {
+  if (p.estado === "ANULADA") return `<span class="pill pill-err" title="${esc((p.motivoAnulacion || "") + " · " + (p.anuladaPor || ""))}">Anulada</span>`;
+  if (p.estado === "ENTRADA") return `<span class="pill pill-warn">Pendiente</span>`;
+  return `<span class="pill pill-ok">Cerrada</span>`;
 }
 
 async function renderReportes() {
   const rows = await api("/api/pesadas");
+  const acciones = can("pesaje.operar") || can("pesaje.anular");
   document.getElementById("main").innerHTML = `
-    <div class="page-head"><div><h2>Pesadas</h2><p>${can("pesadas.ver") ? "Últimos 200 movimientos de la planta." : "Tus últimos 200 movimientos."}</p></div></div>
-    <div class="card">
+    <div class="page-head"><div><h2>Pesadas</h2><p>${can("pesadas.ver") ? "Últimos 200 movimientos de la planta." : "Tus últimos 200 movimientos."} ✎ = peso cargado a mano.</p></div></div>
+    <div class="card" style="overflow-x:auto">
       <table>
-        <tr><th>Ticket</th><th>Empresa</th><th>Patente</th><th>Producto</th><th>Estado</th><th>Entrada</th><th>Salida</th><th>Pallets</th><th>Neto</th></tr>
+        <tr><th>Ticket</th><th>Fecha</th><th>Empresa</th><th>Patente</th><th>Producto</th><th>Estado</th><th>Entrada</th><th>Salida</th><th>Pallets</th><th>Neto</th>${acciones ? "<th></th>" : ""}</tr>
         ${rows.map(p => `<tr>
-          <td>${esc(p.ticketNumero)}</td>
+          <td>${esc(p.ticketNumero)}${p.modo === "TaraConocida" ? ` <span class="pill pill-info">Tara conocida</span>` : ""}${p.tipoOperacion === "Aduana" ? ` <span class="pill pill-info">Aduana</span>` : ""}</td>
+          <td>${esc(hora(p.entradaEn))}</td>
           <td>${esc(empresaName(p.empresaId))}</td>
           <td>${esc(p.patenteChasis)}</td>
           <td>${esc(p.producto || "")}</td>
-          <td>${esc(p.estado)}</td>
-          <td>${p.pesoEntrada}</td>
-          <td>${p.pesoSalida ?? "-"}</td>
+          <td>${pillEstado(p)}</td>
+          <td>${p.pesoEntrada}${p.entradaManualPor ? " ✎" : ""}</td>
+          <td>${p.pesoSalida ?? "-"}${p.salidaManualPor ? " ✎" : ""}</td>
           <td>${p.taraPallets}</td>
-          <td>${p.neto ?? "-"}</td>
+          <td>${p.estado === "ANULADA" ? "-" : (p.neto ?? "-")}</td>
+          ${acciones ? `<td><div class="btn-row" style="margin:0">
+            ${p.estado === "ENTRADA" && can("pesaje.operar") ? `<button class="btn" onclick="retomarPesada('${p.id}')">Retomar</button>` : ""}
+            ${p.estado !== "ANULADA" && can("pesaje.anular") ? `<button class="btn-danger" onclick="anularPesada('${p.id}')">Anular</button>` : ""}
+          </div></td>` : ""}
         </tr>`).join("")}
       </table>
     </div>`;
@@ -677,9 +903,11 @@ async function guardarClaveManual() {
 
 async function autocompletarPatente() {
   const patente = val("patenteChasis").trim();
-  if (patente.length < 5) return;
-  let r;
-  try { r = await api(`/api/vehiculos/${encodeURIComponent(patente)}`); } catch { return; }
+  const taraEl = document.getElementById("taraGuardada");
+  if (patente.length < 3) return;
+  let r = null;
+  try { r = await api(`/api/vehiculos/${encodeURIComponent(patente)}`); } catch {}
+  if (taraEl) taraEl.textContent = r?.tara ? `${r.tara.kilogramos} kg${r.tara.descripcion ? " · " + r.tara.descripcion : ""}` : "Sin tara guardada";
   const d = r?.datos;
   if (!d) return;
   const fill = (id, value) => {
@@ -690,6 +918,9 @@ async function autocompletarPatente() {
   fill("conductor", d.conductor);
   fill("documento", d.documento);
   fill("transporte", d.transporte);
+  fill("ad_nacionalidad", d.nacionalidad);
+  const tipoDoc = document.getElementById("ad_tipoDoc");
+  if (tipoDoc && !tipoDoc.value && d.tipoDocumento) tipoDoc.value = d.tipoDocumento;
   toast("Datos de la última vez completados");
 }
 
@@ -859,6 +1090,8 @@ function renderConfigGeneral() {
           </select>
         </div>
         <div><label>Ingreso manual de peso</label>${yesNo("c_manual", c.ingreso_manual ?? "true")}</div>
+        <div><label>Capturar solo con peso estable</label>${yesNo("c_estable", c.exigir_estable ?? "true")}</div>
+        <div><label>Número de puesto (va en el ticket: 01-000123)</label><input id="c_puesto" type="number" min="1" max="99" value="${esc(c.puesto || "1")}" /></div>
       </div>
       <div class="btn-row"><button class="btn-primary" onclick="saveGeneral()">Guardar general</button></div>
     </div>`;
@@ -1117,7 +1350,9 @@ async function saveGeneral() {
     termica: val("c_term"),
     termica_impresora: val("c_term_imp"),
     termica_ancho: val("c_term_ancho"),
-    ingreso_manual: val("c_manual")
+    ingreso_manual: val("c_manual"),
+    exigir_estable: val("c_estable"),
+    puesto: String(Math.min(99, Math.max(1, num("c_puesto") || 1)))
   });
   state.funciones = await api("/api/funciones");
   renderConfig();

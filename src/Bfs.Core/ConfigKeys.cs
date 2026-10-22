@@ -11,6 +11,12 @@ public static class ConfigKeys
     public const string TermicaAncho = "termica_ancho";
     public const string IngresoManual = "ingreso_manual";
 
+    /// <summary>Número de este puesto (1-99). Va adelante del número de ticket.</summary>
+    public const string Puesto = "puesto";
+
+    /// <summary>Solo se captura peso de la balanza cuando está estable.</summary>
+    public const string ExigirEstable = "exigir_estable";
+
     /// <summary>Hash de la clave que pide el ingreso manual de peso (la 3.x la guardaba en texto plano).</summary>
     public const string ClaveManualHash = "clave_manual_hash";
 

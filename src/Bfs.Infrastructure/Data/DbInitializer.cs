@@ -57,6 +57,8 @@ public static class DbInitializer
         await EnsureConfig(db, ConfigKeys.TermicaImpresora, "");
         await EnsureConfig(db, ConfigKeys.TermicaAncho, "80");
         await EnsureConfig(db, ConfigKeys.IngresoManual, "true");
+        await EnsureConfig(db, ConfigKeys.Puesto, "1");
+        await EnsureConfig(db, ConfigKeys.ExigirEstable, "true");
         await EnsureConfig(db, ConfigKeys.WormsEnabled, "false");
         await EnsureConfig(db, ConfigKeys.WormsEndpoint, "");
         await EnsureConfig(db, ConfigKeys.WormsApiKey, "");

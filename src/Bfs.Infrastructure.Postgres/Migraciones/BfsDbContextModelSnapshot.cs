@@ -176,6 +176,47 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                     b.ToTable("Configuraciones");
                 });
 
+            modelBuilder.Entity("Bfs.Core.Entities.ContadorTicket", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreadoEn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("Eliminado")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("EmpresaId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("ModificadoEn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("OrigenNodoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Proximo")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Puesto")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ModificadoEn");
+
+                    b.HasIndex("EmpresaId", "Puesto")
+                        .IsUnique();
+
+                    b.ToTable("ContadoresTicket");
+                });
+
             modelBuilder.Entity("Bfs.Core.Entities.DatosVehiculo", b =>
                 {
                     b.Property<Guid>("Id")
@@ -441,7 +482,16 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("AnuladaEn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("AnuladaPor")
+                        .HasColumnType("text");
+
                     b.Property<string>("Balanza")
+                        .HasColumnType("text");
+
+                    b.Property<string>("BalanzaSalida")
                         .HasColumnType("text");
 
                     b.Property<int?>("Bruto")
@@ -481,12 +531,22 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                     b.Property<DateTimeOffset>("EntradaEn")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("EntradaManualPor")
+                        .HasColumnType("text");
+
                     b.Property<string>("Estado")
                         .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<DateTimeOffset>("ModificadoEn")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Modo")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("MotivoAnulacion")
+                        .HasColumnType("text");
 
                     b.Property<int?>("Neto")
                         .HasColumnType("integer");
@@ -496,6 +556,9 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
 
                     b.Property<string>("Operador")
                         .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("OperadorSalida")
                         .HasColumnType("text");
 
                     b.Property<Guid?>("OrigenNodoId")
@@ -523,6 +586,9 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                     b.Property<DateTimeOffset?>("SalidaEn")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("SalidaManualPor")
+                        .HasColumnType("text");
+
                     b.Property<int?>("Tara")
                         .HasColumnType("integer");
 
@@ -534,6 +600,10 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                         .HasColumnType("text");
 
                     b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TipoOperacion")
                         .IsRequired()
                         .HasColumnType("text");
 
@@ -552,6 +622,8 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
 
                     b.HasIndex("EmpresaId", "TicketNumero")
                         .IsUnique();
+
+                    b.HasIndex("Estado", "EntradaEn");
 
                     b.ToTable("Pesadas");
                 });
@@ -757,6 +829,61 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                         .HasForeignKey("EmpresaId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.OwnsOne("Bfs.Core.Entities.DatosAduana", "Aduana", b1 =>
+                        {
+                            b1.Property<Guid>("PesadaId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int?>("BultoBruto")
+                                .HasColumnType("integer");
+
+                            b1.Property<string>("BultoId")
+                                .HasColumnType("text");
+
+                            b1.Property<int?>("BultoTara")
+                                .HasColumnType("integer");
+
+                            b1.Property<string>("ChoferNacionalidad")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("ChoferTipoDocumento")
+                                .HasColumnType("text");
+
+                            b1.Property<int?>("ContenedorBruto")
+                                .HasColumnType("integer");
+
+                            b1.Property<string>("ContenedorId")
+                                .HasColumnType("text");
+
+                            b1.Property<int?>("ContenedorNeto")
+                                .HasColumnType("integer");
+
+                            b1.Property<int>("ContenedorTara")
+                                .HasColumnType("integer");
+
+                            b1.Property<string>("Escenario")
+                                .IsRequired()
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Exportador")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("ExportadorCuit")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("OperacionId")
+                                .HasColumnType("text");
+
+                            b1.HasKey("PesadaId");
+
+                            b1.ToTable("Pesadas");
+
+                            b1.WithOwner()
+                                .HasForeignKey("PesadaId");
+                        });
+
+                    b.Navigation("Aduana");
 
                     b.Navigation("Empresa");
                 });

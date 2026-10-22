@@ -55,7 +55,9 @@ public static class PlantaEndpoints
                 termicaImpresora = c.GetValueOrDefault(ConfigKeys.TermicaImpresora, ""),
                 termicaAncho = c.GetValueOrDefault(ConfigKeys.TermicaAncho, "80"),
                 ingresoManual = Si(ConfigKeys.IngresoManual, "true"),
-                claveManual = !string.IsNullOrEmpty(c.GetValueOrDefault(ConfigKeys.ClaveManualHash))
+                claveManual = !string.IsNullOrEmpty(c.GetValueOrDefault(ConfigKeys.ClaveManualHash)),
+                exigirEstable = Si(ConfigKeys.ExigirEstable, "true"),
+                puesto = int.TryParse(c.GetValueOrDefault(ConfigKeys.Puesto), out var puesto) ? puesto : 1
             });
         });
 

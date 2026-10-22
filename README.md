@@ -77,6 +77,7 @@ Las bases creadas por el spike anterior (sin migraciones) se renombran a `bfs.sp
 - Usuario cliente: solo ve las pesadas de su cliente del catálogo
 - Catálogos: clientes, transportes (ATA), productos, exportadores, taras conocidas; búsqueda y CUIT validado
 - Planta: datos de empresas, aduana y clave de ingreso manual; autocompletado por patente
+- Pesaje: Normal, Tara conocida, Tomar tara, Aduana, ingreso manual con clave, anulación y tickets por puesto (`PP-NNNNNN`)
 - Balanzas: varias por nodo (serie STX / Line o simuladas), modelos de la 3.x, reconexión automática, peso estable, diagnóstico de tramas
 - Licencia firmada por PC
 - Columnas de sincronización en todas las entidades (`Version`, `ModificadoEn`, borrado lógico, nodo de origen)

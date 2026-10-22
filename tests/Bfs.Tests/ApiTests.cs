@@ -34,7 +34,7 @@ public class ApiTests
         });
         entrada.EnsureSuccessStatusCode();
         var pesada = await entrada.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("1", pesada.GetProperty("ticketNumero").GetString());
+        Assert.Equal("01-000001", pesada.GetProperty("ticketNumero").GetString());
         Assert.Equal("AB123CD", pesada.GetProperty("patenteChasis").GetString());
         Assert.Equal(DbInitializer.SeedAdminEmail, pesada.GetProperty("operador").GetString());
         Assert.Equal(1, pesada.GetProperty("version").GetInt64());

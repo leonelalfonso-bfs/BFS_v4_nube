@@ -21,21 +21,33 @@ public static class PesadaEndpoints
             return Results.Forbid();
         });
 
+        api.MapGet("/pesadas/pendientes", async (PesajeService pesaje) => Results.Ok(await pesaje.PendientesAsync()))
+            .RequireAuthorization(Permisos.PesajeOperar);
+
         api.MapPost("/pesadas/entrada", async (EntradaRequest req, PesajeService pesaje, ClaimsPrincipal user) =>
-        {
-            if (req.PesoEntrada.HasValue && !user.Puede(Permisos.PesajePesoManual)) return SinPermisoPesoManual();
-            return ToResult(await pesaje.RegistrarEntradaAsync(req, user.Email()));
-        }).RequireAuthorization(Permisos.PesajeOperar);
+            ToResult(await pesaje.RegistrarEntradaAsync(req, Operador(user))))
+            .RequireAuthorization(Permisos.PesajeOperar);
 
         api.MapPost("/pesadas/{id:guid}/salida", async (Guid id, SalidaRequest req, PesajeService pesaje, ClaimsPrincipal user) =>
+            ToResult(await pesaje.RegistrarSalidaAsync(id, req, Operador(user))))
+            .RequireAuthorization(Permisos.PesajeOperar);
+
+        api.MapPost("/pesadas/tara-conocida", async (TaraConocidaRequest req, PesajeService pesaje, ClaimsPrincipal user) =>
+            ToResult(await pesaje.RegistrarConTaraConocidaAsync(req, Operador(user))))
+            .RequireAuthorization(Permisos.PesajeOperar);
+
+        api.MapPost("/pesadas/{id:guid}/anular", async (Guid id, AnularRequest req, PesajeService pesaje, ClaimsPrincipal user) =>
+            ToResult(await pesaje.AnularAsync(id, req.Motivo, Operador(user))))
+            .RequireAuthorization(Permisos.PesajeAnular);
+
+        api.MapPost("/taras/tomar", async (TomarTaraRequest req, PesajeService pesaje, ClaimsPrincipal user) =>
         {
-            if (req.PesoSalida.HasValue && !user.Puede(Permisos.PesajePesoManual)) return SinPermisoPesoManual();
-            return ToResult(await pesaje.RegistrarSalidaAsync(id, req));
+            var (tara, error) = await pesaje.TomarTaraAsync(req, Operador(user));
+            return error != null ? ToResult(error) : Results.Ok(tara);
         }).RequireAuthorization(Permisos.PesajeOperar);
     }
 
-    private static IResult SinPermisoPesoManual() =>
-        Results.Text("No tenés permiso para cargar el peso a mano", statusCode: StatusCodes.Status403Forbidden);
+    private static Operador Operador(ClaimsPrincipal user) => new(user.Email(), user.Puede(Permisos.PesajePesoManual));
 
     private static IResult ToResult(ResultadoPesaje r) =>
         r.NoEncontrada ? Results.NotFound()
@@ -61,6 +73,30 @@ public record EntradaRequest(
     int? PesoEntrada,
     int TaraPallets,
     Guid? ClienteId = null,
-    Guid? BalanzaId = null);
+    Guid? BalanzaId = null,
+    string? ClaveManual = null,
+    string? TipoOperacion = null,
+    DatosAduanaDto? Aduana = null);
 
-public record SalidaRequest(int? PesoSalida, int? TaraPallets, Guid? BalanzaId = null);
+public record SalidaRequest(int? PesoSalida, int? TaraPallets, Guid? BalanzaId = null, string? ClaveManual = null);
+
+/// <param name="Datos">Los mismos datos que una entrada; PesoEntrada es el bruto si se carga a mano.</param>
+/// <param name="TaraManual">Solo si se quiere usar otra tara que la guardada (cuenta como ingreso manual).</param>
+public record TaraConocidaRequest(EntradaRequest Datos, int? TaraManual = null, string? ClaveManual = null);
+
+public record TomarTaraRequest(string? Identificador, string? Descripcion, Guid? BalanzaId = null, int? PesoManual = null, string? ClaveManual = null);
+
+public record AnularRequest(string? Motivo);
+
+public record DatosAduanaDto(
+    string Escenario,
+    string? Exportador = null,
+    string? ExportadorCuit = null,
+    string? OperacionId = null,
+    string? ChoferTipoDocumento = null,
+    string? ChoferNacionalidad = null,
+    string? ContenedorId = null,
+    int ContenedorTara = 0,
+    string? BultoId = null,
+    int? BultoBruto = null,
+    int? BultoTara = null);
