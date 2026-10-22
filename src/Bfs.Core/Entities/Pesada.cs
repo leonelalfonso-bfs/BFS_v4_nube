@@ -12,6 +12,9 @@ public class Pesada : EntidadSync
     public string? Conductor { get; set; }
     public string? Documento { get; set; }
     public string? Cliente { get; set; }
+
+    /// <summary>Cliente del catálogo, si el texto coincide con uno. Es lo que filtra el portal del cliente.</summary>
+    public Guid? ClienteId { get; set; }
     public string? Transporte { get; set; }
     public string? Producto { get; set; }
     public string? Procedencia { get; set; }

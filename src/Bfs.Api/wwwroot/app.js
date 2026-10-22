@@ -36,7 +36,9 @@ const state = {
   campos: DEFAULT_FIELDS,
   scale: { kilogramos: 0, puerto: "SIM", estado: "simulada" },
   scaleMeta: { status: "", lastError: "", puertos: [] },
-  selectedPesadaId: null
+  selectedPesadaId: null,
+  licencia: null,
+  rolesAsignables: []
 };
 
 async function api(path, options = {}) {
@@ -87,7 +89,25 @@ function num(id) {
 }
 
 function isVendor() { return state.user?.rol === "vendor"; }
-function canAdmin() { return isVendor() || state.user?.rol === "admin"; }
+function can(permiso) { return (state.user?.permisos || []).includes(permiso); }
+function canVerPesadas() { return can("pesadas.ver") || can("pesadas.ver_propias"); }
+
+function navItems() {
+  const nav = [];
+  if (can("pesaje.operar")) nav.push(["pesaje", "Pesaje"]);
+  if (canVerPesadas()) nav.push(["reportes", "Pesadas"]);
+  if (can("catalogos.ver")) nav.push(["catalogos", "Catálogos"]);
+  const admin = [];
+  if (can("usuarios.gestionar")) admin.push(["usuarios", "Usuarios"]);
+  if (can("config.bfs")) admin.push(["config", "Configuración"]);
+  return { nav, admin };
+}
+
+function licenciaPill() {
+  const l = state.licencia;
+  if (!l || l.puedePesar) return "";
+  return `<span class="pill pill-err" title="${esc(l.mensaje)}">Sin licencia</span>`;
+}
 
 function fields() {
   return state.campos.length ? state.campos : DEFAULT_FIELDS;
@@ -128,13 +148,12 @@ function pillForScale(estado) {
 
 function render() {
   if (!state.token) return renderLogin();
-  const nav = [
-    ["pesaje", "Pesaje"],
-    ["reportes", "Pesadas"],
-    ["catalogos", "Catálogos"]
-  ];
-  if (canAdmin()) nav.push(["usuarios", "Usuarios"]);
-  if (isVendor()) nav.push(["config", "Configuración"]);
+  const { nav, admin } = navItems();
+  const todas = nav.concat(admin);
+  if (!todas.some(([id]) => id === state.view)) state.view = todas[0]?.[0] || "";
+  const navBtn = ([id, label]) => `
+          <button class="nav-btn ${state.view === id ? "active" : ""}" onclick="go('${id}')">${ICONS[id]}<span>${label}</span></button>
+        `;
 
   document.getElementById("app").innerHTML = `
     <div class="app-shell">
@@ -147,22 +166,19 @@ function render() {
           </div>
         </div>
         <div class="userchip">
+          ${licenciaPill()}
           <div>
-            <strong>${esc(state.user?.nombre || state.user?.username || "")}</strong>
+            <strong>${esc(state.user?.nombre || state.user?.email || "")}</strong>
             <span>${esc(state.user?.rol || "")}</span>
           </div>
           <button class="btn-ghost" onclick="logout()">Salir</button>
         </div>
       </header>
       <aside class="sidebar">
-        <div class="nav-label">Operación</div>
-        ${nav.slice(0, 3).map(([id, label]) => `
-          <button class="nav-btn ${state.view === id ? "active" : ""}" onclick="go('${id}')">${ICONS[id]}<span>${label}</span></button>
-        `).join("")}
-        ${nav.length > 3 ? `<div class="nav-label">Administración</div>` : ""}
-        ${nav.slice(3).map(([id, label]) => `
-          <button class="nav-btn ${state.view === id ? "active" : ""}" onclick="go('${id}')">${ICONS[id]}<span>${label}</span></button>
-        `).join("")}
+        ${nav.length ? `<div class="nav-label">Operación</div>` : ""}
+        ${nav.map(navBtn).join("")}
+        ${admin.length ? `<div class="nav-label">Administración</div>` : ""}
+        ${admin.map(navBtn).join("")}
       </aside>
       <main class="workspace" id="main"></main>
     </div>
@@ -183,8 +199,8 @@ function renderLogin() {
         ${bfsLogo("login-logo")}
         <h2>Ingreso</h2>
         <p style="color:var(--muted);margin-top:0">${esc(state.branding.clienteNombre || "Sistema de pesaje")} · la configuración la hace BFS.</p>
-        <label>Usuario</label>
-        <input id="user" autocomplete="username" />
+        <label>Email</label>
+        <input id="user" type="email" autocomplete="username" />
         <label style="margin-top:12px">Contraseña</label>
         <input id="pass" type="password" autocomplete="current-password" />
         <p class="error" id="err"></p>
@@ -198,30 +214,34 @@ async function doLogin() {
   try {
     const data = await api("/api/auth/login", {
       method: "POST",
-      body: JSON.stringify({ username: val("user"), password: val("pass") })
+      body: JSON.stringify({ email: val("user"), password: val("pass") })
     });
     state.token = data.token;
     state.user = data;
     localStorage.setItem("bfs_token", data.token);
     await boot();
-  } catch {
-    document.getElementById("err").textContent = "Usuario o clave incorrectos";
+  } catch (e) {
+    const msg = e.message || "";
+    document.getElementById("err").textContent =
+      msg && msg !== "Unauthorized" && msg !== "Sesión vencida" ? msg : "Email o clave incorrectos";
   }
 }
 
 async function boot() {
-  const [empresas, config, branding, campos] = await Promise.all([
+  const [empresas, config, branding, campos, licencia] = await Promise.all([
     api("/api/empresas"),
-    api("/api/config"),
+    can("config.bfs") ? api("/api/config") : Promise.resolve({}),
     api("/api/branding"),
-    api("/api/campos")
+    api("/api/campos"),
+    api("/api/licencia")
   ]);
   state.empresas = empresas;
   state.config = config;
   state.branding = branding;
   state.campos = campos?.length ? campos : DEFAULT_FIELDS;
+  state.licencia = licencia;
   render();
-  pollPeso();
+  if (can("pesaje.operar")) pollPeso();
 }
 
 async function pollPeso() {
@@ -264,6 +284,11 @@ async function renderPesaje() {
       </div>
       <div id="scalePill">${pillForScale(state.scale.estado)}</div>
     </div>
+    ${state.licencia && !state.licencia.puedePesar ? `
+    <div class="card" style="border-left:4px solid #c0392b">
+      <strong>${esc(state.licencia.mensaje)}</strong>
+      <p style="margin:6px 0 0">ID de máquina: <code>${esc(state.licencia.maquina)}</code>. No se pueden registrar entradas nuevas; sí cerrar las salidas pendientes.</p>
+    </div>` : ""}
     <div class="card peso-card">
       <div class="peso" id="pesoLed">${state.scale.kilogramos} <small>${esc(state.scale.puerto)} · ${esc(state.scale.estado)}</small></div>
       <div class="status-grid">
@@ -292,7 +317,7 @@ async function renderPesaje() {
       </div>
       <p class="error" id="err"></p>
       <div class="btn-row">
-        <button class="btn-primary" onclick="guardarEntrada()">Capturar entrada</button>
+        <button class="btn-primary" onclick="guardarEntrada()" ${state.licencia && !state.licencia.puedePesar ? "disabled" : ""}>Capturar entrada</button>
         <button class="btn" onclick="guardarSalida()">Capturar salida</button>
       </div>
       <p id="ultimo"></p>
@@ -376,7 +401,7 @@ async function guardarSalida() {
 async function renderReportes() {
   const rows = await api("/api/pesadas");
   document.getElementById("main").innerHTML = `
-    <div class="page-head"><div><h2>Pesadas</h2><p>Últimos 200 movimientos de la planta.</p></div></div>
+    <div class="page-head"><div><h2>Pesadas</h2><p>${can("pesadas.ver") ? "Últimos 200 movimientos de la planta." : "Tus últimos 200 movimientos."}</p></div></div>
     <div class="card">
       <table>
         <tr><th>Ticket</th><th>Empresa</th><th>Patente</th><th>Producto</th><th>Estado</th><th>Entrada</th><th>Salida</th><th>Pallets</th><th>Neto</th></tr>
@@ -414,8 +439,9 @@ async function renderCatalogos() {
 function catalogBlock(title, inputId, fn, items) {
   return `<div class="card">
     <h3 style="margin-top:0">${title}</h3>
+    ${can("catalogos.editar") ? `
     <input id="${inputId}" placeholder="Nuevo..." />
-    <button class="btn-primary" style="margin-top:10px" onclick="${fn}()">${title === "Productos" ? "Agregar producto" : "Agregar"}</button>
+    <button class="btn-primary" style="margin-top:10px" onclick="${fn}()">${title === "Productos" ? "Agregar producto" : "Agregar"}</button>` : ""}
     <table style="margin-top:14px">${items.length ? items.map(x => `<tr><td>${esc(x)}</td></tr>`).join("") : "<tr><td>Sin datos</td></tr>"}</table>
   </div>`;
 }
@@ -439,91 +465,109 @@ async function altaTransporte() {
   renderCatalogos();
 }
 
+function rolOptions(selected) {
+  const roles = !selected || state.rolesAsignables.includes(selected) ? state.rolesAsignables : [selected, ...state.rolesAsignables];
+  return roles.map(r => `<option value="${r}" ${r === selected ? "selected" : ""}>${r}</option>`).join("");
+}
+
+function clienteOptions(selected) {
+  return `<option value="">— (solo rol cliente) —</option>` + state.catalogos.clientes.map(c =>
+    `<option value="${c.id}" ${c.id === selected ? "selected" : ""}>${esc(c.razonSocial)}</option>`
+  ).join("");
+}
+
 async function renderUsuarios() {
-  state.usuarios = await api("/api/usuarios");
+  const [usuarios, roles, clientes] = await Promise.all([
+    api("/api/usuarios"),
+    api("/api/usuarios/roles"),
+    api("/api/catalogos/clientes")
+  ]);
+  state.usuarios = usuarios;
+  state.rolesAsignables = roles;
+  state.catalogos.clientes = clientes;
   const empresas = empresaOptions("");
   document.getElementById("main").innerHTML = `
-    <div class="page-head"><div><h2>Usuarios</h2><p>El cliente administra operadores. El usuario vendor queda en BFS.</p></div></div>
+    <div class="page-head"><div><h2>Usuarios</h2><p>El ingreso es con email. Un usuario <b>cliente</b> solo ve las pesadas de su cliente.</p></div></div>
     <div class="card">
       <h3 style="margin-top:0">Nuevo usuario</h3>
       <div class="grid2">
-        <div><label>Usuario</label><input id="uu" /></div>
-        <div><label>Contraseña</label><input id="up" type="password" /></div>
+        <div><label>Email</label><input id="uu" type="email" /></div>
+        <div><label>Contraseña (mínimo 6)</label><input id="up" type="password" /></div>
         <div><label>Nombre</label><input id="un" /></div>
-        <div><label>Rol</label>
-          <select id="ur">
-            <option value="operador">operador</option>
-            <option value="admin">admin</option>
-            ${isVendor() ? `<option value="vendor">vendor</option>` : ""}
-          </select>
-        </div>
+        <div><label>Rol</label><select id="ur">${rolOptions("operador")}</select></div>
         <div><label>Empresa</label><select id="ue">${empresas}</select></div>
+        <div><label>Cliente</label><select id="uc">${clienteOptions("")}</select></div>
       </div>
       <div class="btn-row"><button class="btn-primary" onclick="altaUsuario()">Crear usuario</button></div>
     </div>
     <div class="card">
       <table>
-        <tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Empresa</th><th>Estado</th><th></th></tr>
-        ${state.usuarios.map(u => `<tr>
-          <td>${esc(u.username)}</td>
-          <td><input id="n_${u.id}" value="${esc(u.nombre)}" /></td>
-          <td>
-            <select id="r_${u.id}" ${u.rol === "vendor" && !isVendor() ? "disabled" : ""}>
-              <option value="operador" ${u.rol === "operador" ? "selected" : ""}>operador</option>
-              <option value="admin" ${u.rol === "admin" ? "selected" : ""}>admin</option>
-              ${isVendor() ? `<option value="vendor" ${u.rol === "vendor" ? "selected" : ""}>vendor</option>` : ""}
-            </select>
-          </td>
-          <td><select id="e_${u.id}">${empresaOptions(u.empresaId || "")}</select></td>
+        <tr><th>Email</th><th>Nombre</th><th>Rol</th><th>Empresa</th><th>Cliente</th><th>Estado</th><th></th></tr>
+        ${state.usuarios.map(u => {
+          const editable = state.rolesAsignables.includes(u.rol);
+          const dis = editable ? "" : "disabled";
+          return `<tr>
+          <td>${esc(u.email)}</td>
+          <td><input id="n_${u.id}" value="${esc(u.nombre)}" ${dis} /></td>
+          <td><select id="r_${u.id}" ${dis}>${rolOptions(u.rol)}</select></td>
+          <td><select id="e_${u.id}" ${dis}>${empresaOptions(u.empresaId || "")}</select></td>
+          <td><select id="c_${u.id}" ${dis}>${clienteOptions(u.clienteId || "")}</select></td>
           <td>${u.activo ? `<span class="pill pill-ok">Activo</span>` : `<span class="pill pill-err">Inactivo</span>`}</td>
-          <td>
+          <td>${editable ? `
             <div class="btn-row" style="margin:0">
               <button class="btn" onclick="guardarUsuario('${u.id}')">Guardar</button>
               <button class="btn" onclick="claveUsuario('${u.id}')">Clave</button>
               <button class="${u.activo ? "btn-danger" : "btn"}" onclick="toggleUsuario('${u.id}', ${u.activo})">${u.activo ? "Baja" : "Alta"}</button>
-            </div>
+            </div>` : ""}
           </td>
-        </tr>`).join("")}
+        </tr>`;
+        }).join("")}
       </table>
     </div>`;
 }
 
+async function usuarioAccion(fn, okMsg) {
+  try {
+    await fn();
+    toast(okMsg);
+    renderUsuarios();
+  } catch (e) {
+    toast(e.message.replace(/^"|"$/g, ""), "err");
+  }
+}
+
 async function altaUsuario() {
-  await api("/api/usuarios", { method: "POST", body: JSON.stringify({
-    username: val("uu"),
+  await usuarioAccion(() => api("/api/usuarios", { method: "POST", body: JSON.stringify({
+    email: val("uu"),
     password: val("up"),
     nombre: val("un"),
     rol: val("ur"),
-    empresaId: val("ue") || null
-  })});
-  toast("Usuario creado");
-  renderUsuarios();
+    empresaId: val("ue") || null,
+    clienteId: val("uc") || null
+  })}), "Usuario creado");
 }
 
 async function guardarUsuario(id) {
-  await api(`/api/usuarios/${id}`, { method: "PUT", body: JSON.stringify({
+  await usuarioAccion(() => api(`/api/usuarios/${id}`, { method: "PUT", body: JSON.stringify({
     nombre: val("n_" + id),
     rol: val("r_" + id),
-    empresaId: val("e_" + id) || null
-  })});
-  toast("Usuario actualizado");
-  renderUsuarios();
+    empresaId: val("e_" + id) || null,
+    clienteId: val("c_" + id) || null
+  })}), "Usuario actualizado");
 }
 
 async function claveUsuario(id) {
-  const password = prompt("Nueva contraseña");
+  const password = prompt("Nueva contraseña (mínimo 6 caracteres)");
   if (!password) return;
-  await api(`/api/usuarios/${id}`, { method: "PUT", body: JSON.stringify({ password, empresaId: val("e_" + id) || null }) });
-  toast("Contraseña actualizada");
+  await usuarioAccion(() => api(`/api/usuarios/${id}`, { method: "PUT", body: JSON.stringify({ password, empresaId: val("e_" + id) || null }) }),
+    "Contraseña actualizada");
 }
 
 async function toggleUsuario(id, activo) {
-  await api(`/api/usuarios/${id}`, { method: "PUT", body: JSON.stringify({
+  await usuarioAccion(() => api(`/api/usuarios/${id}`, { method: "PUT", body: JSON.stringify({
     activo: !activo,
     empresaId: val("e_" + id) || null
-  })});
-  toast(activo ? "Usuario dado de baja" : "Usuario reactivado");
-  renderUsuarios();
+  })}), activo ? "Usuario dado de baja" : "Usuario reactivado");
 }
 
 async function renderConfig() {
@@ -537,7 +581,8 @@ async function renderConfig() {
     ["balanza", "Balanza"],
     ["campos", "Campos"],
     ["ticket", "Ticket y logo"],
-    ["api", "API"]
+    ["api", "API"],
+    ["licencia", "Licencia"]
   ];
   document.getElementById("main").innerHTML = `
     <div class="page-head"><div><h2>Configuración BFS</h2><p>Estas opciones las arma el instalador. El cliente no las ve.</p></div></div>
@@ -551,7 +596,8 @@ async function renderConfig() {
     balanza: renderConfigBalanza,
     campos: renderConfigCampos,
     ticket: renderConfigTicket,
-    api: renderConfigApi
+    api: renderConfigApi,
+    licencia: renderConfigLicencia
   };
   body[state.configTab]();
 }
@@ -695,6 +741,32 @@ function renderConfigApi() {
       </div>
       <div class="btn-row"><button class="btn-primary" onclick="saveApi()">Guardar API</button></div>
     </div>`;
+}
+
+async function renderConfigLicencia() {
+  const l = state.licencia = await api("/api/licencia");
+  document.getElementById("configBody").innerHTML = `
+    <div class="card">
+      <div class="grid2">
+        <div class="status-box"><span>Estado</span><strong>${esc(l.mensaje)}</strong></div>
+        <div class="status-box"><span>Vence</span><strong>${l.vence ? esc(new Date(l.vence).toLocaleDateString()) : (l.cliente ? "Sin vencimiento" : "-")}</strong></div>
+        <div class="status-box"><span>ID de máquina</span><strong><code>${esc(l.maquina)}</code></strong></div>
+        <div class="status-box"><span>Otras placas de red</span><strong>${esc(l.maquinas.slice(1).join(", ") || "ninguna")}</strong></div>
+      </div>
+      <p>La licencia se genera con la herramienta de BFS para el ID de máquina de arriba. Pegala acá:</p>
+      <textarea id="lic_texto" rows="4" placeholder="eyJ..."></textarea>
+      <div class="btn-row"><button class="btn-primary" onclick="activarLicencia()">Activar licencia</button></div>
+    </div>`;
+}
+
+async function activarLicencia() {
+  try {
+    state.licencia = await api("/api/licencia", { method: "POST", body: JSON.stringify({ texto: val("lic_texto") }) });
+    toast("Licencia activada");
+    render();
+  } catch (e) {
+    toast(e.message.replace(/^"|"$/g, ""), "err");
+  }
 }
 
 async function saveConfig(body) {

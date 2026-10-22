@@ -1,5 +1,4 @@
-using System.Security.Claims;
-using Bfs.Api.Auth;
+using Bfs.Core;
 using Bfs.Core.Entities;
 using Bfs.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -13,14 +12,13 @@ public static class CatalogoEndpoints
         api.MapGet("/empresas", async (BfsDbContext db) =>
             Results.Ok(await db.Empresas.OrderBy(e => e.Nombre).ToListAsync()));
 
-        api.MapPost("/empresas", async (Empresa dto, BfsDbContext db, ClaimsPrincipal user) =>
+        api.MapPost("/empresas", async (Empresa dto, BfsDbContext db) =>
         {
-            if (!user.EsVendor()) return Results.Forbid();
             dto.Id = Guid.NewGuid();
             db.Empresas.Add(dto);
             await db.SaveChangesAsync();
             return Results.Ok(dto);
-        });
+        }).RequireAuthorization(Permisos.EmpresasGestionar);
 
         api.MapGet("/catalogos/{tipo}", async (string tipo, BfsDbContext db) => tipo switch
         {
@@ -28,11 +26,11 @@ public static class CatalogoEndpoints
             "productos" => Results.Ok(await db.Productos.OrderBy(x => x.Nombre).ToListAsync()),
             "transportes" => Results.Ok(await db.Transportes.OrderBy(x => x.RazonSocial).ToListAsync()),
             _ => Results.NotFound()
-        });
+        }).RequireAuthorization(Permisos.CatalogosVer);
 
-        api.MapPost("/catalogos/clientes", (Cliente dto, BfsDbContext db) => Agregar(db, dto));
-        api.MapPost("/catalogos/productos", (Producto dto, BfsDbContext db) => Agregar(db, dto));
-        api.MapPost("/catalogos/transportes", (Transporte dto, BfsDbContext db) => Agregar(db, dto));
+        api.MapPost("/catalogos/clientes", (Cliente dto, BfsDbContext db) => Agregar(db, dto)).RequireAuthorization(Permisos.CatalogosEditar);
+        api.MapPost("/catalogos/productos", (Producto dto, BfsDbContext db) => Agregar(db, dto)).RequireAuthorization(Permisos.CatalogosEditar);
+        api.MapPost("/catalogos/transportes", (Transporte dto, BfsDbContext db) => Agregar(db, dto)).RequireAuthorization(Permisos.CatalogosEditar);
     }
 
     private static async Task<IResult> Agregar<T>(BfsDbContext db, T dto) where T : EntidadSync

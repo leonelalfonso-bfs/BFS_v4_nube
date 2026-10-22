@@ -1,5 +1,3 @@
-using System.Security.Claims;
-using Bfs.Api.Auth;
 using Bfs.Api.Config;
 using Bfs.Core;
 
@@ -39,9 +37,8 @@ public static class BrandingEndpoints
             return Results.File(path, content);
         });
 
-        app.MapPost("/api/branding/logo", async (HttpRequest request, ConfigService config, BfsPaths paths, ClaimsPrincipal user) =>
+        app.MapPost("/api/branding/logo", async (HttpRequest request, ConfigService config, BfsPaths paths) =>
         {
-            if (!user.EsVendor()) return Results.Forbid();
             if (!request.HasFormContentType) return Results.BadRequest("Archivo requerido");
             var form = await request.ReadFormAsync();
             var file = form.Files.GetFile("file") ?? form.Files.FirstOrDefault();
@@ -67,6 +64,6 @@ public static class BrandingEndpoints
 
             await config.GuardarAsync([new(ConfigKeys.LogoFile, name)]);
             return Results.Ok(new { logoUrl = "/api/branding/logo" });
-        }).RequireAuthorization().DisableAntiforgery();
+        }).RequireAuthorization(Permisos.ConfigBfs).DisableAntiforgery();
     }
 }

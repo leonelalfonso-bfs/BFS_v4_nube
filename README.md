@@ -18,8 +18,10 @@ dotnet run --project src/Bfs.Api
 
 Abrir http://127.0.0.1:5080
 
-- Vendor: `bfs` / `bfs-setup`
-- Admin cliente: `admin` / `admin`
+- Vendor (BFS): `bfs@bfs.local` / `bfs-setup`
+- Admin cliente: `admin@bfs.local` / `admin`
+
+`dotnet run` arranca en entorno `Development`, sin pedir licencia. La app de escritorio y el instalador sí la piden: ver [docs/LICENCIAS.md](docs/LICENCIAS.md).
 
 La ventana de escritorio:
 
@@ -63,6 +65,7 @@ Las bases creadas por el spike anterior (sin migraciones) se renombran a `bfs.sp
 - `Bfs.Integrations`: outbox y WORMS.
 - `Bfs.Api`: host y endpoints por módulo (`Auth`, `Pesadas`, `Catalogos`, `Usuarios`, `Config`, `Balanza`, `Branding`).
 - `Bfs.Desktop`: ventana WPF para la portería.
+- `tools/Bfs.Licencias`: herramienta de BFS para emitir licencias.
 
 ## Qué ya está
 
@@ -70,5 +73,7 @@ Las bases creadas por el spike anterior (sin migraciones) se renombran a `bfs.sp
 - Pesada entrada/salida, tara pallets, neto
 - Balanza simulada (peso en vivo)
 - Outbox + mapper WORMS (se activa desde Configuración BFS)
-- Roles vendor / admin / operador
+- Login por email; roles vendor / admin / supervisor / operador / cliente con permisos por acción (`Bfs.Core/Permisos.cs`)
+- Usuario cliente: solo ve las pesadas de su cliente del catálogo
+- Licencia firmada por PC
 - Columnas de sincronización en todas las entidades (`Version`, `ModificadoEn`, borrado lógico, nodo de origen)

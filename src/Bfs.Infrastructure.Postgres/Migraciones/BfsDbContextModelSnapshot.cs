@@ -213,6 +213,9 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                     b.Property<string>("Cliente")
                         .HasColumnType("text");
 
+                    b.Property<Guid?>("ClienteId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Comprobante")
                         .HasColumnType("text");
 
@@ -308,6 +311,8 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
 
                     b.HasIndex("ModificadoEn");
 
+                    b.HasIndex("ClienteId", "EntradaEn");
+
                     b.HasIndex("EmpresaId", "TicketNumero")
                         .IsUnique();
 
@@ -398,11 +403,18 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                     b.Property<bool>("Activo")
                         .HasColumnType("boolean");
 
+                    b.Property<Guid?>("ClienteId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset>("CreadoEn")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("Eliminado")
                         .HasColumnType("boolean");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<Guid?>("EmpresaId")
                         .HasColumnType("uuid");
@@ -425,28 +437,31 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("Username")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("bigint");
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ClienteId");
+
+                    b.HasIndex("Email")
+                        .IsUnique();
+
                     b.HasIndex("EmpresaId");
 
                     b.HasIndex("ModificadoEn");
-
-                    b.HasIndex("Username")
-                        .IsUnique();
 
                     b.ToTable("Usuarios");
                 });
 
             modelBuilder.Entity("Bfs.Core.Entities.Pesada", b =>
                 {
+                    b.HasOne("Bfs.Core.Entities.Cliente", null)
+                        .WithMany()
+                        .HasForeignKey("ClienteId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Bfs.Core.Entities.Empresa", "Empresa")
                         .WithMany()
                         .HasForeignKey("EmpresaId")
@@ -458,9 +473,16 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
 
             modelBuilder.Entity("Bfs.Core.Entities.Usuario", b =>
                 {
+                    b.HasOne("Bfs.Core.Entities.Cliente", "Cliente")
+                        .WithMany()
+                        .HasForeignKey("ClienteId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Bfs.Core.Entities.Empresa", "Empresa")
                         .WithMany()
                         .HasForeignKey("EmpresaId");
+
+                    b.Navigation("Cliente");
 
                     b.Navigation("Empresa");
                 });

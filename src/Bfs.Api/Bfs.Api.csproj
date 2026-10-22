@@ -20,4 +20,8 @@
     <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- La configuración de desarrollo (licencia desactivada) no viaja en el instalador. -->
+    <Content Update="appsettings.Development.json" CopyToPublishDirectory="Never" />
+  </ItemGroup>
 </Project>

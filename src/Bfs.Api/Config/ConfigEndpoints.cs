@@ -1,5 +1,3 @@
-using System.Security.Claims;
-using Bfs.Api.Auth;
 using Bfs.Core;
 
 namespace Bfs.Api.Config;
@@ -17,14 +15,13 @@ public static class ConfigEndpoints
             return Results.Ok(items.ToDictionary(
                 c => c.Key,
                 c => c.Key == ConfigKeys.WormsApiKey && c.Value.Length > 0 ? "********" : c.Value));
-        });
+        }).RequireAuthorization(Permisos.ConfigBfs);
 
-        api.MapPut("/config", async (Dictionary<string, string> body, ConfigService config, IScaleController scale, ClaimsPrincipal user) =>
+        api.MapPut("/config", async (Dictionary<string, string> body, ConfigService config, IScaleController scale) =>
         {
-            if (!user.EsVendor()) return Results.Forbid();
             await config.GuardarAsync(body);
             scale.Apply(config.ScaleSettings());
             return Results.Ok(new { status = scale.Status, lastError = scale.LastError });
-        });
+        }).RequireAuthorization(Permisos.ConfigBfs);
     }
 }

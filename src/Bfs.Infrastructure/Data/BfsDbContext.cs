@@ -28,7 +28,10 @@ public class BfsDbContext : DbContext
         ConfigurarSync<Pesada>(modelBuilder);
 
         modelBuilder.Entity<Empresa>().HasIndex(e => e.Nombre).IsUnique();
-        modelBuilder.Entity<Usuario>().HasIndex(u => u.Username).IsUnique();
+        modelBuilder.Entity<Usuario>().HasIndex(u => u.Email).IsUnique();
+        modelBuilder.Entity<Usuario>().HasOne(u => u.Cliente).WithMany().HasForeignKey(u => u.ClienteId).OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<Pesada>().HasOne<Cliente>().WithMany().HasForeignKey(p => p.ClienteId).OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<Pesada>().HasIndex(p => new { p.ClienteId, p.EntradaEn });
         modelBuilder.Entity<Configuracion>().HasIndex(c => new { c.Clave, c.EmpresaId }).IsUnique();
         modelBuilder.Entity<Cliente>().HasIndex(c => c.RazonSocial);
         modelBuilder.Entity<Producto>().HasIndex(p => p.Nombre).IsUnique();

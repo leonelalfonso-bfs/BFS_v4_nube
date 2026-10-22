@@ -7,6 +7,9 @@ namespace Bfs.Infrastructure.Data;
 
 public static class DbInitializer
 {
+    public const string SeedVendorEmail = "bfs@bfs.local";
+    public const string SeedAdminEmail = "admin@bfs.local";
+
     public static async Task SeedAsync(BfsDbContext db)
     {
         await db.Database.MigrateAsync();
@@ -25,7 +28,7 @@ public static class DbInitializer
             var vendor = new Usuario
             {
                 Id = Guid.NewGuid(),
-                Username = "bfs",
+                Email = SeedVendorEmail,
                 Rol = Roles.Vendor,
                 Nombre = "BFS",
                 Activo = true
@@ -35,7 +38,7 @@ public static class DbInitializer
             var admin = new Usuario
             {
                 Id = Guid.NewGuid(),
-                Username = "admin",
+                Email = SeedAdminEmail,
                 Rol = Roles.Admin,
                 Nombre = "Administrador",
                 Activo = true

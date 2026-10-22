@@ -208,6 +208,9 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                     b.Property<string>("Cliente")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("ClienteId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Comprobante")
                         .HasColumnType("TEXT");
 
@@ -303,6 +306,8 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
 
                     b.HasIndex("ModificadoEn");
 
+                    b.HasIndex("ClienteId", "EntradaEn");
+
                     b.HasIndex("EmpresaId", "TicketNumero")
                         .IsUnique();
 
@@ -393,11 +398,18 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                     b.Property<bool>("Activo")
                         .HasColumnType("INTEGER");
 
+                    b.Property<Guid?>("ClienteId")
+                        .HasColumnType("TEXT");
+
                     b.Property<long>("CreadoEn")
                         .HasColumnType("INTEGER");
 
                     b.Property<bool>("Eliminado")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
 
                     b.Property<Guid?>("EmpresaId")
                         .HasColumnType("TEXT");
@@ -420,28 +432,31 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("Username")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ClienteId");
+
+                    b.HasIndex("Email")
+                        .IsUnique();
+
                     b.HasIndex("EmpresaId");
 
                     b.HasIndex("ModificadoEn");
-
-                    b.HasIndex("Username")
-                        .IsUnique();
 
                     b.ToTable("Usuarios");
                 });
 
             modelBuilder.Entity("Bfs.Core.Entities.Pesada", b =>
                 {
+                    b.HasOne("Bfs.Core.Entities.Cliente", null)
+                        .WithMany()
+                        .HasForeignKey("ClienteId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Bfs.Core.Entities.Empresa", "Empresa")
                         .WithMany()
                         .HasForeignKey("EmpresaId")
@@ -453,9 +468,16 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
 
             modelBuilder.Entity("Bfs.Core.Entities.Usuario", b =>
                 {
+                    b.HasOne("Bfs.Core.Entities.Cliente", "Cliente")
+                        .WithMany()
+                        .HasForeignKey("ClienteId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Bfs.Core.Entities.Empresa", "Empresa")
                         .WithMany()
                         .HasForeignKey("EmpresaId");
+
+                    b.Navigation("Cliente");
 
                     b.Navigation("Empresa");
                 });

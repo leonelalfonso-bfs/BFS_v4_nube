@@ -9,3 +9,7 @@ logs/
 *.db-shm
 *.db-wal
 .idea/
+
+# Claves de firma de licencias: nunca al repo
+*.pem
+license.key

@@ -3,6 +3,7 @@ using Bfs.Api.Auth;
 using Bfs.Api.Branding;
 using Bfs.Api.Catalogos;
 using Bfs.Api.Config;
+using Bfs.Api.Licencias;
 using Bfs.Api.Pesadas;
 using Bfs.Api.Balanza;
 using Bfs.Api.Usuarios;
@@ -45,6 +46,7 @@ public static class ApiHost
         builder.Services.AddSingleton<PasswordHasher<Usuario>>();
         builder.Services.AddScoped<ConfigService>();
         builder.Services.AddScoped<PesajeService>();
+        builder.Services.AddSingleton(_ => new LicenciaService(options, paths, builder.Configuration, builder.Environment));
 
         var jwtKey = builder.Configuration["Jwt:Key"] ?? "bfs-dev-key-cambiar-en-produccion-32bytes!!";
         var signing = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey.PadRight(32, 'x')));
@@ -53,6 +55,8 @@ public static class ApiHost
         builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(o =>
             {
+                // Sin esto "email" llega renombrado al esquema largo de Microsoft y user.Email() queda vacío.
+                o.MapInboundClaims = false;
                 o.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuer = false,
@@ -62,7 +66,7 @@ public static class ApiHost
                     ClockSkew = TimeSpan.FromMinutes(1)
                 };
             });
-        builder.Services.AddAuthorization();
+        builder.Services.AddBfsAutorizacion();
         builder.Services.AddCors(o => o.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
 
         var app = builder.Build();
@@ -77,7 +81,12 @@ public static class ApiHost
 
         app.UseCors();
         app.UseDefaultFiles();
-        app.UseStaticFiles();
+        app.UseStaticFiles(new StaticFileOptions
+        {
+            // Que el navegador (y el WebView2 de la portería) revalide siempre: al actualizar el sistema
+            // no tiene que quedar corriendo el app.js de la versión anterior.
+            OnPrepareResponse = ctx => ctx.Context.Response.Headers.CacheControl = "no-cache"
+        });
         app.UseAuthentication();
         app.UseAuthorization();
 
@@ -91,6 +100,7 @@ public static class ApiHost
         api.MapCatalogoEndpoints();
         api.MapUsuarioEndpoints();
         api.MapPesadaEndpoints();
+        api.MapLicenciaEndpoints();
 
         app.MapFallbackToFile("index.html");
         return app;

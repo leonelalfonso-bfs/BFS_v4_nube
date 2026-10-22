@@ -161,6 +161,8 @@ Cada fase termina compilando y con algo que se pueda demostrar. Las fases 0 a 6 
 
 ### Fase 1 — Usuarios, roles y licencia
 
+> **Estado (2026-10-22):** hecha en la rama `fase-1`. Permisos en `Bfs.Core/Permisos.cs`; licencia firmada (ECDSA) con herramienta en `tools/Bfs.Licencias` (ver `docs/LICENCIAS.md`). El índice central de logins por email se hace en la Fase 7. Pendiente para el importador (Fase 6): asociar las pesadas viejas a su cliente del catálogo por razón social.
+
 1. Equivalencia de roles: privilegio 0 → `operador`, 1 → `supervisor` (rol nuevo), 2 → `admin`, más `vendor` (BFS).
 2. Rol **`cliente`** asociado a un `Cliente` del catálogo. Equivale a `client_razon`, pero con FK y no con texto exacto. Solo ve sus pesadas.
 3. Permisos por pantalla y por acción (quién reimprime, quién anula, quién carga peso manual).

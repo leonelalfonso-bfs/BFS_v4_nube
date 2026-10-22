@@ -15,27 +15,38 @@ public static class AuthEndpoints
     {
         app.MapPost("/api/auth/login", async (LoginRequest req, BfsDbContext db, PasswordHasher<Usuario> hasher, SymmetricSecurityKey signing) =>
         {
-            var user = await db.Usuarios.FirstOrDefaultAsync(u => u.Username == req.Username && u.Activo);
+            var email = Usuario.NormalizarEmail(req.Email);
+            var user = await db.Usuarios.FirstOrDefaultAsync(u => u.Email == email && u.Activo);
             if (user == null)
             {
                 return Results.Unauthorized();
             }
 
-            if (hasher.VerifyHashedPassword(user, user.PasswordHash, req.Password) == PasswordVerificationResult.Failed)
+            if (hasher.VerifyHashedPassword(user, user.PasswordHash, req.Password ?? "") == PasswordVerificationResult.Failed)
             {
                 return Results.Unauthorized();
+            }
+
+            // Un usuario cliente sin cliente asignado no puede ver nada: mejor avisar que entrar a una pantalla vacía.
+            if (user.Rol == Roles.Cliente && user.ClienteId == null)
+            {
+                return Results.Text("El usuario no tiene un cliente asignado", statusCode: StatusCodes.Status403Forbidden);
             }
 
             var claims = new List<Claim>
             {
                 new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-                new("name", user.Nombre),
-                new("username", user.Username),
+                new(Autorizacion.ClaimNombre, user.Nombre),
+                new(Autorizacion.ClaimEmail, user.Email),
                 new(ClaimTypes.Role, user.Rol)
             };
             if (user.EmpresaId.HasValue)
             {
-                claims.Add(new Claim("empresaId", user.EmpresaId.Value.ToString()));
+                claims.Add(new Claim(Autorizacion.ClaimEmpresaId, user.EmpresaId.Value.ToString()));
+            }
+            if (user.ClienteId.HasValue)
+            {
+                claims.Add(new Claim(Autorizacion.ClaimClienteId, user.ClienteId.Value.ToString()));
             }
 
             var token = new JwtSecurityToken(
@@ -46,23 +57,24 @@ public static class AuthEndpoints
             return Results.Ok(new
             {
                 token = new JwtSecurityTokenHandler().WriteToken(token),
-                username = user.Username,
+                email = user.Email,
                 nombre = user.Nombre,
                 rol = user.Rol,
-                empresaId = user.EmpresaId
+                empresaId = user.EmpresaId,
+                clienteId = user.ClienteId,
+                permisos = Permisos.DeRol(user.Rol)
             });
         });
 
         app.MapGet("/api/me", (ClaimsPrincipal user) => Results.Ok(new
         {
-            username = user.FindFirstValue("username"),
-            nombre = user.FindFirstValue("name"),
-            rol = user.FindFirstValue(ClaimTypes.Role)
+            email = user.Email(),
+            nombre = user.FindFirstValue(Autorizacion.ClaimNombre),
+            rol = user.Rol(),
+            clienteId = user.ClienteId(),
+            permisos = Permisos.DeRol(user.Rol())
         })).RequireAuthorization();
     }
-
-    public static bool EsVendor(this ClaimsPrincipal user) => user.IsInRole(Roles.Vendor);
-    public static bool EsAdmin(this ClaimsPrincipal user) => user.IsInRole(Roles.Admin);
 }
 
-public record LoginRequest(string Username, string Password);
+public record LoginRequest(string? Email, string? Password);
