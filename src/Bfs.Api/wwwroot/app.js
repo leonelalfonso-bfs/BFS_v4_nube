@@ -1356,7 +1356,93 @@ function renderConfigApi() {
         </div>
       </div>
       <div class="btn-row"><button class="btn-primary" onclick="saveApi()">Guardar API</button></div>
-    </div>`;
+    </div>
+    <div class="card" id="envios"></div>`;
+  cargarEnvios();
+}
+
+const estadoEnvio = {
+  pendiente: ["pill-warn", "Pendiente"],
+  enviado: ["pill-ok", "Enviado"],
+  error: ["pill-err", "Rechazado"],
+  descartado: ["pill-info", "Descartado"]
+};
+
+async function cargarEnvios(filtro = state.enviosFiltro || "") {
+  state.enviosFiltro = filtro;
+  const el = document.getElementById("envios");
+  if (!el) return;
+  let r;
+  try {
+    r = await api("/api/integraciones" + (filtro ? "?estado=" + encodeURIComponent(filtro) : ""));
+  } catch (e) {
+    el.innerHTML = `<p class="error">${esc(limpiarError(e))}</p>`;
+    return;
+  }
+  const fecha = d => new Date(d).toLocaleString([], { dateStyle: "short", timeStyle: "short" });
+  const nombre = d => d.toUpperCase();
+  el.innerHTML = `
+    <h3 style="margin-top:0">Envíos</h3>
+    <div class="grid2">
+      ${r.destinos.map(d => `<div class="status-box"><span>${esc(nombre(d.nombre))} · ${d.habilitado ? "activa" : "apagada o sin configurar"}</span>
+        <strong>${d.pendientes} pendientes · ${d.errores} rechazados · ${d.enviados} enviados</strong>
+        ${d.errores ? `<button class="btn" style="margin-top:6px" onclick="reintentarErrores('${esc(d.nombre)}')">Reintentar rechazados</button>` : ""}
+      </div>`).join("")}
+    </div>
+    <p>Si el sistema del cliente no responde, BFS reintenta solo, esperando cada vez más (de 1 a 30 minutos). Lo que el sistema rechaza queda acá hasta que lo reintentes o lo descartes; mientras tanto, la salida de esa pesada espera.</p>
+    <div class="btn-row">
+      <select style="width:auto" onchange="cargarEnvios(this.value)">
+        ${[["", "Todos"], ["pendiente", "Pendientes"], ["error", "Rechazados"], ["enviado", "Enviados"], ["descartado", "Descartados"]]
+          .map(([v, l]) => `<option value="${v}" ${filtro === v ? "selected" : ""}>${l}</option>`).join("")}
+      </select>
+      <button class="btn-primary" onclick="enviarAhora()">Enviar ahora</button>
+    </div>
+    <table>
+      <tr><th>Fecha</th><th>Destino</th><th>Ticket</th><th>Evento</th><th>Estado</th><th>Intentos</th><th>Detalle</th><th></th></tr>
+      ${r.mensajes.length ? r.mensajes.map(m => {
+        const [cls, label] = estadoEnvio[m.estado] || ["pill-info", m.estado];
+        const espera = m.estado === "pendiente" && m.intentos ? ` · próximo ${fecha(m.proximoIntento)}` : "";
+        return `<tr>
+          <td>${fecha(m.creadoEn)}</td><td>${esc(nombre(m.destino))}</td><td>${esc(m.ticket)}</td><td>${esc(m.evento)}</td>
+          <td><span class="pill ${cls}">${label}</span></td><td>${m.intentos}${espera}</td>
+          <td>${esc(m.ultimoError || "")}</td>
+          <td>${m.estado === "error" || m.estado === "pendiente" || m.estado === "descartado" ? `
+            <button class="btn" onclick="accionEnvio('${m.id}','reintentar')">Reintentar</button>
+            ${m.estado !== "descartado" ? `<button class="btn" onclick="accionEnvio('${m.id}','descartar')">Descartar</button>` : ""}` : ""}</td>
+        </tr>`;
+      }).join("") : `<tr><td colspan="8">No hay envíos${filtro ? " en este estado" : ""}.</td></tr>`}
+    </table>`;
+}
+
+async function accionEnvio(id, accion) {
+  if (accion === "descartar" && !confirm("Este envío no se va a mandar más. ¿Seguir?")) return;
+  try {
+    await api(`/api/integraciones/${id}/${accion}`, { method: "POST" });
+    toast(accion === "descartar" ? "Envío descartado" : "Vuelve a la cola");
+  } catch (e) {
+    toast(limpiarError(e), "err");
+  }
+  cargarEnvios();
+}
+
+async function reintentarErrores(destino) {
+  try {
+    const r = await api(`/api/integraciones/${destino}/reintentar-errores`, { method: "POST" });
+    toast(`${r.reintentados} vuelven a la cola`);
+  } catch (e) {
+    toast(limpiarError(e), "err");
+  }
+  cargarEnvios();
+}
+
+async function enviarAhora() {
+  try {
+    await api("/api/integraciones/enviar", { method: "POST" });
+    toast("Envío terminado");
+  } catch (e) {
+    toast(limpiarError(e), "err");
+  }
+  cargarEnvios();
 }
 
 async function renderConfigLicencia() {
