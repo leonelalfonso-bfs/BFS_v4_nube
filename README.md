@@ -36,6 +36,14 @@ dotnet run --project src/Bfs.Api -- --Bfs:DataPath=C:\temp\bfs-prueba
 dotnet run --project src/Bfs.Api -- --Bfs:Modo=Nube --ConnectionStrings:Bfs="Host=localhost;Database=bfs_t_demo;Username=bfs;Password=..."
 ```
 
+## Instalador (PC de portería)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File installeruild.ps1 -Version 4.0.0
+```
+
+Deja `artifacts\BFS-Pesaje-4.0.0.msi` (self-contained, Windows 10/11). Después de instalar, BFS entra con su usuario, activa la licencia (Configuración → Licencia) y, si el cliente venía de la 3.x, importa sus datos desde Sistema → Importar desde la 3.x.
+
 ## Tests
 
 ```powershell
@@ -79,6 +87,7 @@ Las bases creadas por el spike anterior (sin migraciones) se renombran a `bfs.sp
 - Planta: datos de empresas, aduana y clave de ingreso manual; autocompletado por patente
 - Pesaje: Normal, Tara conocida, Tomar tara, Aduana, ingreso manual con clave, anulación y tickets por puesto (`PP-NNNNNN`)
 - Documentos: ticket PDF (normal y aduana), ticket térmico ESC/POS, Excel de pesadas
+- Pesadas con filtros y totales, tablero; Sistema: backups, restauración, espejo, numeración; importador de la 3.x; instalador MSI
 - Balanzas: varias por nodo (serie STX / Line o simuladas), modelos de la 3.x, reconexión automática, peso estable, diagnóstico de tramas
 - Licencia firmada por PC
 - Columnas de sincronización en todas las entidades (`Version`, `ModificadoEn`, borrado lógico, nodo de origen)

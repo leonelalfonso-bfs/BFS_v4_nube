@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Bfs.Api.Auth;
 using Bfs.Api.Config;
+using Bfs.Api.Reportes;
 using Bfs.Core;
 using Bfs.Documents;
 
@@ -38,15 +39,10 @@ public static class DocumentoEndpoints
             }
         }).RequireAuthorization(Permisos.PesajeReimprimir);
 
-        api.MapGet("/pesadas/excel", async (DateOnly? desde, DateOnly? hasta, Guid? empresaId, DocumentosService docs, ClaimsPrincipal user) =>
+        api.MapGet("/pesadas/excel", async ([AsParameters] FiltroQuery q, DocumentosService docs, ClaimsPrincipal user) =>
         {
-            Guid? soloCliente = null;
-            if (!user.Puede(Permisos.PesadasVer))
-            {
-                if (!user.Puede(Permisos.PesadasVerPropias) || user.ClienteId() is not { } clienteId) return Results.Forbid();
-                soloCliente = clienteId;
-            }
-            var xlsx = await docs.ExcelAsync(desde, hasta, empresaId, soloCliente);
+            if (ReporteEndpoints.Filtro(q, user) is not { } filtro) return Results.Forbid();
+            var xlsx = await docs.ExcelAsync(filtro);
             return Results.File(xlsx, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 $"pesadas-{DateTime.Now:yyyyMMdd-HHmm}.xlsx");
         });

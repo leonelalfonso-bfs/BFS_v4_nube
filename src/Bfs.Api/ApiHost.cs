@@ -7,6 +7,8 @@ using Bfs.Api.Documentos;
 using Bfs.Api.Licencias;
 using Bfs.Api.Pesadas;
 using Bfs.Api.Planta;
+using Bfs.Api.Reportes;
+using Bfs.Api.Sistema;
 using Bfs.Api.Balanzas;
 using Bfs.Api.Usuarios;
 using Bfs.Core;
@@ -17,6 +19,7 @@ using Bfs.Integrations;
 using Bfs.Scale;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 
@@ -28,8 +31,10 @@ public static class ApiHost
 
     public static WebApplication Create(string[] args)
     {
-        var builder = WebApplication.CreateBuilder(args);
+        // La raíz es la carpeta del programa (no la carpeta desde donde lo abrieron): ahí están appsettings.json y las DLL.
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = args, ContentRootPath = AppContext.BaseDirectory });
         builder.WebHost.UseUrls(builder.Configuration["Urls"] ?? DefaultUrl);
+        builder.Environment.WebRootFileProvider = new ManifestEmbeddedFileProvider(typeof(ApiHost).Assembly, "wwwroot");
 
         var options = builder.Configuration.GetSection(BfsOptions.Seccion).Get<BfsOptions>() ?? new BfsOptions();
         var paths = new BfsPaths(options.DataPath);
@@ -50,10 +55,11 @@ public static class ApiHost
         builder.Services.AddScoped<ConfigService>();
         builder.Services.AddScoped<PesajeService>();
         builder.Services.AddScoped<DocumentosService>();
+        builder.Services.AddScoped<ReportesService>();
+        builder.Services.AddScoped<SistemaService>();
         builder.Services.AddSingleton(_ => new LicenciaService(options, paths, builder.Configuration, builder.Environment));
 
-        var jwtKey = builder.Configuration["Jwt:Key"] ?? "bfs-dev-key-cambiar-en-produccion-32bytes!!";
-        var signing = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey.PadRight(32, 'x')));
+        var signing = ClaveJwt(builder.Configuration["Jwt:Key"], paths);
         builder.Services.AddSingleton(signing);
 
         builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -83,9 +89,10 @@ public static class ApiHost
         }
 
         app.UseCors();
-        app.UseDefaultFiles();
+        app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = app.Environment.WebRootFileProvider });
         app.UseStaticFiles(new StaticFileOptions
         {
+            FileProvider = app.Environment.WebRootFileProvider,
             // Que el navegador (y el WebView2 de la portería) revalide siempre: al actualizar el sistema
             // no tiene que quedar corriendo el app.js de la versión anterior.
             OnPrepareResponse = ctx => ctx.Context.Response.Headers.CacheControl = "no-cache"
@@ -106,9 +113,33 @@ public static class ApiHost
         api.MapPesadaEndpoints();
         api.MapLicenciaEndpoints();
         api.MapDocumentoEndpoints();
+        api.MapReporteEndpoints();
+        api.MapSistemaEndpoints();
+        api.MapImportacionEndpoints();
 
+        // Una ruta de la API que no existe es 404; cualquier otra ruta es la aplicación web.
+        app.MapFallback("/api/{**resto}", () => Results.NotFound());
         app.MapFallbackToFile("index.html");
         return app;
+    }
+
+    /// <summary>
+    /// Clave para firmar las sesiones. Si no viene por configuración, cada instalación genera la suya la primera vez
+    /// (antes había una fija en el código, que además está en el repositorio público: cualquiera podía falsificar un login).
+    /// </summary>
+    private static SymmetricSecurityKey ClaveJwt(string? configurada, BfsPaths paths)
+    {
+        if (!string.IsNullOrWhiteSpace(configurada) && configurada.Length >= 32)
+        {
+            return new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configurada));
+        }
+
+        var archivo = Path.Combine(paths.Root, "jwt.key");
+        if (!File.Exists(archivo))
+        {
+            File.WriteAllText(archivo, Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(48)));
+        }
+        return new SymmetricSecurityKey(Convert.FromBase64String(File.ReadAllText(archivo).Trim()));
     }
 
     private static void AddDatosYBalanza(WebApplicationBuilder builder, BfsOptions options, BfsPaths paths)
@@ -129,6 +160,11 @@ public static class ApiHost
             return;
         }
 
+        if (ArchivosBase.AplicarRestauracionPendiente(paths.Restaurar, paths.BaseSqlite, paths.Backups) is { } anterior)
+        {
+            Log.Warning("Se restauró un backup. La base anterior quedó en {Anterior}", anterior);
+        }
+
         var respaldo = SpikeDbRespaldo.ApartarSiNoTieneMigraciones(paths.BaseSqlite);
         if (respaldo != null)
         {
@@ -139,6 +175,7 @@ public static class ApiHost
         builder.Services.AddBfsDatabase(ModoDespliegue.Nodo, BfsDatabase.SqliteConnectionString(paths.BaseSqlite));
 
         builder.Services.AddSingleton<IImpresoraTermica, ImpresoraWindows>();
+        builder.Services.AddHostedService<RespaldoAutomatico>();
         builder.Services.AddSingleton<IPuertoSerieFactory, PuertoSerieFactory>();
         builder.Services.AddSingleton<IBalanzas>(sp => new BalanzaManager(
             sp.GetRequiredService<IPuertoSerieFactory>(), sp.GetRequiredService<ILogger<BalanzaManager>>()));

@@ -17,6 +17,11 @@ public static class ConfigKeys
     /// <summary>Solo se captura peso de la balanza cuando está estable.</summary>
     public const string ExigirEstable = "exigir_estable";
 
+    /// <summary>Carpeta (otro disco o carpeta de red) donde se mantiene una copia de la base.</summary>
+    public const string EspejoCarpeta = "espejo_carpeta";
+    public const string EspejoUltimo = "espejo_ultimo";
+    public const string EspejoError = "espejo_error";
+
     /// <summary>Hash de la clave que pide el ingreso manual de peso (la 3.x la guardaba en texto plano).</summary>
     public const string ClaveManualHash = "clave_manual_hash";
 

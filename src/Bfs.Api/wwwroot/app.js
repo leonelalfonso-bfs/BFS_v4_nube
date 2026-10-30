@@ -4,6 +4,8 @@ const ICONS = {
   catalogos: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M4 12h16M4 17h10"/></svg>',
   usuarios: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4z"/><path d="M4 20a8 8 0 0 1 16 0"/></svg>',
   planta: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 21V9l6-4v4l6-4v16"/><path d="M15 21V3h6v18M3 21h18M7 13h2M7 17h2M11 13h2M11 17h2"/></svg>',
+  tablero: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
+  sistema: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>',
   config: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>'
 };
 
@@ -42,6 +44,9 @@ const state = {
   modelos: [],
   balEdit: null,
   modoPesaje: "normal",
+  filtros: {},
+  pagina: 1,
+  dias: 30,
   pendientes: [],
   selectedPesadaId: null,
   licencia: null,
@@ -107,11 +112,12 @@ function canVerPesadas() { return can("pesadas.ver") || can("pesadas.ver_propias
 function navItems() {
   const nav = [];
   if (can("pesaje.operar")) nav.push(["pesaje", "Pesaje"]);
-  if (canVerPesadas()) nav.push(["reportes", "Pesadas"]);
+  if (canVerPesadas()) nav.push(["reportes", "Pesadas"], ["tablero", "Tablero"]);
   if (can("catalogos.ver")) nav.push(["catalogos", "Catálogos"]);
   const admin = [];
   if (can("usuarios.gestionar")) admin.push(["usuarios", "Usuarios"]);
   if (can("config.planta")) admin.push(["planta", "Planta"]);
+  if (can("sistema.gestionar")) admin.push(["sistema", "Sistema"]);
   if (can("config.bfs")) admin.push(["config", "Configuración"]);
   return { nav, admin };
 }
@@ -218,7 +224,7 @@ function render() {
       <main class="workspace" id="main"></main>
     </div>
   `;
-  const views = { pesaje: renderPesaje, reportes: renderReportes, catalogos: renderCatalogos, usuarios: renderUsuarios, planta: renderPlanta, config: renderConfig };
+  const views = { pesaje: renderPesaje, reportes: renderReportes, catalogos: renderCatalogos, usuarios: renderUsuarios, planta: renderPlanta, tablero: renderTablero, sistema: renderSistema, config: renderConfig };
   views[state.view]?.();
 }
 
@@ -554,17 +560,6 @@ function guardarComo(url, nombre) {
   a.remove();
 }
 
-async function exportarExcel() {
-  const q = new URLSearchParams();
-  if (val("x_desde")) q.set("desde", val("x_desde"));
-  if (val("x_hasta")) q.set("hasta", val("x_hasta"));
-  try {
-    const { blob, nombre } = await bajarArchivo(`/api/pesadas/excel?${q}`);
-    guardarComo(URL.createObjectURL(blob), nombre);
-  } catch (e) {
-    toast("No se pudo exportar: " + limpiarError(e), "err");
-  }
-}
 
 function usaTermica() {
   return state.funciones.termica && can("pesaje.reimprimir");
@@ -734,42 +729,6 @@ function pillEstado(p) {
   if (p.estado === "ANULADA") return `<span class="pill pill-err" title="${esc((p.motivoAnulacion || "") + " · " + (p.anuladaPor || ""))}">Anulada</span>`;
   if (p.estado === "ENTRADA") return `<span class="pill pill-warn">Pendiente</span>`;
   return `<span class="pill pill-ok">Cerrada</span>`;
-}
-
-async function renderReportes() {
-  const rows = await api("/api/pesadas");
-  const acciones = true;
-  document.getElementById("main").innerHTML = `
-    <div class="page-head"><div><h2>Pesadas</h2><p>${can("pesadas.ver") ? "Últimos 200 movimientos de la planta." : "Tus últimos 200 movimientos."} ✎ = peso cargado a mano.</p></div></div>
-    <div class="card">
-      <div class="grid2">
-        <div><label>Desde</label><input id="x_desde" type="date" /></div>
-        <div><label>Hasta</label><input id="x_hasta" type="date" /></div>
-      </div>
-      <div class="btn-row"><button class="btn-primary" onclick="exportarExcel()">Exportar a Excel</button></div>
-    </div>
-    <div class="card" style="overflow-x:auto">
-      <table>
-        <tr><th>Ticket</th><th>Fecha</th><th>Empresa</th><th>Patente</th><th>Producto</th><th>Estado</th><th>Entrada</th><th>Salida</th><th>Pallets</th><th>Neto</th>${acciones ? "<th></th>" : ""}</tr>
-        ${rows.map(p => `<tr>
-          <td>${esc(p.ticketNumero)}${p.modo === "TaraConocida" ? ` <span class="pill pill-info">Tara conocida</span>` : ""}${p.tipoOperacion === "Aduana" ? ` <span class="pill pill-info">Aduana</span>` : ""}</td>
-          <td>${esc(hora(p.entradaEn))}</td>
-          <td>${esc(empresaName(p.empresaId))}</td>
-          <td>${esc(p.patenteChasis)}</td>
-          <td>${esc(p.producto || "")}</td>
-          <td>${pillEstado(p)}</td>
-          <td>${p.pesoEntrada}${p.entradaManualPor ? " ✎" : ""}</td>
-          <td>${p.pesoSalida ?? "-"}${p.salidaManualPor ? " ✎" : ""}</td>
-          <td>${p.taraPallets}</td>
-          <td>${p.estado === "ANULADA" ? "-" : (p.neto ?? "-")}</td>
-          ${acciones ? `<td><div class="btn-row" style="margin:0">
-            ${botonesTicket(p.id)}
-            ${p.estado === "ENTRADA" && can("pesaje.operar") ? `<button class="btn" onclick="retomarPesada('${p.id}')">Retomar</button>` : ""}
-            ${p.estado !== "ANULADA" && can("pesaje.anular") ? `<button class="btn-danger" onclick="anularPesada('${p.id}')">Anular</button>` : ""}
-          </div></td>` : ""}
-        </tr>`).join("")}
-      </table>
-    </div>`;
 }
 
 const CATALOGOS = {
@@ -1489,6 +1448,277 @@ async function start() {
     }
   } else {
     render();
+  }
+}
+
+
+function filtrosQuery(extra = {}) {
+  const f = state.filtros;
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries({ ...f, ...extra })) if (v !== "" && v != null) q.set(k, v);
+  return q.toString();
+}
+
+function leerFiltros() {
+  state.filtros = {
+    desde: val("f_desde"), hasta: val("f_hasta"), empresaId: val("f_empresa"), cliente: val("f_cliente"),
+    transporte: val("f_transporte"), producto: val("f_producto"), texto: val("f_texto"), estado: val("f_estado")
+  };
+  state.pagina = 1;
+}
+
+function kg(n) {
+  return `${Number(n || 0).toLocaleString("es-AR")} kg`;
+}
+
+async function renderReportes() {
+  const f = state.filtros;
+  const r = await api(`/api/reportes/pesadas?${filtrosQuery({ pagina: state.pagina, tamano: 50 })}`);
+  const paginas = Math.max(1, Math.ceil(r.total / r.tamano));
+  const t = r.totales;
+  const opt = (values, sel) => values.map(([v, l]) => `<option value="${v}" ${v === sel ? "selected" : ""}>${l}</option>`).join("");
+  document.getElementById("main").innerHTML = `
+    <div class="page-head"><div><h2>Pesadas</h2><p>${can("pesadas.ver") ? "Movimientos de la planta." : "Tus movimientos."} ✎ = peso cargado a mano.</p></div></div>
+    <div class="card">
+      <div class="grid3">
+        <div><label>Desde</label><input id="f_desde" type="date" value="${esc(f.desde)}" /></div>
+        <div><label>Hasta</label><input id="f_hasta" type="date" value="${esc(f.hasta)}" /></div>
+        <div><label>Estado</label><select id="f_estado">${opt([["", "Todos"], ["SALIDA", "Cerradas"], ["ENTRADA", "Pendientes"], ["ANULADA", "Anuladas"]], f.estado)}</select></div>
+        ${state.empresas.length > 1 ? `<div><label>Empresa</label><select id="f_empresa">${empresaOptions(f.empresaId)}</select></div>` : ""}
+        ${can("pesadas.ver") ? `<div><label>Cliente</label><input id="f_cliente" value="${esc(f.cliente)}" /></div>` : ""}
+        <div><label>Transporte</label><input id="f_transporte" value="${esc(f.transporte)}" /></div>
+        <div><label>Producto</label><input id="f_producto" value="${esc(f.producto)}" /></div>
+        <div><label>Ticket, patente, chofer o remito</label><input id="f_texto" value="${esc(f.texto)}" /></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-primary" onclick="leerFiltros();renderReportes()">Buscar</button>
+        <button class="btn" onclick="state.filtros={};state.pagina=1;renderReportes()">Limpiar</button>
+        <button class="btn" onclick="leerFiltros();exportarExcel()">Exportar a Excel</button>
+      </div>
+    </div>
+    <div class="status-grid" style="margin-bottom:16px">
+      <div class="status-box"><span>Pesadas</span><strong>${t.cantidad}</strong></div>
+      <div class="status-box"><span>Neto (cerradas)</span><strong>${kg(t.neto)}</strong></div>
+      <div class="status-box"><span>Cerradas / pendientes / anuladas</span><strong>${t.cerradas} / ${t.pendientes} / ${t.anuladas}</strong></div>
+    </div>
+    <div class="card" style="overflow-x:auto">
+      <table>
+        <tr><th>Ticket</th><th>Fecha</th><th>Empresa</th><th>Patente</th><th>Cliente</th><th>Producto</th><th>Estado</th><th>Entrada</th><th>Salida</th><th>Neto</th><th></th></tr>
+        ${r.items.length ? r.items.map(p => `<tr>
+          <td>${esc(p.ticketNumero)}${p.modo === "TaraConocida" ? ` <span class="pill pill-info">Tara conocida</span>` : ""}${p.tipoOperacion === "Aduana" ? ` <span class="pill pill-info">Aduana</span>` : ""}</td>
+          <td>${esc(hora(p.entradaEn))}</td>
+          <td>${esc(empresaName(p.empresaId))}</td>
+          <td>${esc(p.patenteChasis)}</td>
+          <td>${esc(p.cliente || "")}</td>
+          <td>${esc(p.producto || "")}</td>
+          <td>${pillEstado(p)}</td>
+          <td>${p.pesoEntrada}${p.entradaManualPor ? " ✎" : ""}</td>
+          <td>${p.pesoSalida ?? "-"}${p.salidaManualPor ? " ✎" : ""}</td>
+          <td>${p.estado === "ANULADA" ? "-" : (p.neto ?? "-")}</td>
+          <td><div class="btn-row" style="margin:0">
+            ${botonesTicket(p.id)}
+            ${p.estado === "ENTRADA" && can("pesaje.operar") ? `<button class="btn" onclick="retomarPesada('${p.id}')">Retomar</button>` : ""}
+            ${p.estado !== "ANULADA" && can("pesaje.anular") ? `<button class="btn-danger" onclick="anularPesada('${p.id}')">Anular</button>` : ""}
+          </div></td>
+        </tr>`).join("") : `<tr><td colspan="11">No hay pesadas con esos filtros.</td></tr>`}
+      </table>
+      <div class="btn-row">
+        <button class="btn" ${state.pagina <= 1 ? "disabled" : ""} onclick="state.pagina--;renderReportes()">Anterior</button>
+        <span style="align-self:center">Página ${state.pagina} de ${paginas}</span>
+        <button class="btn" ${state.pagina >= paginas ? "disabled" : ""} onclick="state.pagina++;renderReportes()">Siguiente</button>
+      </div>
+    </div>`;
+}
+
+async function exportarExcel() {
+  try {
+    const { blob, nombre } = await bajarArchivo(`/api/pesadas/excel?${filtrosQuery()}`);
+    guardarComo(URL.createObjectURL(blob), nombre);
+  } catch (e) {
+    toast("No se pudo exportar: " + limpiarError(e), "err");
+  }
+}
+
+async function renderTablero() {
+  const r = await api(`/api/reportes/resumen?dias=${state.dias}`);
+  const max = Math.max(1, ...r.porDia.map(d => d.neto));
+  const tablaTop = (titulo, items) => `
+    <div class="card">
+      <h3 style="margin-top:0">${titulo}</h3>
+      <table>
+        <tr><th></th><th>Pesadas</th><th>Neto</th></tr>
+        ${items.length ? items.map(x => `<tr><td>${esc(x.nombre)}</td><td>${x.cantidad}</td><td>${kg(x.neto)}</td></tr>`).join("") : `<tr><td colspan="3">Sin datos</td></tr>`}
+      </table>
+    </div>`;
+  document.getElementById("main").innerHTML = `
+    <div class="page-head">
+      <div><h2>Tablero</h2><p>Neto de pesadas cerradas. Las pendientes y anuladas no suman.</p></div>
+      <select onchange="state.dias=Number(this.value);renderTablero()" style="max-width:180px">
+        ${[7, 30, 90, 365].map(d => `<option value="${d}" ${d === state.dias ? "selected" : ""}>Últimos ${d} días</option>`).join("")}
+      </select>
+    </div>
+    <div class="status-grid" style="margin-bottom:16px">
+      <div class="status-box"><span>Hoy</span><strong>${r.hoy.cerradas} cerradas · ${kg(r.hoy.neto)}</strong></div>
+      <div class="status-box"><span>Últimos ${r.dias} días</span><strong>${r.periodo.cerradas} cerradas · ${kg(r.periodo.neto)}</strong></div>
+      <div class="status-box"><span>Pendientes de salida ahora</span><strong>${r.pendientesAhora}</strong></div>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Neto por día</h3>
+      <div style="display:flex;align-items:flex-end;gap:2px;height:180px;overflow-x:auto">
+        ${r.porDia.map(d => `<div title="${esc(d.fecha)}: ${d.cantidad} pesadas · ${kg(d.neto)}"
+          style="flex:1;min-width:4px;background:var(--accent,#0f766e);opacity:${d.neto ? 1 : 0.15};height:${Math.max(2, Math.round(d.neto / max * 170))}px"></div>`).join("")}
+      </div>
+      <div style="display:flex;justify-content:space-between;color:var(--muted);font-size:12px;margin-top:4px">
+        <span>${esc(r.porDia[0]?.fecha || "")}</span><span>${esc(r.porDia[r.porDia.length - 1]?.fecha || "")}</span>
+      </div>
+    </div>
+    <div class="grid2">
+      ${can("pesadas.ver") ? tablaTop("Clientes con más neto", r.topClientes) : ""}
+      ${tablaTop("Productos con más neto", r.topProductos)}
+    </div>`;
+}
+
+async function renderSistema() {
+  const s = await api("/api/sistema");
+  const tam = b => b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.ceil(b / 1024)} KB`;
+  let importar = "";
+  if (can("config.bfs")) {
+    try {
+      const d = await api("/api/sistema/importar-3x");
+      importar = `
+    <div class="card">
+      <h3 style="margin-top:0">Importar desde la 3.x</h3>
+      <p>${d.existe
+        ? `Se encontró <code>${esc(d.ruta)}</code>: ${Object.entries(d.contenido).map(([k, v]) => `${esc(k)} ${v}`).join(" · ")}.`
+        : `No se encontró la base de la 3.x en <code>${esc(d.ruta)}</code>. Podés subir una copia.`}
+        La base de la 3.x no se modifica; lo que ya existe en la 4.0 se omite y antes se guarda un backup.</p>
+      <div class="grid2"><div><label>O subir otra truckscale.db</label><input id="imp_archivo" type="file" accept=".db" /></div></div>
+      <div class="btn-row"><button class="btn-primary" onclick="importar3x()">Importar</button></div>
+      <div id="imp_resultado"></div>
+    </div>`;
+    } catch (e) {
+      importar = `<div class="card">${esc(limpiarError(e))}</div>`;
+    }
+  }
+  document.getElementById("main").innerHTML = `
+    <div class="page-head"><div><h2>Sistema</h2><p>Copias de seguridad, espejo y numeración. Todos los días se hace un backup automático (se guardan los últimos 30).</p></div></div>
+    ${s.restauracionPendiente ? `
+    <div class="card" style="border-left:4px solid #d97706">
+      <strong>Hay una restauración pendiente.</strong> Cerrá y volvé a abrir el sistema para aplicarla.
+      <div class="btn-row"><button class="btn" onclick="cancelarRestauracion()">Cancelar restauración</button></div>
+    </div>` : ""}
+    <div class="card">
+      <h3 style="margin-top:0">Backups</h3>
+      <div class="btn-row" style="margin-top:0"><button class="btn-primary" onclick="crearBackup()">Hacer backup ahora</button></div>
+      <table style="margin-top:12px">
+        <tr><th>Archivo</th><th>Fecha</th><th>Tamaño</th><th></th></tr>
+        ${s.backups.length ? s.backups.slice(0, 15).map(b => `<tr>
+          <td>${esc(b.archivo)}</td><td>${esc(new Date(b.fecha).toLocaleString())}</td><td>${tam(b.bytes)}</td>
+          <td><button class="btn" onclick="bajarBackup('${esc(b.archivo)}')">Descargar</button></td>
+        </tr>`).join("") : `<tr><td colspan="4">Todavía no hay backups.</td></tr>`}
+      </table>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Restaurar</h3>
+      <p>Reemplaza toda la base por la de un backup. La actual queda guardada en backups. Se aplica al volver a abrir el sistema.</p>
+      <div class="grid2"><div><input id="rest_archivo" type="file" accept=".db" /></div></div>
+      <div class="btn-row"><button class="btn-danger" onclick="restaurar()">Restaurar este backup</button></div>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Espejo automático</h3>
+      <p>Copia de la base en otra carpeta (otro disco o una carpeta de red), cada 10 minutos si hubo cambios.
+        ${s.espejoUltimo ? `Última copia: ${esc(new Date(s.espejoUltimo).toLocaleString())}.` : ""}
+        ${s.espejoError ? `<br><span class="error">${esc(s.espejoError)}</span>` : ""}</p>
+      <div class="grid2"><div><label>Carpeta (vacío = desactivado)</label><input id="esp_carpeta" value="${esc(s.espejoCarpeta)}" placeholder="D:\\EspejoBFS o \\\\servidor\\carpeta" /></div></div>
+      <div class="btn-row">
+        <button class="btn-primary" onclick="guardarEspejo()">Guardar</button>
+        <button class="btn" onclick="probarEspejo()">Copiar ahora</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Numeración de tickets</h3>
+      <table>
+        <tr><th>Empresa</th><th>Puesto</th><th>Último usado</th><th>Próximo</th><th></th></tr>
+        ${s.tickets.map(t => `<tr>
+          <td>${esc(t.empresa)}</td><td>${t.puesto}</td><td>${t.maximoUsado || "-"}</td>
+          <td><input id="tk_${t.empresaId}" type="number" min="1" value="${t.proximo}" style="max-width:120px" /></td>
+          <td><button class="btn" onclick="fijarTicket('${t.empresaId}')">Guardar</button></td>
+        </tr>`).join("")}
+      </table>
+    </div>
+    ${importar}`;
+}
+
+async function sistemaAccion(fn, ok) {
+  try {
+    const r = await fn();
+    if (ok) toast(typeof ok === "function" ? ok(r) : ok);
+    renderSistema();
+  } catch (e) {
+    toast(limpiarError(e), "err");
+  }
+}
+
+function crearBackup() {
+  sistemaAccion(() => api("/api/sistema/backups", { method: "POST" }), b => `Backup ${b.archivo}`);
+}
+
+async function bajarBackup(archivo) {
+  try {
+    const { blob } = await bajarArchivo(`/api/sistema/backups/${encodeURIComponent(archivo)}`);
+    guardarComo(URL.createObjectURL(blob), archivo);
+  } catch (e) {
+    toast(limpiarError(e), "err");
+  }
+}
+
+function restaurar() {
+  const file = document.getElementById("rest_archivo")?.files?.[0];
+  if (!file) return toast("Elegí el archivo de backup", "err");
+  if (!confirm(`Se va a reemplazar TODA la base por ${file.name} al volver a abrir el sistema. ¿Seguir?`)) return;
+  const body = new FormData();
+  body.append("file", file);
+  sistemaAccion(() => api("/api/sistema/restaurar", { method: "POST", body }), r => r.mensaje);
+}
+
+function cancelarRestauracion() {
+  sistemaAccion(() => api("/api/sistema/restaurar", { method: "DELETE" }), "Restauración cancelada");
+}
+
+function guardarEspejo() {
+  sistemaAccion(() => api("/api/sistema/espejo", { method: "PUT", body: JSON.stringify({ carpeta: val("esp_carpeta") }) }), "Carpeta de espejo guardada");
+}
+
+function probarEspejo() {
+  sistemaAccion(() => api("/api/sistema/espejo", { method: "POST" }), "Espejo actualizado");
+}
+
+function fijarTicket(empresaId) {
+  sistemaAccion(() => api("/api/sistema/tickets", { method: "PUT", body: JSON.stringify({ empresaId, proximo: num("tk_" + empresaId) }) }), "Numeración guardada");
+}
+
+async function importar3x() {
+  const file = document.getElementById("imp_archivo")?.files?.[0];
+  if (!confirm("¿Importar los datos de la 3.x a esta instalación?")) return;
+  const body = new FormData();
+  if (file) body.append("file", file);
+  const out = document.getElementById("imp_resultado");
+  out.innerHTML = "<p>Importando...</p>";
+  try {
+    const r = await api("/api/sistema/importar-3x", { method: "POST", body });
+    out.innerHTML = `
+      <table style="margin-top:12px">
+        <tr><th></th><th>Importados</th><th>Ya existían / omitidos</th></tr>
+        ${Object.entries(r.conteos).map(([k, c]) => `<tr><td>${esc(k)}</td><td>${c.importados}</td><td>${c.omitidos}</td></tr>`).join("")}
+      </table>
+      ${r.avisos.length ? `<ul>${r.avisos.map(a => `<li>${esc(a)}</li>`).join("")}</ul>` : ""}
+      ${r.backupPrevio ? `<p>Backup previo: <code>${esc(r.backupPrevio)}</code></p>` : ""}`;
+    toast("Importación terminada");
+    const [empresas, branding] = await Promise.all([api("/api/empresas"), api("/api/branding")]);
+    state.empresas = empresas;
+    state.branding = branding;
+  } catch (e) {
+    out.innerHTML = `<p class="error">${esc(limpiarError(e))}</p>`;
   }
 }
 

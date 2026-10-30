@@ -22,17 +22,20 @@ public static class Permisos
     public const string ConfigPlanta = "config.planta";
     public const string LicenciaGestionar = "licencia.gestionar";
 
+    /// <summary>Backups, restauración, espejo y numeración de tickets (pantalla Sistema, admin en la 3.x).</summary>
+    public const string SistemaGestionar = "sistema.gestionar";
+
     public static IReadOnlyList<string> Todos { get; } =
     [
         PesajeOperar, PesajePesoManual, PesajeAnular, PesajeReimprimir,
         PesadasVer, PesadasVerPropias,
         CatalogosVer, CatalogosEditar,
-        UsuariosGestionar, EmpresasGestionar, ConfigBfs, ConfigPlanta, LicenciaGestionar
+        UsuariosGestionar, EmpresasGestionar, ConfigBfs, ConfigPlanta, LicenciaGestionar, SistemaGestionar
     ];
 
     private static readonly string[] Operador = [PesajeOperar, PesajeReimprimir, PesadasVer, CatalogosVer];
     private static readonly string[] Supervisor = [.. Operador, PesajePesoManual, PesajeAnular, CatalogosEditar];
-    private static readonly string[] Admin = [.. Supervisor, UsuariosGestionar, ConfigPlanta];
+    private static readonly string[] Admin = [.. Supervisor, UsuariosGestionar, ConfigPlanta, SistemaGestionar];
 
     private static readonly IReadOnlyDictionary<string, string[]> PorRol = new Dictionary<string, string[]>
     {

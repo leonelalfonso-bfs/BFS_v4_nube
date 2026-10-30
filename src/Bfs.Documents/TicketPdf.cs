@@ -7,8 +7,7 @@ namespace Bfs.Documents;
 
 /// <summary>
 /// Ticket A4 igual al de la 3.x (<c>TicketGenerator.java</c>): el normal sale con original y duplicado en la misma hoja;
-/// el de aduana, con sus secciones. Cambios respecto de la 3.x: producto y código ya no salen invertidos,
-/// y se marcan el peso manual, la tara conocida y la anulación.
+/// el de aduana, con sus secciones. Además marca el peso manual, la tara conocida y la anulación.
 /// </summary>
 public static class TicketPdf
 {

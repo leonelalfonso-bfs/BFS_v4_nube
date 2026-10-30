@@ -26,7 +26,7 @@ public record Operador(string Email, bool PuedePesoManual);
 /// </summary>
 public class PesajeService
 {
-    private const int Reintentos = 3;
+    private const int Reintentos = 8;
 
     private readonly BfsDbContext _db;
     private readonly IBalanzas _balanzas;
@@ -356,7 +356,8 @@ public class PesajeService
 
     /// <summary>
     /// Si dos pesadas toman el mismo número a la vez, una falla por la versión del contador (o el índice único del ticket):
-    /// se descarta lo hecho y se vuelve a intentar con el número siguiente.
+    /// se descarta lo hecho y se vuelve a intentar con el número siguiente. Entre intentos se espera un poco al azar
+    /// para que las que chocaron no vuelvan a chocar todas juntas.
     /// </summary>
     private async Task<ResultadoPesaje> ConReintento(Func<Task<ResultadoPesaje>> operacion)
     {
@@ -369,6 +370,7 @@ public class PesajeService
             catch (DbUpdateException) when (intento < Reintentos)
             {
                 _db.ChangeTracker.Clear();
+                await Task.Delay(Random.Shared.Next(10, 40 * intento));
             }
         }
     }

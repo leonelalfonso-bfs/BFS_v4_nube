@@ -215,7 +215,7 @@ Cada fase termina compilando y con algo que se pueda demostrar. Las fases 0 a 6 
 
 ### Fase 5 — Tickets y documentos
 
-> **Estado (2026-10-22):** hecha en la rama `fase-5`, **salvo la prueba con una impresora térmica real**. Ticket A4 comparado contra uno real de la 3.x (Kraft): mismo formato, original y duplicado, pie "Desarrollado por" de BFS; el de aduana con sus secciones. Producto y código ya no salen invertidos (bug de la 3.x). Térmica ESC/POS por el spooler de Windows (RAW), 32/48 columnas, sin acentos, con corte. Excel con filtros por fecha, total y autofiltro; el usuario cliente exporta solo lo suyo. Reimpresión: botones Ticket / Térmica en Pesaje y Pesadas; al cerrar una pesada el ticket se abre solo. **Licencia QuestPDF:** Community, gratis mientras BFS facture menos de USD 1 millón al año (si no, hay que comprar la licencia o cambiar a otra librería).
+> **Estado (2026-10-22):** hecha en la rama `fase-5`, **salvo la prueba con una impresora térmica real**. Ticket A4 comparado contra uno real de la 3.x (Kraft): mismo formato, original y duplicado, pie "Desarrollado por" de BFS; el de aduana con sus secciones. (En el ticket de ejemplo producto y código se veían invertidos: era la carga del catálogo de ese cliente, no un error de la 3.x.) Térmica ESC/POS por el spooler de Windows (RAW), 32/48 columnas, sin acentos, con corte. Excel con filtros por fecha, total y autofiltro; el usuario cliente exporta solo lo suyo. Reimpresión: botones Ticket / Térmica en Pesaje y Pesadas; al cerrar una pesada el ticket se abre solo. **Licencia QuestPDF:** Community, gratis mientras BFS facture menos de USD 1 millón al año (si no, hay que comprar la licencia o cambiar a otra librería).
 
 1. Ticket PDF A4 con QuestPDF (layout de `TicketGenerator.java`, logo, título y pie configurables).
 2. Ticket térmico ESC/POS (`ThermalTicketGenerator.java`) desde el nodo.
@@ -225,6 +225,13 @@ Cada fase termina compilando y con algo que se pueda demostrar. Las fases 0 a 6 
 **Terminada cuando:** el ticket impreso por la 4.0 tiene los mismos datos que el de la 3.x, comparándolos uno al lado del otro.
 
 ### Fase 6 — Reportes, sistema, importador e instalador (**primer cliente local**)
+
+> **Estado (2026-10-30):** hecha en la rama `fase-6`, salvo el túnel de Cloudflare (punto 3, queda para cuando un cliente local lo pida: con la nube no hace falta) y la prueba de instalar el MSI en una PC limpia y sobre una PC con la 3.x.
+> - Pesadas con filtros (fechas, estado, empresa, cliente, transporte, producto, ticket/patente/chofer/remito), totales y páginas; el Excel sale con los mismos filtros. Tablero con hoy, neto por día y ranking de clientes y productos.
+> - Sistema (admin): backup en caliente (VACUUM INTO), automático diario (se guardan 30), descarga; restauración validada que se aplica al reabrir guardando la base anterior; espejo cada 10 minutos si hubo cambios; próximo número de ticket (no deja reutilizar uno usado).
+> - Importador de `truckscale.db` (BFS): solo lectura, tolera las variantes de columnas de cada cliente, se puede correr dos veces sin duplicar, sigue la numeración (último 37 → 01-000038), pasa claves a hash y avisa lo que no puede pasar (CUIT inválidos, fotos). Probado con la base 3.x real de la PC de desarrollo (37 pesadas).
+> - Instalador: `installer/build.ps1` → `artifacts/BFS-Pesaje-<versión>.msi` (~71 MB, self-contained, Windows 10+, accesos directos, datos en `%ProgramData%fs-4` con permiso de escritura para los usuarios).
+> - Arreglos para instalar: la clave de sesiones se genera por instalación (antes era fija y pública), la web va embebida en el ensamblado, una sola instancia, el servidor arranca antes que la ventana.
 
 1. Reportes: filtros (fechas, cliente, transporte, producto, patente, estado), totales, Excel, reimpresión.
 2. Dashboard / estadísticas (`DashboardService.java`).

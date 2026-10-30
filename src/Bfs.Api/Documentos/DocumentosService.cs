@@ -1,4 +1,5 @@
 using Bfs.Api.Config;
+using Bfs.Api.Reportes;
 using Bfs.Core;
 using Bfs.Core.Entities;
 using Bfs.Documents;
@@ -16,13 +17,15 @@ public class DocumentosService
     private readonly ConfigService _config;
     private readonly BfsPaths _paths;
     private readonly BfsOptions _options;
+    private readonly ReportesService _reportes;
 
-    public DocumentosService(BfsDbContext db, ConfigService config, BfsPaths paths, BfsOptions options)
+    public DocumentosService(BfsDbContext db, ConfigService config, BfsPaths paths, BfsOptions options, ReportesService reportes)
     {
         _db = db;
         _config = config;
         _paths = paths;
         _options = options;
+        _reportes = reportes;
     }
 
     public async Task<TicketDatos?> TicketAsync(Guid pesadaId)
@@ -60,16 +63,11 @@ public class DocumentosService
             aduana);
     }
 
-    /// <param name="hasta">Inclusive (todo ese día).</param>
-    public async Task<byte[]> ExcelAsync(DateOnly? desde, DateOnly? hasta, Guid? empresaId, Guid? soloCliente)
+    /// <summary>El Excel sale con los mismos filtros que la pantalla Pesadas.</summary>
+    public async Task<byte[]> ExcelAsync(FiltroPesadas filtro)
     {
-        var q = _db.Pesadas.AsNoTracking();
-        if (empresaId.HasValue) q = q.Where(p => p.EmpresaId == empresaId);
-        if (soloCliente.HasValue) q = q.Where(p => p.ClienteId == soloCliente);
-        if (desde.HasValue) q = q.Where(p => p.EntradaEn >= Inicio(desde.Value));
-        if (hasta.HasValue) q = q.Where(p => p.EntradaEn < Inicio(hasta.Value.AddDays(1)));
-
-        var pesadas = await q.OrderBy(p => p.EntradaEn).Take(MaxFilasExcel).ToListAsync();
+        var (desde, hasta) = (filtro.Desde, filtro.Hasta);
+        var pesadas = await _reportes.Filtrar(filtro).OrderBy(p => p.EntradaEn).Take(MaxFilasExcel).ToListAsync();
         var empresas = await _db.Empresas.AsNoTracking().ToDictionaryAsync(e => e.Id, e => e.Nombre);
         var filas = pesadas.Select(p => new FilaExcel(
             p,
@@ -85,21 +83,6 @@ public class DocumentosService
             ({ } d, { } h) => $"del {d:dd/MM/yyyy} al {h:dd/MM/yyyy}"
         };
         return PesadasExcel.Generar(filas, $"Pesadas {rango}");
-    }
-
-    /// <summary>Medianoche de ese día en la zona de la planta, en UTC.</summary>
-    private DateTimeOffset Inicio(DateOnly dia)
-    {
-        var local = dia.ToDateTime(TimeOnly.MinValue);
-        try
-        {
-            var zona = TimeZoneInfo.FindSystemTimeZoneById(_options.ZonaHoraria);
-            return new DateTimeOffset(local, zona.GetUtcOffset(local)).ToUniversalTime();
-        }
-        catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException)
-        {
-            return new DateTimeOffset(local).ToUniversalTime();
-        }
     }
 
     private async Task<byte[]?> Logo(string? archivo)

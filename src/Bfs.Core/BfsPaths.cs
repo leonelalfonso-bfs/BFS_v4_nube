@@ -11,6 +11,10 @@ public sealed class BfsPaths
     public string Root { get; }
     public string Logs => Sub("logs");
     public string Branding => Sub("branding");
+    public string Backups => Sub("backups");
+
+    /// <summary>Base subida para restaurar: se aplica al próximo arranque, antes de abrir la base.</summary>
+    public string Restaurar => Path.Combine(Root, "restaurar.db");
     public string BaseSqlite => Path.Combine(Root, "bfs.db");
 
     /// <summary>Id del puesto, creado la primera vez que arranca el nodo.</summary>

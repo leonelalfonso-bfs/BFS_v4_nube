@@ -13,3 +13,4 @@ logs/
 # Claves de firma de licencias: nunca al repo
 *.pem
 license.key
+artifacts/
