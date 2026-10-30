@@ -17,6 +17,7 @@ public class NubeTests : IAsyncLifetime
     private const string SaClave = "superclave1";
 
     private readonly TempDir _tmp = new();
+    private readonly NubeDePrueba _motor = new();
     private WebApplication _app = null!;
 
     public async Task InitializeAsync() => _app = await Levantar();
@@ -24,6 +25,7 @@ public class NubeTests : IAsyncLifetime
     public async Task DisposeAsync()
     {
         await _app.DisposeAsync();
+        await _motor.LimpiarAsync(_tmp.Path);
         _tmp.Dispose();
     }
 
@@ -31,7 +33,8 @@ public class NubeTests : IAsyncLifetime
     {
         var app = ApiHost.Create([
             "--Urls=http://127.0.0.1:0", $"--Bfs:DataPath={_tmp.Path}", "--environment=Development",
-            "--Bfs:Modo=Nube", "--Bfs:Nube:Proveedor=Sqlite", $"--Bfs:Nube:SuperadminEmail={SaEmail}", $"--Bfs:Nube:SuperadminPassword={SaClave}"
+            "--Bfs:Modo=Nube", $"--Bfs:Nube:SuperadminEmail={SaEmail}", $"--Bfs:Nube:SuperadminPassword={SaClave}",
+            .. _motor.Args()
         ]);
         await app.StartAsync();
         return app;
@@ -169,9 +172,12 @@ public class NubeTests : IAsyncLifetime
         using var otraVez = await Login("admin@acopio.com", "clave-admin-1");
         Assert.Equal(1, (await otraVez.GetFromJsonAsync<JsonElement>("/api/pesadas")).GetArrayLength());
 
-        // Base central y base del cliente, cada una en su archivo.
-        Assert.True(File.Exists(Path.Combine(_tmp.Path, "central.db")));
-        Assert.True(File.Exists(Path.Combine(_tmp.Path, "tenants", "acopio.db")));
+        // Con SQLite: base central y base del cliente, cada una en su archivo.
+        if (!_motor.EsPostgres)
+        {
+            Assert.True(File.Exists(Path.Combine(_tmp.Path, "central.db")));
+            Assert.True(File.Exists(Path.Combine(_tmp.Path, "tenants", "acopio.db")));
+        }
     }
 
     [Fact]

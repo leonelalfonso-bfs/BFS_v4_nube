@@ -24,6 +24,7 @@ public class SyncTests : IAsyncLifetime
 
     private readonly TempDir _datosNube = new();
     private readonly TempDir _datosNodo = new();
+    private readonly NubeDePrueba _motor = new();
     private readonly ECDsa _claveLicencias = ECDsa.Create(ECCurve.NamedCurves.nistP256);
     private readonly int _puertoNube = PuertoLibre();
     private WebApplication? _nube;
@@ -55,6 +56,7 @@ public class SyncTests : IAsyncLifetime
         await _nodo.DisposeAsync();
         if (_nube != null) await _nube.DisposeAsync();
         _claveLicencias.Dispose();
+        await _motor.LimpiarAsync(_datosNube.Path);
         _datosNodo.Dispose();
         _datosNube.Dispose();
     }
@@ -63,8 +65,9 @@ public class SyncTests : IAsyncLifetime
     {
         _nube = ApiHost.Create([
             $"--Urls={UrlNube}", $"--Bfs:DataPath={_datosNube.Path}", "--environment=Development",
-            "--Bfs:Modo=Nube", "--Bfs:Nube:Proveedor=Sqlite", $"--Bfs:Nube:SuperadminEmail={SaEmail}", $"--Bfs:Nube:SuperadminPassword={SaClave}",
-            $"--Bfs:Nube:ClaveLicencias={_claveLicencias.ExportPkcs8PrivateKeyPem()}", $"--Bfs:Nube:DiasLicencia={diasLicencia}"
+            "--Bfs:Modo=Nube", $"--Bfs:Nube:SuperadminEmail={SaEmail}", $"--Bfs:Nube:SuperadminPassword={SaClave}",
+            $"--Bfs:Nube:ClaveLicencias={_claveLicencias.ExportPkcs8PrivateKeyPem()}", $"--Bfs:Nube:DiasLicencia={diasLicencia}",
+            .. _motor.Args()
         ]);
         await _nube.StartAsync();
     }

@@ -14,3 +14,7 @@ logs/
 *.pem
 license.key
 artifacts/
+
+# Despliegue: claves del servidor
+deploy/.env
+deploy/secretos/

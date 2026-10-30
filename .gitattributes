@@ -1,0 +1,5 @@
+# Los scripts del servidor tienen que quedar con fin de línea Unix aunque se editen en Windows.
+*.sh text eol=lf
+deploy/Dockerfile text eol=lf
+deploy/*.yml text eol=lf
+deploy/*.conf text eol=lf

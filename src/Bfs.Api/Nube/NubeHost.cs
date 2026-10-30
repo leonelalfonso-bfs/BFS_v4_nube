@@ -14,6 +14,9 @@ public class OpcionesNube
 {
     public ProveedorBase Proveedor { get; set; } = ProveedorBase.Postgres;
 
+    /// <summary>Prefijo de los nombres de base (bfs_central, bfs_t_...). Otro prefijo = otra nube en el mismo servidor.</summary>
+    public string PrefijoBases { get; set; } = BasesNube.PrefijoPorDefecto;
+
     /// <summary>Primer superadmin: se crea al arrancar si todavía no hay ninguno (después se puede sacar de la configuración).</summary>
     public string? SuperadminEmail { get; set; }
     public string? SuperadminPassword { get; set; }
@@ -30,7 +33,7 @@ public static class NubeHost
     public static void AddNube(this WebApplicationBuilder builder, BfsPaths paths)
     {
         var opciones = builder.Configuration.GetSection("Bfs:Nube").Get<OpcionesNube>() ?? new OpcionesNube();
-        var bases = new BasesNube(opciones.Proveedor, builder.Configuration.GetConnectionString("Bfs"), paths.Root);
+        var bases = new BasesNube(opciones.Proveedor, builder.Configuration.GetConnectionString("Bfs"), paths.Root, opciones.PrefijoBases);
 
         builder.Services.AddSingleton(opciones);
         builder.Services.AddSingleton(bases);

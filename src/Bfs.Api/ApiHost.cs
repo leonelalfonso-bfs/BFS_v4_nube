@@ -20,6 +20,7 @@ using Bfs.Infrastructure.Data;
 using Bfs.Integrations;
 using Bfs.Scale;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
@@ -94,6 +95,15 @@ public static class ApiHost
             var db = scope.ServiceProvider.GetRequiredService<BfsDbContext>();
             DbInitializer.SeedAsync(db).GetAwaiter().GetResult();
             BalanzaEndpoints.AplicarAsync(db, app.Services.GetRequiredService<IBalanzas>()).GetAwaiter().GetResult();
+        }
+
+        if (options.Modo == ModoDespliegue.Nube)
+        {
+            // Detrás de Nginx: el contenedor solo escucha en 127.0.0.1 del servidor, así que el único que le habla es el proxy.
+            var forwarded = new ForwardedHeadersOptions { ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto };
+            forwarded.KnownIPNetworks.Clear();
+            forwarded.KnownProxies.Clear();
+            app.UseForwardedHeaders(forwarded);
         }
 
         app.UseCors();

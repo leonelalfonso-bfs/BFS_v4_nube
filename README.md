@@ -46,6 +46,10 @@ powershell -ExecutionPolicy Bypass -File installeruild.ps1 -Version 4.0.0
 
 Deja `artifacts\BFS-Pesaje-4.0.0.msi` (self-contained, Windows 10/11). Después de instalar, BFS entra con su usuario, activa la licencia (Configuración → Licencia) y, si el cliente venía de la 3.x, importa sus datos desde Sistema → Importar desde la 3.x.
 
+## Nube (servidor)
+
+Ver [docs/DESPLIEGUE.md](docs/DESPLIEGUE.md): Docker Compose con la API y PostgreSQL, Nginx, backups por cliente.
+
 ## Tests
 
 ```powershell

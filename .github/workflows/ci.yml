@@ -17,3 +17,51 @@ jobs:
       - run: dotnet restore Bfs.Pesaje.slnx
       - run: dotnet build Bfs.Pesaje.slnx --no-restore -c Release -warnaserror
       - run: dotnet test tests/Bfs.Tests --no-build -c Release
+
+  # La nube contra un PostgreSQL de verdad (en Linux, como en el servidor).
+  nube-postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: bfs
+          POSTGRES_PASSWORD: bfs
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U bfs"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      BFS_TEST_POSTGRES: "Host=localhost;Username=bfs;Password=bfs"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet test tests/Bfs.Tests -c Release --filter "FullyQualifiedName~NubeTests|FullyQualifiedName~SyncTests|FullyQualifiedName~DatosTests"
+
+  # La imagen que va al VPS: que se arme, que arranque y que responda.
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash -n deploy/backup.sh && bash -n deploy/restaurar-cliente.sh
+      - run: docker build -f deploy/Dockerfile -t bfs-nube .
+      - name: Arranca y responde
+        run: |
+          docker run -d --name bfs -p 8080:8080 \
+            -e Bfs__Nube__Proveedor=Sqlite \
+            -e Bfs__Nube__SuperadminEmail=sa@bfs.com.ar -e Bfs__Nube__SuperadminPassword=superclave1 \
+            bfs-nube
+          for i in $(seq 1 30); do
+            if curl -fs http://127.0.0.1:8080/api/health; then break; fi
+            sleep 2
+          done
+          curl -fs http://127.0.0.1:8080/api/health | grep -q '"modo":"Nube"'
+          curl -fs -X POST http://127.0.0.1:8080/api/auth/login -H 'Content-Type: application/json' \
+            -d '{"email":"sa@bfs.com.ar","password":"superclave1"}' | grep -q token
+          curl -fs http://127.0.0.1:8080/ | grep -q '<html'
+          sleep 45
+          test "$(docker inspect -f '{{.State.Health.Status}}' bfs)" = healthy
+      - if: failure()
+        run: docker logs bfs || true

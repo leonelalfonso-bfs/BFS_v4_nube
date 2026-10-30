@@ -115,15 +115,24 @@ public static class SyncNubeEndpoints
 
         var conflictos = aplicados.Values.Sum(a => a.Conflictos.Count);
         if (conflictos > 0) log.LogWarning("Sync {Tenant}/{Nodo}: {Conflictos} conflictos", tenant.Codigo, nodo.Nombre, conflictos);
-        return Results.Ok(new RespuestaSync(tenant.Nombre, aplicados, cambios, hasta, Licencia(opciones, tenant, pedido.Maquina)));
+        return Results.Ok(new RespuestaSync(tenant.Nombre, aplicados, cambios, hasta, Licencia(opciones, tenant, pedido.Maquina, log)));
     }
 
     /// <summary>Licencia de la portería por <see cref="OpcionesNube.DiasLicencia"/> días: si deja de sincronizar o se suspende, vence sola.</summary>
-    private static string? Licencia(OpcionesNube opciones, Tenant tenant, string maquina)
+    private static string? Licencia(OpcionesNube opciones, Tenant tenant, string maquina, ILogger log)
     {
         var pem = opciones.ClaveLicencias;
         if (string.IsNullOrWhiteSpace(pem)) return null;
-        if (!pem.TrimStart().StartsWith("-----BEGIN", StringComparison.Ordinal)) pem = File.ReadAllText(pem);
+        if (!pem.TrimStart().StartsWith("-----BEGIN", StringComparison.Ordinal))
+        {
+            // Si falta el archivo, Docker monta una carpeta vacía en su lugar: se sincroniza igual, sin renovar licencia.
+            if (!File.Exists(pem))
+            {
+                log.LogWarning("No se encontró la clave de licencias en {Ruta}: las porterías no reciben licencia", pem);
+                return null;
+            }
+            pem = File.ReadAllText(pem);
+        }
         using var clave = ECDsa.Create();
         clave.ImportFromPem(pem);
         var ahora = DateTimeOffset.UtcNow;

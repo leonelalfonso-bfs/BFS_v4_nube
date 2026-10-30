@@ -1,0 +1,10 @@
+**/bin/
+**/obj/
+artifacts/
+.git/
+.vs/
+**/*.db
+**/*.pem
+**/license.key
+deploy/.env
+deploy/secretos/
