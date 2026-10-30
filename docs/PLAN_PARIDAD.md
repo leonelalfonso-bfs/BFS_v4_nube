@@ -251,6 +251,11 @@ Cada fase termina compilando y con algo que se pueda demostrar. Las fases 0 a 6 
 
 ### Fase 7 — Nube
 
+> **Estado (2026-10-30):** se divide en 7a / 7b / 7c.
+> - **7a hecha (rama `fase-7`):** base central (clientes, índice email → cliente, superadmins, nodos), una base por cliente creada con sus migraciones al dar el alta (sin usuarios ni empresas de prueba), login con un solo dominio que detecta el cliente por el email, email único entre todos los clientes, suspensión que corta también las sesiones abiertas (≤30 s), "entrar como BFS" (sesión de soporte de 2 h, pasa aunque esté suspendido), migración de todas las bases al arrancar, logo por cliente. Panel de superadmin en la misma web. Probado en modo nube con SQLite; PostgreSQL verificado a nivel modelo y migraciones.
+> - **7b pendiente:** sincronización nodo ↔ nube (puntos 3 a 5) y licencia del nodo con 15 días.
+> - **7c pendiente:** despliegue en el VPS (punto 6), backups por cliente (punto 7) y tests contra un PostgreSQL real en el CI.
+
 1. API en modo `Nube`: base central `bfs_central`, **tenant por usuario** con el índice de logins (§2.6) y una cadena de conexión PostgreSQL por tenant.
 2. Panel **superadmin**: alta de tenant (crear base + migraciones + admin del cliente), suspender / reactivar / dar de baja, funciones habilitadas, códigos de activación de nodos y última sincronización de cada uno.
 3. **Sincronización** nodo ↔ nube (§2.3): activación del nodo con código, subida del outbox, bajada de catálogos, comandos y licencia firmada, reintentos, estado visible.

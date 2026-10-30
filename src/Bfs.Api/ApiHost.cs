@@ -5,6 +5,7 @@ using Bfs.Api.Catalogos;
 using Bfs.Api.Config;
 using Bfs.Api.Documentos;
 using Bfs.Api.Licencias;
+using Bfs.Api.Nube;
 using Bfs.Api.Pesadas;
 using Bfs.Api.Planta;
 using Bfs.Api.Reportes;
@@ -50,7 +51,8 @@ public static class ApiHost
         AddDatosYBalanza(builder, options, paths);
 
         builder.Services.AddHttpClient("worms");
-        builder.Services.AddHostedService<OutboxDispatcher>();
+        builder.Services.AddHttpContextAccessor();
+        builder.Services.AddScoped<TenantActual>();
         builder.Services.AddSingleton<PasswordHasher<Usuario>>();
         builder.Services.AddScoped<ConfigService>();
         builder.Services.AddScoped<PesajeService>();
@@ -81,8 +83,13 @@ public static class ApiHost
 
         var app = builder.Build();
 
-        using (var scope = app.Services.CreateScope())
+        if (options.Modo == ModoDespliegue.Nube)
         {
+            NubeHost.InicializarAsync(app.Services, app.Logger).GetAwaiter().GetResult();
+        }
+        else
+        {
+            using var scope = app.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<BfsDbContext>();
             DbInitializer.SeedAsync(db).GetAwaiter().GetResult();
             BalanzaEndpoints.AplicarAsync(db, app.Services.GetRequiredService<IBalanzas>()).GetAwaiter().GetResult();
@@ -98,9 +105,10 @@ public static class ApiHost
             OnPrepareResponse = ctx => ctx.Context.Response.Headers.CacheControl = "no-cache"
         });
         app.UseAuthentication();
+        if (options.Modo == ModoDespliegue.Nube) app.UseMiddleware<EstadoTenantMiddleware>();
         app.UseAuthorization();
 
-        app.MapAuthEndpoints();
+        app.MapAuthEndpoints(options.Modo);
         app.MapBrandingEndpoints();
 
         var api = app.MapGroup("/api").RequireAuthorization();
@@ -116,6 +124,7 @@ public static class ApiHost
         api.MapReporteEndpoints();
         api.MapSistemaEndpoints();
         api.MapImportacionEndpoints();
+        if (options.Modo == ModoDespliegue.Nube) api.MapSuperadminEndpoints();
 
         // Una ruta de la API que no existe es 404; cualquier otra ruta es la aplicación web.
         app.MapFallback("/api/{**resto}", () => Results.NotFound());
@@ -146,17 +155,8 @@ public static class ApiHost
     {
         if (options.Modo == ModoDespliegue.Nube)
         {
-            var cs = builder.Configuration.GetConnectionString("Bfs");
-            if (string.IsNullOrWhiteSpace(cs))
-            {
-                throw new InvalidOperationException("Modo Nube requiere ConnectionStrings:Bfs (PostgreSQL).");
-            }
-
-            builder.Services.AddSingleton(NodoInfo.Ninguno);
-            builder.Services.AddBfsDatabase(ModoDespliegue.Nube, cs);
-
-            builder.Services.AddSingleton<IBalanzas, SinBalanzas>();
-            builder.Services.AddSingleton<IImpresoraTermica, SinImpresora>();
+            // Una base por cliente; la integración con WORMS desde la nube queda para la Fase 8.
+            builder.AddNube(paths);
             return;
         }
 
@@ -175,6 +175,8 @@ public static class ApiHost
         builder.Services.AddBfsDatabase(ModoDespliegue.Nodo, BfsDatabase.SqliteConnectionString(paths.BaseSqlite));
 
         builder.Services.AddSingleton<IImpresoraTermica, ImpresoraWindows>();
+        builder.Services.AddScoped<IIndiceLogins, IndiceLoginsNodo>();
+        builder.Services.AddHostedService<OutboxDispatcher>();
         builder.Services.AddHostedService<RespaldoAutomatico>();
         builder.Services.AddSingleton<IPuertoSerieFactory, PuertoSerieFactory>();
         builder.Services.AddSingleton<IBalanzas>(sp => new BalanzaManager(

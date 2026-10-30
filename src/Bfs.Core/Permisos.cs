@@ -25,6 +25,9 @@ public static class Permisos
     /// <summary>Backups, restauración, espejo y numeración de tickets (pantalla Sistema, admin en la 3.x).</summary>
     public const string SistemaGestionar = "sistema.gestionar";
 
+    /// <summary>Panel de clientes de la nube. No está en <see cref="Todos"/>: no es un permiso dentro de un cliente.</summary>
+    public const string Superadmin = "superadmin.gestionar";
+
     public static IReadOnlyList<string> Todos { get; } =
     [
         PesajeOperar, PesajePesoManual, PesajeAnular, PesajeReimprimir,
@@ -43,7 +46,8 @@ public static class Permisos
         [Roles.Admin] = Admin,
         [Roles.Supervisor] = Supervisor,
         [Roles.Operador] = Operador,
-        [Roles.Cliente] = [PesadasVerPropias]
+        [Roles.Cliente] = [PesadasVerPropias],
+        [Roles.Superadmin] = [Superadmin]
     };
 
     public static IReadOnlyList<string> DeRol(string? rol) =>

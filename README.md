@@ -33,8 +33,10 @@ Otra carpeta de datos o modo nube, por línea de comandos o variables de entorno
 
 ```powershell
 dotnet run --project src/Bfs.Api -- --Bfs:DataPath=C:\temp\bfs-prueba
-dotnet run --project src/Bfs.Api -- --Bfs:Modo=Nube --ConnectionStrings:Bfs="Host=localhost;Database=bfs_t_demo;Username=bfs;Password=..."
+dotnet run --project src/Bfs.Api -- --Bfs:Modo=Nube --ConnectionStrings:Bfs="Host=localhost;Username=bfs;Password=..." --Bfs:Nube:SuperadminEmail=sa@bfs.com.ar --Bfs:Nube:SuperadminPassword=...
 ```
+
+En modo nube hay una base central (`bfs_central`: clientes, índice de emails, superadmins) y una base por cliente (`bfs_t_<código>`), en el mismo servidor PostgreSQL; el usuario de la cadena necesita permiso para crear bases. El superadmin entra con su email y ve el panel de clientes. Para probar sin PostgreSQL: `--Bfs:Nube:Proveedor=Sqlite` (un archivo por cliente en la carpeta de datos).
 
 ## Instalador (PC de portería)
 
@@ -56,9 +58,11 @@ Cada motor tiene sus migraciones: `src/Bfs.Infrastructure.Sqlite` y `src/Bfs.Inf
 
 ```powershell
 dotnet tool restore
-dotnet ef migrations add <Nombre> --project src/Bfs.Infrastructure.Sqlite --startup-project src/Bfs.Infrastructure.Sqlite --output-dir Migraciones
-dotnet ef migrations add <Nombre> --project src/Bfs.Infrastructure.Postgres --startup-project src/Bfs.Infrastructure.Postgres --output-dir Migraciones
+dotnet ef migrations add <Nombre> --context BfsDbContext --project src/Bfs.Infrastructure.Sqlite --startup-project src/Bfs.Infrastructure.Sqlite --output-dir Migraciones
+dotnet ef migrations add <Nombre> --context BfsDbContext --project src/Bfs.Infrastructure.Postgres --startup-project src/Bfs.Infrastructure.Postgres --output-dir Migraciones
 ```
+
+La base central de la nube tiene sus propias migraciones: `--context BfsCentralContext --output-dir MigracionesCentral`.
 
 Si falta alguna, falla un test (`Migraciones_*_al_dia_con_el_modelo`). Las migraciones se aplican solas al arrancar.
 

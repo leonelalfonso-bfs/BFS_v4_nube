@@ -18,9 +18,11 @@ public class DocumentosService
     private readonly BfsPaths _paths;
     private readonly BfsOptions _options;
     private readonly ReportesService _reportes;
+    private readonly Nube.TenantActual _tenant;
 
-    public DocumentosService(BfsDbContext db, ConfigService config, BfsPaths paths, BfsOptions options, ReportesService reportes)
+    public DocumentosService(BfsDbContext db, ConfigService config, BfsPaths paths, BfsOptions options, ReportesService reportes, Nube.TenantActual tenant)
     {
+        _tenant = tenant;
         _db = db;
         _config = config;
         _paths = paths;
@@ -88,7 +90,7 @@ public class DocumentosService
     private async Task<byte[]?> Logo(string? archivo)
     {
         if (string.IsNullOrWhiteSpace(archivo)) return null;
-        var path = Path.Combine(_paths.Branding, Path.GetFileName(archivo));
+        var path = Path.Combine(_tenant.CarpetaBranding(_paths), Path.GetFileName(archivo));
         // QuestPDF no dibuja SVG como imagen: el logo en SVG solo se usa en la pantalla.
         return File.Exists(path) && !path.EndsWith(".svg", StringComparison.OrdinalIgnoreCase) ? await File.ReadAllBytesAsync(path) : null;
     }

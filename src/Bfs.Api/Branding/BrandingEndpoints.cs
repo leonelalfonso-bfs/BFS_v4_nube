@@ -7,8 +7,14 @@ public static class BrandingEndpoints
 {
     public static void MapBrandingEndpoints(this WebApplication app)
     {
-        app.MapGet("/api/branding", async (ConfigService config) =>
+        app.MapGet("/api/branding", async (HttpContext http, BfsOptions options, Nube.TenantActual tenant) =>
         {
+            // En la nube, antes de iniciar sesión no se sabe de qué cliente es: pantalla de BFS.
+            if (options.Modo == ModoDespliegue.Nube && tenant.Codigo == null)
+            {
+                return Results.Ok(new { clienteNombre = "Balanzas Full Service", ticketTitulo = "Comprobante de pesaje", ticketPie = "", logoUrl = (string?)null });
+            }
+            var config = http.RequestServices.GetRequiredService<ConfigService>();
             var c = await config.GlobalAsync();
             var logo = c.GetValueOrDefault(ConfigKeys.LogoFile, "");
             return Results.Ok(new
@@ -20,11 +26,11 @@ public static class BrandingEndpoints
             });
         });
 
-        app.MapGet("/api/branding/logo", async (ConfigService config, BfsPaths paths) =>
+        app.MapGet("/api/branding/logo", async (ConfigService config, BfsPaths paths, Nube.TenantActual tenant) =>
         {
             var logo = await config.ValorAsync(ConfigKeys.LogoFile);
             if (string.IsNullOrWhiteSpace(logo)) return Results.NotFound();
-            var path = Path.Combine(paths.Branding, Path.GetFileName(logo));
+            var path = Path.Combine(tenant.CarpetaBranding(paths), Path.GetFileName(logo));
             if (!File.Exists(path)) return Results.NotFound();
             var content = Path.GetExtension(logo).ToLowerInvariant() switch
             {
@@ -37,7 +43,7 @@ public static class BrandingEndpoints
             return Results.File(path, content);
         });
 
-        app.MapPost("/api/branding/logo", async (HttpRequest request, ConfigService config, BfsPaths paths) =>
+        app.MapPost("/api/branding/logo", async (HttpRequest request, ConfigService config, BfsPaths paths, Nube.TenantActual tenant) =>
         {
             if (!request.HasFormContentType) return Results.BadRequest("Archivo requerido");
             var form = await request.ReadFormAsync();
@@ -50,7 +56,7 @@ public static class BrandingEndpoints
                 return Results.BadRequest("Usá PNG, JPG, WEBP o SVG");
             }
 
-            var dir = paths.Branding;
+            var dir = tenant.CarpetaBranding(paths);
             foreach (var old in Directory.GetFiles(dir, "logo.*"))
             {
                 try { File.Delete(old); } catch { /* ignore locked files */ }

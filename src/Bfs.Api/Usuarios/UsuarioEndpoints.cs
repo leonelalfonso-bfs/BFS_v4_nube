@@ -43,7 +43,7 @@ public static class UsuarioEndpoints
             return Results.Ok(list);
         });
 
-        usuarios.MapPost("", async (NuevoUsuario dto, BfsDbContext db, PasswordHasher<Usuario> hasher, ClaimsPrincipal user) =>
+        usuarios.MapPost("", async (NuevoUsuario dto, BfsDbContext db, PasswordHasher<Usuario> hasher, ClaimsPrincipal user, Nube.IIndiceLogins indice) =>
         {
             var email = Usuario.NormalizarEmail(dto.Email);
             if (!EmailValido(email)) return Results.BadRequest("Email inválido");
@@ -56,6 +56,11 @@ public static class UsuarioEndpoints
             if (await db.Usuarios.IgnoreQueryFilters().AnyAsync(u => u.Email == email))
             {
                 return Results.Conflict("Ya existe un usuario con ese email");
+            }
+            // En la nube el email tampoco puede estar en otro cliente: el login lo usa para saber a cuál va.
+            if (!await indice.DisponibleAsync(email))
+            {
+                return Results.Conflict("Ese email ya está registrado en el sistema");
             }
 
             var entity = new Usuario
@@ -71,6 +76,7 @@ public static class UsuarioEndpoints
             entity.PasswordHash = hasher.HashPassword(entity, dto.Password!);
             db.Usuarios.Add(entity);
             await db.SaveChangesAsync();
+            await indice.RegistrarAsync(email);
             return Results.Ok(new { entity.Id, entity.Email, entity.Rol });
         });
 

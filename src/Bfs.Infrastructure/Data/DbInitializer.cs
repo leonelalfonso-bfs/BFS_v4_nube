@@ -10,11 +10,18 @@ public static class DbInitializer
     public const string SeedVendorEmail = "bfs@bfs.local";
     public const string SeedAdminEmail = "admin@bfs.local";
 
-    public static async Task SeedAsync(BfsDbContext db)
+    /// <summary>Nodo: base lista para usar, con empresas y usuarios de prueba si está vacía (se reemplazan al importar o configurar).</summary>
+    public static Task SeedAsync(BfsDbContext db) => SeedAsync(db, datosDePrueba: true);
+
+    /// <param name="datosDePrueba">
+    /// false para un cliente de la nube: sin "Empresa 1/2" ni los usuarios bfs@/admin@bfs.local
+    /// (tendrían clave conocida y el mismo email en todos los clientes). La empresa y el admin los crea el alta.
+    /// </param>
+    public static async Task SeedAsync(BfsDbContext db, bool datosDePrueba)
     {
         await db.Database.MigrateAsync();
 
-        if (!await db.Empresas.AnyAsync())
+        if (datosDePrueba && !await db.Empresas.AnyAsync())
         {
             db.Empresas.AddRange(
                 new Empresa { Id = Guid.Parse("11111111-1111-1111-1111-111111111111"), Nombre = "Empresa 1", Activa = true, ProximoTicket = 1 },
@@ -22,7 +29,7 @@ public static class DbInitializer
             );
         }
 
-        if (!await db.Usuarios.AnyAsync())
+        if (datosDePrueba && !await db.Usuarios.AnyAsync())
         {
             var hasher = new PasswordHasher<Usuario>();
             var vendor = new Usuario
@@ -80,7 +87,7 @@ public static class DbInitializer
         await db.SaveChangesAsync();
 
         await SembrarModelos(db);
-        await PasarBalanzaDelSpike(db);
+        if (datosDePrueba) await PasarBalanzaDelSpike(db);
         await db.SaveChangesAsync();
     }
 

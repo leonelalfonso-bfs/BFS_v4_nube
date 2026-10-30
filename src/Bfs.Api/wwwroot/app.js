@@ -63,7 +63,7 @@ async function api(path, options = {}) {
   if (!(options.body instanceof FormData)) headers["Content-Type"] = "application/json";
   if (state.token) headers.Authorization = "Bearer " + state.token;
   const res = await fetch(path, { ...options, headers });
-  if (res.status === 401) {
+  if (res.status === 401 && path !== "/api/auth/login") {
     logout();
     throw new Error("Sesión vencida");
   }
@@ -80,6 +80,7 @@ function logout() {
   state.token = null;
   state.user = null;
   localStorage.removeItem("bfs_token");
+  try { localStorage.removeItem("bfs_token_panel"); } catch {}
   render();
 }
 
@@ -111,13 +112,15 @@ function canVerPesadas() { return can("pesadas.ver") || can("pesadas.ver_propias
 
 function navItems() {
   const nav = [];
-  if (can("pesaje.operar")) nav.push(["pesaje", "Pesaje"]);
+  // En la nube no hay balanza (se pesa en la portería, que sincroniza) y los backups los hace el servidor.
+  const nube = state.modo === "Nube";
+  if (can("pesaje.operar") && !nube) nav.push(["pesaje", "Pesaje"]);
   if (canVerPesadas()) nav.push(["reportes", "Pesadas"], ["tablero", "Tablero"]);
   if (can("catalogos.ver")) nav.push(["catalogos", "Catálogos"]);
   const admin = [];
   if (can("usuarios.gestionar")) admin.push(["usuarios", "Usuarios"]);
   if (can("config.planta")) admin.push(["planta", "Planta"]);
-  if (can("sistema.gestionar")) admin.push(["sistema", "Sistema"]);
+  if (can("sistema.gestionar") && !nube) admin.push(["sistema", "Sistema"]);
   if (can("config.bfs")) admin.push(["config", "Configuración"]);
   return { nav, admin };
 }
@@ -189,6 +192,7 @@ function pillForScale(estado) {
 
 function render() {
   if (!state.token) return renderLogin();
+  if (esSuperadmin()) return renderSuperadmin();
   const { nav, admin } = navItems();
   const todas = nav.concat(admin);
   if (!todas.some(([id]) => id === state.view)) state.view = todas[0]?.[0] || "";
@@ -196,14 +200,14 @@ function render() {
           <button class="nav-btn ${state.view === id ? "active" : ""}" onclick="go('${id}')">${ICONS[id]}<span>${label}</span></button>
         `;
 
-  document.getElementById("app").innerHTML = `
+  document.getElementById("app").innerHTML = `${bannerSoporte()}
     <div class="app-shell">
       <header class="topbar">
         <div class="brand">
           ${bfsLogo()}
           <div>
             <h1>Sistema de Pesaje BFS 4.0</h1>
-            <p>${esc(state.branding.clienteNombre || "Planta local")}</p>
+            <p>${esc(state.user?.tenant || state.branding.clienteNombre || "Planta local")}</p>
           </div>
         </div>
         <div class="userchip">
@@ -260,6 +264,7 @@ async function doLogin() {
     state.token = data.token;
     state.user = data;
     localStorage.setItem("bfs_token", data.token);
+    if (data.rol === "superadmin") return render();
     await boot();
   } catch (e) {
     const msg = e.message || "";
@@ -1439,9 +1444,11 @@ async function saveApi() {
 
 async function start() {
   try { state.branding = await api("/api/branding"); } catch { state.branding = {}; }
+  try { state.modo = (await api("/api/health")).modo; } catch { state.modo = "Nodo"; }
   if (state.token) {
     try {
       state.user = await api("/api/me");
+      if (esSuperadmin()) return render();
       await boot();
     } catch {
       logout();
@@ -1720,6 +1727,122 @@ async function importar3x() {
   } catch (e) {
     out.innerHTML = `<p class="error">${esc(limpiarError(e))}</p>`;
   }
+}
+
+function esSuperadmin() {
+  return state.user?.rol === "superadmin";
+}
+
+/** Si un superadmin entró a un cliente, su sesión de panel queda guardada para volver. */
+function tokenPanel() {
+  try { return localStorage.getItem("bfs_token_panel"); } catch { return null; }
+}
+
+function bannerSoporte() {
+  if (!state.user?.soporte) return "";
+  return `<div style="background:#d97706;color:#fff;padding:8px 16px;display:flex;justify-content:space-between;align-items:center">
+    <span>Estás dentro de <b>${esc(state.user.tenant || "")}</b> como BFS (soporte).</span>
+    ${tokenPanel() ? `<button class="btn" onclick="volverAlPanel()">Volver al panel</button>` : ""}
+  </div>`;
+}
+
+async function renderSuperadmin() {
+  const tenants = await api("/api/superadmin/tenants");
+  const fecha = d => d ? new Date(d).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : "-";
+  const pill = e => e === "Activo" ? `<span class="pill pill-ok">Activo</span>`
+    : e === "Suspendido" ? `<span class="pill pill-err">Suspendido</span>` : `<span class="pill pill-warn">Baja</span>`;
+  document.getElementById("app").innerHTML = `
+    <div class="app-shell" style="grid-template-columns:1fr">
+      <header class="topbar">
+        <div class="brand">${bfsLogo()}<div><h1>BFS Nube · Clientes</h1><p>Panel de superadmin</p></div></div>
+        <div class="userchip"><div><strong>${esc(state.user.email)}</strong><span>superadmin</span></div>
+          <button class="btn-ghost" onclick="logout()">Salir</button></div>
+      </header>
+      <main class="workspace" id="main">
+        <div class="card">
+          <h3 style="margin-top:0">Nuevo cliente</h3>
+          <div class="grid3">
+            <div><label>Nombre</label><input id="t_nombre" placeholder="Acopio Sur SA" oninput="sugerirCodigo()" /></div>
+            <div><label>Código (base bfs_t_...)</label><input id="t_codigo" placeholder="acopio_sur" /></div>
+            <div><label>Email del administrador</label><input id="t_email" type="email" /></div>
+            <div><label>Nombre del administrador</label><input id="t_admin" /></div>
+            <div><label>Clave inicial (mínimo 8)</label><input id="t_clave" type="password" autocomplete="new-password" /></div>
+          </div>
+          <div class="btn-row"><button class="btn-primary" onclick="crearTenant()">Crear cliente</button></div>
+        </div>
+        <div class="card" style="overflow-x:auto">
+          <table>
+            <tr><th>Cliente</th><th>Código</th><th>Estado</th><th>Usuarios</th><th>Última sincronización</th><th>Alta</th><th></th></tr>
+            ${tenants.length ? tenants.map(t => `<tr>
+              <td>${esc(t.nombre)}</td><td><code>${esc(t.codigo)}</code></td>
+              <td>${pill(t.estado)}${t.motivoEstado ? `<br><small>${esc(t.motivoEstado)}</small>` : ""}</td>
+              <td>${t.usuarios}</td><td>${fecha(t.ultimaSincronizacion)}</td><td>${fecha(t.creadoEn)}</td>
+              <td><div class="btn-row" style="margin:0">
+                ${t.estado !== "Baja" ? `<button class="btn" onclick="entrarTenant('${t.id}')">Entrar como BFS</button>` : ""}
+                ${t.estado === "Activo" ? `<button class="btn-danger" onclick="estadoTenant('${t.id}','Suspendido')">Suspender</button>` : ""}
+                ${t.estado !== "Activo" ? `<button class="btn" onclick="estadoTenant('${t.id}','Activo')">Reactivar</button>` : ""}
+                ${t.estado !== "Baja" ? `<button class="btn" onclick="estadoTenant('${t.id}','Baja')">Dar de baja</button>` : ""}
+              </div></td>
+            </tr>`).join("") : `<tr><td colspan="7">Todavía no hay clientes.</td></tr>`}
+          </table>
+        </div>
+      </main>
+    </div>`;
+}
+
+function sugerirCodigo() {
+  const codigo = document.getElementById("t_codigo");
+  if (codigo.dataset.tocado) return;
+  codigo.value = val("t_nombre").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/\b(sa|srl|sas|s\.a\.|s\.r\.l\.)\b/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40);
+}
+
+async function crearTenant() {
+  try {
+    const t = await api("/api/superadmin/tenants", { method: "POST", body: JSON.stringify({
+      nombre: val("t_nombre"), codigo: val("t_codigo"), adminEmail: val("t_email"), adminNombre: val("t_admin"), adminPassword: val("t_clave")
+    })});
+    toast(`Cliente ${t.nombre} creado`);
+    renderSuperadmin();
+  } catch (e) {
+    toast(limpiarError(e), "err");
+  }
+}
+
+async function estadoTenant(id, estado) {
+  const motivo = estado === "Activo" ? "" : prompt(estado === "Suspendido" ? "Motivo de la suspensión (ej. falta de pago)" : "Motivo de la baja");
+  if (motivo === null) return;
+  try {
+    await api(`/api/superadmin/tenants/${id}/estado`, { method: "PUT", body: JSON.stringify({ estado, motivo }) });
+    toast(`Cliente ${estado.toLowerCase()}`);
+    renderSuperadmin();
+  } catch (e) {
+    toast(limpiarError(e), "err");
+  }
+}
+
+async function entrarTenant(id) {
+  try {
+    const r = await api(`/api/superadmin/tenants/${id}/entrar`, { method: "POST" });
+    try { localStorage.setItem("bfs_token_panel", state.token); } catch {}
+    state.token = r.token;
+    localStorage.setItem("bfs_token", r.token);
+    state.user = await api("/api/me");
+    state.view = "config";
+    await boot();
+  } catch (e) {
+    toast(limpiarError(e), "err");
+  }
+}
+
+async function volverAlPanel() {
+  const panel = tokenPanel();
+  try { localStorage.removeItem("bfs_token_panel"); } catch {}
+  if (!panel) return logout();
+  state.token = panel;
+  localStorage.setItem("bfs_token", panel);
+  state.user = await api("/api/me");
+  render();
 }
 
 start();

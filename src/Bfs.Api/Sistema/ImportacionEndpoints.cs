@@ -37,7 +37,7 @@ public static class ImportacionEndpoints
         });
 
         g.MapPost("", async (HttpRequest request, BfsDbContext db, PasswordHasher<Usuario> hasher, BfsOptions options, BfsPaths paths,
-            SistemaService sistema, IBalanzas balanzas, ILogger<Importador3x> log) =>
+            SistemaService sistema, IBalanzas balanzas, Nube.TenantActual tenant, ILogger<Importador3x> log) =>
         {
             string archivo;
             string? temporal = null;
@@ -71,7 +71,7 @@ public static class ImportacionEndpoints
                 var empresa = await db.Empresas.OrderBy(e => e.CreadoEn).ThenBy(e => e.Id).FirstAsync();
                 Backup? backup = options.Modo == ModoDespliegue.Nodo ? sistema.CrearBackup() : null;
 
-                var resultado = await new Importador3x(db, hasher, options.ZonaHoraria, paths.Branding).ImportarAsync(archivo, empresa.Id);
+                var resultado = await new Importador3x(db, hasher, options.ZonaHoraria, tenant.CarpetaBranding(paths)).ImportarAsync(archivo, empresa.Id);
                 log.LogInformation("Importación 3.x desde {Archivo}: {@Conteos}", archivo, resultado.Conteos);
                 await Balanzas.BalanzaEndpoints.AplicarAsync(db, balanzas);
                 return Results.Ok(new { resultado.Conteos, resultado.Avisos, backupPrevio = backup?.Archivo });

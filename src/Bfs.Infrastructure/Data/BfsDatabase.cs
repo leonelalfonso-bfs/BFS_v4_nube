@@ -4,6 +4,13 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Bfs.Infrastructure.Data;
 
+/// <summary>Motor de base. El nodo usa SQLite; la nube, PostgreSQL (o SQLite para desarrollar y testear sin servidor).</summary>
+public enum ProveedorBase
+{
+    Sqlite,
+    Postgres
+}
+
 /// <summary>
 /// Elige el proveedor según el modo. Cada proveedor tiene sus propias migraciones en un ensamblado aparte.
 /// </summary>
@@ -24,11 +31,14 @@ public static class BfsDatabase
     }
 
     public static DbContextOptionsBuilder Configurar(DbContextOptionsBuilder o, ModoDespliegue modo, string connectionString) =>
-        modo switch
+        Configurar(o, modo == ModoDespliegue.Nodo ? ProveedorBase.Sqlite : ProveedorBase.Postgres, connectionString);
+
+    public static DbContextOptionsBuilder Configurar(DbContextOptionsBuilder o, ProveedorBase proveedor, string connectionString) =>
+        proveedor switch
         {
-            ModoDespliegue.Nodo => o.UseSqlite(connectionString, x => x.MigrationsAssembly(MigracionesSqlite)),
-            ModoDespliegue.Nube => o.UseNpgsql(connectionString, x => x.MigrationsAssembly(MigracionesPostgres)),
-            _ => throw new ArgumentOutOfRangeException(nameof(modo), modo, null)
+            ProveedorBase.Sqlite => o.UseSqlite(connectionString, x => x.MigrationsAssembly(MigracionesSqlite)),
+            ProveedorBase.Postgres => o.UseNpgsql(connectionString, x => x.MigrationsAssembly(MigracionesPostgres)),
+            _ => throw new ArgumentOutOfRangeException(nameof(proveedor), proveedor, null)
         };
 
     public static string SqliteConnectionString(string file) => $"Data Source={file}";

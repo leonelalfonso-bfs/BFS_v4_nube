@@ -17,6 +17,9 @@ public static class Roles
     /// <summary>Cliente de la planta: solo ve sus propias pesadas (client_razon en la 3.x).</summary>
     public const string Cliente = "cliente";
 
+    /// <summary>BFS en la nube: da de alta, suspende y entra a los clientes. No es un rol dentro de un cliente.</summary>
+    public const string Superadmin = "superadmin";
+
     public static IReadOnlyList<string> Todos { get; } = [Vendor, Admin, Supervisor, Operador, Cliente];
 
     public static bool Existe(string? rol) => rol != null && Todos.Contains(rol);
