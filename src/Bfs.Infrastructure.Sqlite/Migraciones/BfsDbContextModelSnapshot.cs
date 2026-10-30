@@ -76,6 +76,9 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                     b.Property<int>("StopBits")
                         .HasColumnType("INTEGER");
 
+                    b.Property<long>("SyncSeq")
+                        .HasColumnType("INTEGER");
+
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
@@ -86,6 +89,8 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
 
                     b.HasIndex("Nombre")
                         .IsUnique();
+
+                    b.HasIndex("SyncSeq");
 
                     b.ToTable("Balanzas");
                 });
@@ -115,6 +120,9 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<long>("SyncSeq")
+                        .HasColumnType("INTEGER");
+
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
@@ -124,6 +132,8 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                     b.HasIndex("ModificadoEn");
 
                     b.HasIndex("RazonSocial");
+
+                    b.HasIndex("SyncSeq");
 
                     b.ToTable("Clientes");
                 });
@@ -153,6 +163,9 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                     b.Property<Guid?>("OrigenNodoId")
                         .HasColumnType("TEXT");
 
+                    b.Property<long>("SyncSeq")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Valor")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -164,6 +177,8 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                     b.HasKey("Id");
 
                     b.HasIndex("ModificadoEn");
+
+                    b.HasIndex("SyncSeq");
 
                     b.HasIndex("Clave", "EmpresaId")
                         .IsUnique();
@@ -198,6 +213,9 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                     b.Property<int>("Puesto")
                         .HasColumnType("INTEGER");
 
+                    b.Property<long>("SyncSeq")
+                        .HasColumnType("INTEGER");
+
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
@@ -205,6 +223,8 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                     b.HasKey("Id");
 
                     b.HasIndex("ModificadoEn");
+
+                    b.HasIndex("SyncSeq");
 
                     b.HasIndex("EmpresaId", "Puesto")
                         .IsUnique();
@@ -246,6 +266,9 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<long>("SyncSeq")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("TipoDocumento")
                         .HasColumnType("TEXT");
 
@@ -262,6 +285,8 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
 
                     b.HasIndex("PatenteChasis")
                         .IsUnique();
+
+                    b.HasIndex("SyncSeq");
 
                     b.ToTable("DatosVehiculos");
                 });
@@ -309,6 +334,9 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                     b.Property<int>("ProximoTicket")
                         .HasColumnType("INTEGER");
 
+                    b.Property<long>("SyncSeq")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Telefono")
                         .HasColumnType("TEXT");
 
@@ -322,6 +350,8 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
 
                     b.HasIndex("Nombre")
                         .IsUnique();
+
+                    b.HasIndex("SyncSeq");
 
                     b.ToTable("Empresas");
                 });
@@ -351,6 +381,9 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<long>("SyncSeq")
+                        .HasColumnType("INTEGER");
+
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
@@ -361,6 +394,8 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
 
                     b.HasIndex("RazonSocial")
                         .IsUnique();
+
+                    b.HasIndex("SyncSeq");
 
                     b.ToTable("Exportadores");
                 });
@@ -407,6 +442,9 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                     b.Property<int>("StopBits")
                         .HasColumnType("INTEGER");
 
+                    b.Property<long>("SyncSeq")
+                        .HasColumnType("INTEGER");
+
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
@@ -417,6 +455,8 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
 
                     b.HasIndex("Nombre")
                         .IsUnique();
+
+                    b.HasIndex("SyncSeq");
 
                     b.ToTable("ModelosBalanza");
                 });
@@ -584,6 +624,9 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                     b.Property<string>("SalidaManualPor")
                         .HasColumnType("TEXT");
 
+                    b.Property<long>("SyncSeq")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int?>("Tara")
                         .HasColumnType("INTEGER");
 
@@ -612,6 +655,8 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                     b.HasKey("Id");
 
                     b.HasIndex("ModificadoEn");
+
+                    b.HasIndex("SyncSeq");
 
                     b.HasIndex("ClienteId", "EntradaEn");
 
@@ -648,6 +693,9 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                     b.Property<Guid?>("OrigenNodoId")
                         .HasColumnType("TEXT");
 
+                    b.Property<long>("SyncSeq")
+                        .HasColumnType("INTEGER");
+
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
@@ -658,6 +706,8 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
 
                     b.HasIndex("Nombre")
                         .IsUnique();
+
+                    b.HasIndex("SyncSeq");
 
                     b.ToTable("Productos");
                 });
@@ -690,6 +740,9 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                     b.Property<Guid?>("OrigenNodoId")
                         .HasColumnType("TEXT");
 
+                    b.Property<long>("SyncSeq")
+                        .HasColumnType("INTEGER");
+
                     b.Property<long>("TomadaEn")
                         .HasColumnType("INTEGER");
 
@@ -703,6 +756,8 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                         .IsUnique();
 
                     b.HasIndex("ModificadoEn");
+
+                    b.HasIndex("SyncSeq");
 
                     b.ToTable("Taras");
                 });
@@ -738,6 +793,9 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<long>("SyncSeq")
+                        .HasColumnType("INTEGER");
+
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
@@ -747,6 +805,8 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                     b.HasIndex("ModificadoEn");
 
                     b.HasIndex("RazonSocial");
+
+                    b.HasIndex("SyncSeq");
 
                     b.ToTable("Transportes");
                 });
@@ -794,6 +854,9 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<long>("SyncSeq")
+                        .HasColumnType("INTEGER");
+
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
@@ -808,6 +871,8 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                     b.HasIndex("EmpresaId");
 
                     b.HasIndex("ModificadoEn");
+
+                    b.HasIndex("SyncSeq");
 
                     b.ToTable("Usuarios");
                 });

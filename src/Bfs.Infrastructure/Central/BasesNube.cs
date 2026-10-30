@@ -22,7 +22,7 @@ public sealed partial class BasesNube
     private readonly string? _servidor;
     private readonly string _carpeta;
     private readonly ConcurrentDictionary<string, DbContextOptions<BfsDbContext>> _opciones = new();
-    private readonly SyncStampInterceptor _interceptor = new(NodoInfo.Ninguno);
+    private readonly SyncStampInterceptor _interceptor = new(NodoInfo.Ninguno, marcarSecuencia: true);
 
     /// <param name="servidor">Cadena de PostgreSQL (la base que diga se reemplaza por la central o la del cliente).</param>
     /// <param name="carpeta">Para SQLite: dónde van central.db y tenants/*.db.</param>

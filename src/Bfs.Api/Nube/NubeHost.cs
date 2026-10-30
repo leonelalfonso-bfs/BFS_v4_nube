@@ -17,6 +17,12 @@ public class OpcionesNube
     /// <summary>Primer superadmin: se crea al arrancar si todavía no hay ninguno (después se puede sacar de la configuración).</summary>
     public string? SuperadminEmail { get; set; }
     public string? SuperadminPassword { get; set; }
+
+    /// <summary>Clave privada (PEM o ruta al archivo) con la que se firma la licencia que se renueva a cada portería.</summary>
+    public string? ClaveLicencias { get; set; }
+
+    /// <summary>Cuánto puede estar una portería sin sincronizar (o con el cliente suspendido) antes de dejar de pesar.</summary>
+    public int DiasLicencia { get; set; } = 15;
 }
 
 public static class NubeHost

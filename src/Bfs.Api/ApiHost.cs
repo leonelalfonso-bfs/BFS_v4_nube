@@ -9,6 +9,7 @@ using Bfs.Api.Nube;
 using Bfs.Api.Pesadas;
 using Bfs.Api.Planta;
 using Bfs.Api.Reportes;
+using Bfs.Api.Sincronizacion;
 using Bfs.Api.Sistema;
 using Bfs.Api.Balanzas;
 using Bfs.Api.Usuarios;
@@ -124,7 +125,15 @@ public static class ApiHost
         api.MapReporteEndpoints();
         api.MapSistemaEndpoints();
         api.MapImportacionEndpoints();
-        if (options.Modo == ModoDespliegue.Nube) api.MapSuperadminEndpoints();
+        if (options.Modo == ModoDespliegue.Nube)
+        {
+            api.MapSuperadminEndpoints();
+            app.MapSyncNubeEndpoints();
+        }
+        else
+        {
+            api.MapNubeNodoEndpoints();
+        }
 
         // Una ruta de la API que no existe es 404; cualquier otra ruta es la aplicación web.
         app.MapFallback("/api/{**resto}", () => Results.NotFound());
@@ -178,6 +187,9 @@ public static class ApiHost
         builder.Services.AddScoped<IIndiceLogins, IndiceLoginsNodo>();
         builder.Services.AddHostedService<OutboxDispatcher>();
         builder.Services.AddHostedService<RespaldoAutomatico>();
+        builder.Services.AddHttpClient("nube");
+        builder.Services.AddSingleton<SincronizadorNodo>();
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<SincronizadorNodo>());
         builder.Services.AddSingleton<IPuertoSerieFactory, PuertoSerieFactory>();
         builder.Services.AddSingleton<IBalanzas>(sp => new BalanzaManager(
             sp.GetRequiredService<IPuertoSerieFactory>(), sp.GetRequiredService<ILogger<BalanzaManager>>()));

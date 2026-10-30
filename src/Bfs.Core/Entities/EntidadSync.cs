@@ -12,4 +12,7 @@ public abstract class EntidadSync
     public long Version { get; set; }
     public bool Eliminado { get; set; }
     public Guid? OrigenNodoId { get; set; }
+
+    /// <summary>Orden de llegada a la nube (solo lo pone el servidor). En el nodo queda el de la última copia recibida.</summary>
+    public long SyncSeq { get; set; }
 }

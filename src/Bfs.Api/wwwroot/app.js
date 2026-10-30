@@ -211,6 +211,7 @@ function render() {
           </div>
         </div>
         <div class="userchip">
+          <span id="nubePill">${pillNube()}</span>
           ${licenciaPill()}
           <div>
             <strong>${esc(state.user?.nombre || state.user?.email || "")}</strong>
@@ -288,8 +289,15 @@ async function boot() {
   state.branding = branding;
   state.campos = campos?.length ? campos : DEFAULT_FIELDS;
   state.licencia = licencia;
+  await actualizarNube();
   render();
   if (can("pesaje.operar")) pollPeso();
+  // Solo se actualiza el indicador: repintar la pantalla borraría lo que el operador está cargando.
+  if (!boot._nube) boot._nube = setInterval(async () => {
+    await actualizarNube();
+    const pill = document.getElementById("nubePill");
+    if (pill) pill.innerHTML = pillNube();
+  }, 60000);
 }
 
 async function pollPeso() {
@@ -1077,7 +1085,8 @@ async function renderConfig() {
     ["campos", "Campos"],
     ["ticket", "Ticket y logo"],
     ["api", "API"],
-    ["licencia", "Licencia"]
+    ["licencia", "Licencia"],
+    ...(state.modo === "Nube" ? [] : [["nube", "Nube"]])
   ];
   document.getElementById("main").innerHTML = `
     <div class="page-head"><div><h2>Configuración BFS</h2><p>Estas opciones las arma el instalador. El cliente no las ve.</p></div></div>
@@ -1092,7 +1101,8 @@ async function renderConfig() {
     campos: renderConfigCampos,
     ticket: renderConfigTicket,
     api: renderConfigApi,
-    licencia: renderConfigLicencia
+    licencia: renderConfigLicencia,
+    nube: renderConfigNube
   };
   body[state.configTab]();
 }
@@ -1779,6 +1789,7 @@ async function renderSuperadmin() {
               <td>${t.usuarios}</td><td>${fecha(t.ultimaSincronizacion)}</td><td>${fecha(t.creadoEn)}</td>
               <td><div class="btn-row" style="margin:0">
                 ${t.estado !== "Baja" ? `<button class="btn" onclick="entrarTenant('${t.id}')">Entrar como BFS</button>` : ""}
+                <button class="btn" onclick="verNodos('${t.id}','${esc(t.nombre)}')">Porterías</button>
                 ${t.estado === "Activo" ? `<button class="btn-danger" onclick="estadoTenant('${t.id}','Suspendido')">Suspender</button>` : ""}
                 ${t.estado !== "Activo" ? `<button class="btn" onclick="estadoTenant('${t.id}','Activo')">Reactivar</button>` : ""}
                 ${t.estado !== "Baja" ? `<button class="btn" onclick="estadoTenant('${t.id}','Baja')">Dar de baja</button>` : ""}
@@ -1843,6 +1854,109 @@ async function volverAlPanel() {
   localStorage.setItem("bfs_token", panel);
   state.user = await api("/api/me");
   render();
+}
+
+function pillNube() {
+  const n = state.nube;
+  if (!n?.conectado) return "";
+  if (n.ultimoError) return `<span class="pill pill-err" title="${esc(n.ultimoError)}">Nube: sin conexión${n.pendientes ? ` · ${n.pendientes} pendientes` : ""}</span>`;
+  return `<span class="pill pill-ok" title="Última sincronización: ${esc(n.ultimaSincronizacion ? new Date(n.ultimaSincronizacion).toLocaleString() : "-")}">Nube: en línea</span>`;
+}
+
+async function actualizarNube() {
+  if (state.modo === "Nube" || !state.token) return;
+  try { state.nube = await api("/api/nube"); } catch { state.nube = null; }
+}
+
+async function renderConfigNube() {
+  const n = state.nube = await api("/api/nube");
+  document.getElementById("configBody").innerHTML = n.conectado ? `
+    <div class="card">
+      <div class="grid2">
+        <div class="status-box"><span>Conectada a</span><strong>${esc(n.tenant || "")}</strong></div>
+        <div class="status-box"><span>Servidor</span><strong>${esc(n.url)}</strong></div>
+        <div class="status-box"><span>Última sincronización</span><strong>${n.ultimaSincronizacion ? esc(new Date(n.ultimaSincronizacion).toLocaleString()) : "todavía no"}</strong></div>
+        <div class="status-box"><span>Cambios por enviar</span><strong>${n.pendientes}</strong></div>
+      </div>
+      ${n.ultimoError ? `<p class="error">${esc(n.ultimoError)}</p>` : ""}
+      ${n.conflictos.length ? `<p>Conflictos de la última sincronización (no se aplicaron):</p><ul>${n.conflictos.map(c => `<li>${esc(c)}</li>`).join("")}</ul>` : ""}
+      <p>Sincroniza sola cada minuto. Sin internet la portería sigue pesando y manda todo cuando vuelve la conexión.</p>
+      <div class="btn-row">
+        <button class="btn-primary" onclick="sincronizarAhora()">Sincronizar ahora</button>
+        <button class="btn-danger" onclick="desvincularNube()">Desconectar de la nube</button>
+      </div>
+    </div>` : `
+    <div class="card">
+      <p>Conectá esta portería con la nube de BFS. El código lo genera BFS en el panel de clientes (vale 7 días y se usa una vez).</p>
+      <div class="grid2">
+        <div><label>Dirección de la nube</label><input id="nb_url" placeholder="https://pesaje.bfs.com.ar" /></div>
+        <div><label>Código de activación</label><input id="nb_codigo" placeholder="ABCD-EFGH-JKLM" /></div>
+      </div>
+      <div class="btn-row"><button class="btn-primary" onclick="activarNube()">Conectar</button></div>
+    </div>`;
+}
+
+async function nubeAccion(fn, ok) {
+  try {
+    const r = await fn();
+    if (r) state.nube = r;
+    toast(ok);
+  } catch (e) {
+    toast(limpiarError(e), "err");
+  }
+  await actualizarNube();
+  const pill = document.getElementById("nubePill");
+  if (pill) pill.innerHTML = pillNube();
+  renderConfig();
+}
+
+function activarNube() {
+  nubeAccion(() => api("/api/nube/activar", { method: "POST", body: JSON.stringify({ url: val("nb_url"), codigo: val("nb_codigo") }) }), "Portería conectada a la nube");
+}
+
+function sincronizarAhora() {
+  nubeAccion(() => api("/api/nube/sincronizar", { method: "POST" }), "Sincronizado");
+}
+
+function desvincularNube() {
+  if (!confirm("La portería deja de sincronizar con la nube (los datos locales no se borran). ¿Seguir?")) return;
+  nubeAccion(() => api("/api/nube", { method: "DELETE" }), "Portería desconectada");
+}
+
+async function verNodos(tenantId, nombre) {
+  const nodos = await api(`/api/superadmin/tenants/${tenantId}/nodos`);
+  const fecha = d => d ? new Date(d).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : "-";
+  document.getElementById("main").innerHTML = `
+    <div class="card">
+      <h3 style="margin-top:0">Porterías de ${esc(nombre)}</h3>
+      <table>
+        <tr><th>Nombre</th><th>PC</th><th>Activada</th><th>Última sincronización</th><th></th></tr>
+        ${nodos.length ? nodos.map(n => `<tr>
+          <td>${esc(n.nombre)}</td><td>${esc(n.maquina || "-")}</td><td>${fecha(n.activadoEn)}${n.codigoPendiente ? " (código pendiente)" : ""}</td>
+          <td>${fecha(n.ultimaSincronizacion)}</td>
+          <td><button class="btn" onclick="codigoNodo('${tenantId}','${esc(nombre)}','${n.id}')">Código nuevo</button></td>
+        </tr>`).join("") : `<tr><td colspan="5">Todavía no tiene porterías.</td></tr>`}
+      </table>
+      <div class="grid2" style="margin-top:12px"><div><label>Nueva portería</label><input id="nd_nombre" placeholder="Balanza principal" /></div></div>
+      <div class="btn-row">
+        <button class="btn-primary" onclick="codigoNodo('${tenantId}','${esc(nombre)}')">Crear y generar código</button>
+        <button class="btn" onclick="renderSuperadmin()">Volver</button>
+      </div>
+      <div id="nd_codigo"></div>
+    </div>`;
+}
+
+async function codigoNodo(tenantId, nombre, nodoId) {
+  if (nodoId && !confirm("Un código nuevo desconecta la PC que estaba usando esta portería. ¿Seguir?")) return;
+  try {
+    const r = await api(`/api/superadmin/tenants/${tenantId}/nodos`, { method: "POST", body: JSON.stringify({ nombre: val("nd_nombre") || null, nodoId: nodoId || null }) });
+    await verNodos(tenantId, nombre);
+    document.getElementById("nd_codigo").innerHTML = `
+      <div class="status-box" style="margin-top:12px"><span>Código para ${esc(r.nombre)} (se muestra una sola vez, vence ${esc(new Date(r.vence).toLocaleDateString())})</span>
+      <strong style="font-size:24px;letter-spacing:2px">${esc(r.codigo)}</strong></div>`;
+  } catch (e) {
+    toast(limpiarError(e), "err");
+  }
 }
 
 start();

@@ -12,4 +12,15 @@ public static class LicenciaClave
         RxxU3rIKoeXjxfTpODYS505bQ4zaey4TpwJ1GbSXn5r4AXpZRes2FLXtbg==
         -----END PUBLIC KEY-----
         """;
+
+    /// <summary>
+    /// Clave con la que la nube firma la licencia de 15 días que le renueva a cada portería al sincronizar.
+    /// Es otro par: la privada vive en el servidor, no en la PC de BFS.
+    /// </summary>
+    public const string NubePublicaPem = """
+        -----BEGIN PUBLIC KEY-----
+        MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE8eIhddnhbSOZdwMHdowV1cwUVj1E
+        XIkvTdgiqY7Px77l98lQEaawWTky+2JO4shhf1qx4mekErzwspseqqy4JQ==
+        -----END PUBLIC KEY-----
+        """;
 }

@@ -8,6 +8,9 @@ public class BfsDbContext : DbContext
 {
     public BfsDbContext(DbContextOptions<BfsDbContext> options) : base(options) { }
 
+    /// <summary>Mientras está en true, se guardan cambios recibidos de la otra punta sin volver a sellarlos.</summary>
+    public bool AplicandoSincronizacion { get; set; }
+
     public DbSet<Empresa> Empresas => Set<Empresa>();
     public DbSet<Usuario> Usuarios => Set<Usuario>();
     public DbSet<Configuracion> Configuraciones => Set<Configuracion>();
@@ -84,5 +87,6 @@ public class BfsDbContext : DbContext
         entity.Property(e => e.Version).IsConcurrencyToken();
         entity.HasQueryFilter(e => !e.Eliminado);
         entity.HasIndex(e => e.ModificadoEn);
+        entity.HasIndex(e => e.SyncSeq);
     }
 }

@@ -39,6 +39,15 @@ Estados: `Valida`, `Ausente`, `Invalida` (firma incorrecta), `OtraMaquina`, `Ven
 
 `dotnet run --project src/Bfs.Api` usa el entorno `Development` (`Properties/launchSettings.json`), donde `appsettings.Development.json` desactiva la licencia. Ese archivo no se publica en el instalador, y en cualquier otro entorno la licencia es obligatoria y la clave pública no se puede cambiar por configuración.
 
-## Nube (Fase 7)
+## Nube
 
-El mismo formato sirve para la licencia que la nube le renueva al nodo en cada sincronización, con vencimiento a 15 días.
+Una portería conectada a la nube recibe en cada sincronización una licencia por 15 días (`Bfs:Nube:DiasLicencia`) firmada por el servidor. Si el cliente se suspende o la portería deja de sincronizar, al vencer no registra entradas nuevas.
+
+Es **otro par de claves**, para no poner la tuya en el servidor:
+
+| Qué | Dónde |
+|-----|-------|
+| Privada de la nube | `C:\Users\fulls\.bfs\bfs-nube-licencias-privada.pem` → va al VPS y se configura en `Bfs:Nube:ClaveLicencias` (el PEM o la ruta al archivo) |
+| Pública de la nube | `LicenciaClave.NubePublicaPem` |
+
+La portería acepta licencias firmadas con cualquiera de las dos. Hacé copia de las dos privadas fuera de esta PC.

@@ -28,6 +28,7 @@ public record InfoLicencia(EstadoLicencia Estado, string Mensaje, Licencia? Lice
 public sealed class LicenciaService : IDisposable
 {
     private readonly ECDsa _clavePublica;
+    private readonly ECDsa _clavePublicaNube;
     private readonly bool _requerida;
     private readonly string _archivo;
     private readonly TimeProvider _clock;
@@ -40,6 +41,8 @@ public sealed class LicenciaService : IDisposable
         var dev = env.IsDevelopment();
         var clave = dev ? config["Bfs:Licencia:ClavePublica"] : null;
         _clavePublica = LicenciaCodec.ClaveDesdePem(string.IsNullOrWhiteSpace(clave) ? LicenciaClave.PublicaPem : clave);
+        var claveNube = dev ? config["Bfs:Licencia:ClavePublicaNube"] : null;
+        _clavePublicaNube = LicenciaCodec.ClaveDesdePem(string.IsNullOrWhiteSpace(claveNube) ? LicenciaClave.NubePublicaPem : claveNube);
         _requerida = options.Modo == ModoDespliegue.Nodo && !(dev && config.GetValue("Bfs:Licencia:Requerida", true) == false);
         _archivo = Path.Combine(paths.Root, "license.key");
         _clock = clock ?? TimeProvider.System;
@@ -72,7 +75,8 @@ public sealed class LicenciaService : IDisposable
 
     private InfoLicencia Evaluar(string texto)
     {
-        var licencia = LicenciaCodec.Verificar(texto, _clavePublica);
+        // Vale la que firma BFS a mano (modo Local) o la que renueva la nube al sincronizar.
+        var licencia = LicenciaCodec.Verificar(texto, _clavePublica) ?? LicenciaCodec.Verificar(texto, _clavePublicaNube);
         if (licencia == null)
         {
             return Info(EstadoLicencia.Invalida, "La licencia no es válida (firma incorrecta o archivo dañado).", null);
@@ -91,5 +95,9 @@ public sealed class LicenciaService : IDisposable
     private InfoLicencia Info(EstadoLicencia estado, string mensaje, Licencia? licencia) =>
         new(estado, mensaje, licencia, _maquinas.Value.FirstOrDefault() ?? "ID_NO_DISPONIBLE", _maquinas.Value);
 
-    public void Dispose() => _clavePublica.Dispose();
+    public void Dispose()
+    {
+        _clavePublica.Dispose();
+        _clavePublicaNube.Dispose();
+    }
 }

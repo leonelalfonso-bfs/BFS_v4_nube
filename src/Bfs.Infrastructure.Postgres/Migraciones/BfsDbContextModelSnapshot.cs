@@ -81,6 +81,9 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                     b.Property<int>("StopBits")
                         .HasColumnType("integer");
 
+                    b.Property<long>("SyncSeq")
+                        .HasColumnType("bigint");
+
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("bigint");
@@ -91,6 +94,8 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
 
                     b.HasIndex("Nombre")
                         .IsUnique();
+
+                    b.HasIndex("SyncSeq");
 
                     b.ToTable("Balanzas");
                 });
@@ -120,6 +125,9 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<long>("SyncSeq")
+                        .HasColumnType("bigint");
+
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("bigint");
@@ -129,6 +137,8 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                     b.HasIndex("ModificadoEn");
 
                     b.HasIndex("RazonSocial");
+
+                    b.HasIndex("SyncSeq");
 
                     b.ToTable("Clientes");
                 });
@@ -158,6 +168,9 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                     b.Property<Guid?>("OrigenNodoId")
                         .HasColumnType("uuid");
 
+                    b.Property<long>("SyncSeq")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("Valor")
                         .IsRequired()
                         .HasColumnType("text");
@@ -169,6 +182,8 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                     b.HasKey("Id");
 
                     b.HasIndex("ModificadoEn");
+
+                    b.HasIndex("SyncSeq");
 
                     b.HasIndex("Clave", "EmpresaId")
                         .IsUnique();
@@ -203,6 +218,9 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                     b.Property<int>("Puesto")
                         .HasColumnType("integer");
 
+                    b.Property<long>("SyncSeq")
+                        .HasColumnType("bigint");
+
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("bigint");
@@ -210,6 +228,8 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                     b.HasKey("Id");
 
                     b.HasIndex("ModificadoEn");
+
+                    b.HasIndex("SyncSeq");
 
                     b.HasIndex("EmpresaId", "Puesto")
                         .IsUnique();
@@ -251,6 +271,9 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<long>("SyncSeq")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("TipoDocumento")
                         .HasColumnType("text");
 
@@ -267,6 +290,8 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
 
                     b.HasIndex("PatenteChasis")
                         .IsUnique();
+
+                    b.HasIndex("SyncSeq");
 
                     b.ToTable("DatosVehiculos");
                 });
@@ -314,6 +339,9 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                     b.Property<int>("ProximoTicket")
                         .HasColumnType("integer");
 
+                    b.Property<long>("SyncSeq")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("Telefono")
                         .HasColumnType("text");
 
@@ -327,6 +355,8 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
 
                     b.HasIndex("Nombre")
                         .IsUnique();
+
+                    b.HasIndex("SyncSeq");
 
                     b.ToTable("Empresas");
                 });
@@ -356,6 +386,9 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<long>("SyncSeq")
+                        .HasColumnType("bigint");
+
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("bigint");
@@ -366,6 +399,8 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
 
                     b.HasIndex("RazonSocial")
                         .IsUnique();
+
+                    b.HasIndex("SyncSeq");
 
                     b.ToTable("Exportadores");
                 });
@@ -412,6 +447,9 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                     b.Property<int>("StopBits")
                         .HasColumnType("integer");
 
+                    b.Property<long>("SyncSeq")
+                        .HasColumnType("bigint");
+
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("bigint");
@@ -422,6 +460,8 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
 
                     b.HasIndex("Nombre")
                         .IsUnique();
+
+                    b.HasIndex("SyncSeq");
 
                     b.ToTable("ModelosBalanza");
                 });
@@ -589,6 +629,9 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                     b.Property<string>("SalidaManualPor")
                         .HasColumnType("text");
 
+                    b.Property<long>("SyncSeq")
+                        .HasColumnType("bigint");
+
                     b.Property<int?>("Tara")
                         .HasColumnType("integer");
 
@@ -617,6 +660,8 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                     b.HasKey("Id");
 
                     b.HasIndex("ModificadoEn");
+
+                    b.HasIndex("SyncSeq");
 
                     b.HasIndex("ClienteId", "EntradaEn");
 
@@ -653,6 +698,9 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                     b.Property<Guid?>("OrigenNodoId")
                         .HasColumnType("uuid");
 
+                    b.Property<long>("SyncSeq")
+                        .HasColumnType("bigint");
+
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("bigint");
@@ -663,6 +711,8 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
 
                     b.HasIndex("Nombre")
                         .IsUnique();
+
+                    b.HasIndex("SyncSeq");
 
                     b.ToTable("Productos");
                 });
@@ -695,6 +745,9 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                     b.Property<Guid?>("OrigenNodoId")
                         .HasColumnType("uuid");
 
+                    b.Property<long>("SyncSeq")
+                        .HasColumnType("bigint");
+
                     b.Property<DateTimeOffset>("TomadaEn")
                         .HasColumnType("timestamp with time zone");
 
@@ -708,6 +761,8 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                         .IsUnique();
 
                     b.HasIndex("ModificadoEn");
+
+                    b.HasIndex("SyncSeq");
 
                     b.ToTable("Taras");
                 });
@@ -743,6 +798,9 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<long>("SyncSeq")
+                        .HasColumnType("bigint");
+
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("bigint");
@@ -752,6 +810,8 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                     b.HasIndex("ModificadoEn");
 
                     b.HasIndex("RazonSocial");
+
+                    b.HasIndex("SyncSeq");
 
                     b.ToTable("Transportes");
                 });
@@ -799,6 +859,9 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<long>("SyncSeq")
+                        .HasColumnType("bigint");
+
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("bigint");
@@ -813,6 +876,8 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                     b.HasIndex("EmpresaId");
 
                     b.HasIndex("ModificadoEn");
+
+                    b.HasIndex("SyncSeq");
 
                     b.ToTable("Usuarios");
                 });
