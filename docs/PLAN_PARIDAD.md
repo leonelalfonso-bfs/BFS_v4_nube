@@ -271,6 +271,8 @@ Cada fase termina compilando y con algo que se pueda demostrar. Las fases 0 a 6 
 1. Conector **WORMS** contra el endpoint de prueba (outbox existente).
 2. Conector **Centum** (según `DOCUMENTACION_INTEGRACION_CENTUM.md` de la 3.0).
 
+> **Estado (2026-10-30):** primera parte hecha en la rama `fase-8`. El despacho del outbox es común a todos los destinos (`IDestinoIntegracion`; WORMS es el primero): los envíos de una pesada salen en orden (la SALIDA espera a la ENTRADA), una falla pasajera se reintenta con espera creciente (1, 2, 4… hasta 30 minutos) y un rechazo (400/401/403/422) queda en "Rechazado" y traba solo esa pesada. Configuración → API muestra los envíos (pendientes, rechazados, enviados, descartados, con el motivo) y permite Reintentar, Descartar, Reintentar rechazados y Enviar ahora. Los envíos salen desde la portería (modo Nodo). **Esperando documentación:** el conector de Centum (tiene su propia API: dirección, autenticación, formato y cómo confirma o rechaza) y el aviso de anulación a WORMS (hoy se mandan ENTRADA y SALIDA, igual que la 3.x).
+
 ---
 
 ## 5. Fuera de alcance

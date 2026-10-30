@@ -16,12 +16,12 @@ public static class WormsOutbox
         db.Outbox.Add(new OutboxMessage
         {
             Id = Guid.NewGuid(),
-            Destino = "worms",
+            Destino = WormsDestino.Destino,
             PesadaId = pesada.Id,
             TicketNumero = pesada.TicketNumero,
             Evento = evento,
             PayloadJson = JsonSerializer.Serialize(payload),
-            Estado = "pendiente",
+            Estado = EstadosOutbox.Pendiente,
             CreadoEn = now,
             ProximoIntento = now
         });

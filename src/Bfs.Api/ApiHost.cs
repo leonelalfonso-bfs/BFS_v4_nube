@@ -4,6 +4,7 @@ using Bfs.Api.Branding;
 using Bfs.Api.Catalogos;
 using Bfs.Api.Config;
 using Bfs.Api.Documentos;
+using Bfs.Api.Integraciones;
 using Bfs.Api.Licencias;
 using Bfs.Api.Nube;
 using Bfs.Api.Pesadas;
@@ -18,6 +19,7 @@ using Bfs.Core.Entities;
 using Bfs.Documents;
 using Bfs.Infrastructure.Data;
 using Bfs.Integrations;
+using Bfs.Integrations.Worms;
 using Bfs.Scale;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -52,7 +54,9 @@ public static class ApiHost
 
         AddDatosYBalanza(builder, options, paths);
 
-        builder.Services.AddHttpClient("worms");
+        builder.Services.AddHttpClient(WormsDestino.Destino);
+        builder.Services.AddSingleton<IDestinoIntegracion, WormsDestino>();
+        builder.Services.AddSingleton<DespachadorOutbox>();
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddScoped<TenantActual>();
         builder.Services.AddSingleton<PasswordHasher<Usuario>>();
@@ -135,6 +139,7 @@ public static class ApiHost
         api.MapReporteEndpoints();
         api.MapSistemaEndpoints();
         api.MapImportacionEndpoints();
+        api.MapIntegracionEndpoints();
         if (options.Modo == ModoDespliegue.Nube)
         {
             api.MapSuperadminEndpoints();
@@ -174,7 +179,7 @@ public static class ApiHost
     {
         if (options.Modo == ModoDespliegue.Nube)
         {
-            // Una base por cliente; la integración con WORMS desde la nube queda para la Fase 8.
+            // Una base por cliente. WORMS sale desde la portería (el outbox no corre en la nube).
             builder.AddNube(paths);
             return;
         }
