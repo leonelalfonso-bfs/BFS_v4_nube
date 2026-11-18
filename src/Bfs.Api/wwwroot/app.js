@@ -202,12 +202,88 @@ function elegirBalanza(id) {
 function pintarPeso() {
   const p = balanzaActual();
   state.scale = p;
-  const led = document.getElementById("pesoLed");
-  if (led) led.innerHTML = `${p.kilogramos} <small>${esc(p.nombre || p.puerto)} · ${esc(p.estado)}${p.estable ? " · estable" : ""}</small>`;
+  const cont = document.getElementById("displays");
+  if (cont) {
+    const lista = balanzasEnPantalla();
+    cont.classList.toggle("dos", lista.length > 1);
+    const iguales = cont.children.length === lista.length
+      && lista.every((b, i) => cont.children[i].dataset.balanza === String(b.balanzaId || ""));
+    if (!iguales) {
+      cont.innerHTML = lista.map(displayBalanza).join("");
+    } else {
+      // Se cambia solo el contenido: el recuadro que se toca queda, así un toque no se pierde en medio de un repintado.
+      lista.forEach((b, i) => {
+        const el = cont.children[i];
+        const nuevo = document.createElement("div");
+        nuevo.innerHTML = displayBalanza(b);
+        el.className = nuevo.firstElementChild.className;
+        el.innerHTML = nuevo.firstElementChild.innerHTML;
+      });
+    }
+  }
   const st = document.getElementById("scalePill");
   if (st) st.innerHTML = pillForScale(p.estado) + (p.estable ? ` <span class="pill pill-ok">Estable</span>` : "");
-  const kg = document.getElementById("scaleKg");
-  if (kg) kg.textContent = p.kilogramos + " kg";
+}
+
+/** Las balanzas en el orden de la pantalla. Con dos, el operador elige cuál va a la izquierda (se recuerda en la PC). */
+function balanzasEnPantalla() {
+  const lista = state.balanzas.length ? [...state.balanzas] : [state.scale];
+  let invertidas = false;
+  try { invertidas = localStorage.getItem("bfs_balanzas_invertidas") === "1"; } catch {}
+  return invertidas && lista.length === 2 ? lista.reverse() : lista;
+}
+
+function intercambiarBalanzas() {
+  try {
+    const actual = localStorage.getItem("bfs_balanzas_invertidas") === "1";
+    localStorage.setItem("bfs_balanzas_invertidas", actual ? "0" : "1");
+  } catch {}
+  pintarPeso();
+}
+
+/** Estado de la lectura → color del display: verde estable, ámbar en movimiento, rojo sin lectura. */
+function estadoDisplay(b) {
+  if (["error", "sin señal", "sin balanza"].includes(b.estado)) return ["lcd-err", b.estado === "error" ? "Error" : "Sin señal"];
+  return b.estable ? ["lcd-ok", "Estable"] : ["lcd-mov", "En movimiento"];
+}
+
+function displayBalanza(b) {
+  const [cls, estado] = estadoDisplay(b);
+  const varias = state.balanzas.length > 1;
+  const enUso = varias && b.balanzaId === balanzaActual().balanzaId;
+  return `<div class="lcd ${cls} ${enUso ? "en-uso" : ""}" data-balanza="${b.balanzaId || ""}"
+      ${varias ? `onclick="elegirBalanza('${b.balanzaId}')" title="Tocar para pesar con esta balanza"` : ""}>
+    <div class="lcd-top">
+      <span class="lcd-nombre">${esc(b.nombre || b.puerto || "Balanza")}</span>
+      ${enUso ? `<span class="lcd-chip">En uso</span>` : ""}
+    </div>
+    <div class="lcd-num">${sieteSegmentos(cls === "lcd-err" ? "------" : String(b.kilogramos ?? 0))}<span class="lcd-kg">kg</span></div>
+    <div class="lcd-pie"><span class="lcd-led"></span>${esc(estado)}${b.estado === "simulada" ? " · simulada" : ""}</div>
+  </div>`;
+}
+
+const SEGMENTOS = {
+  "0": "abcdef", "1": "bc", "2": "abged", "3": "abgcd", "4": "fgbc", "5": "afgcd", "6": "afgedc",
+  "7": "abc", "8": "abcdefg", "9": "abcdfg", "-": "g", " ": ""
+};
+
+/** Número como display de 7 segmentos (SVG, sin fuentes externas): los segmentos apagados se ven tenues, como en un LCD. */
+function sieteSegmentos(texto, digitos = 6) {
+  const t = texto.length >= digitos ? texto.slice(-digitos) : texto.padStart(digitos, " ");
+  const W = 50, H = 90, m = 4.5, g = 1.6, paso = 62;
+  const hor = (cy, x1, x2) => `${x1},${cy} ${x1 + m},${cy - m} ${x2 - m},${cy - m} ${x2},${cy} ${x2 - m},${cy + m} ${x1 + m},${cy + m}`;
+  const ver = (cx, y1, y2) => `${cx},${y1} ${cx + m},${y1 + m} ${cx + m},${y2 - m} ${cx},${y2} ${cx - m},${y2 - m} ${cx - m},${y1 + m}`;
+  const forma = {
+    a: hor(m, m + g, W - m - g), g: hor(H / 2, m + g, W - m - g), d: hor(H - m, m + g, W - m - g),
+    f: ver(m, m + g, H / 2 - g), b: ver(W - m, m + g, H / 2 - g),
+    e: ver(m, H / 2 + g, H - m - g), c: ver(W - m, H / 2 + g, H - m - g)
+  };
+  const cuerpo = [...t].map((ch, i) => {
+    const prendidos = SEGMENTOS[ch] ?? "";
+    return `<g transform="translate(${i * paso + 8} 0) skewX(-6)">${Object.entries(forma).map(([seg, pts]) =>
+      `<polygon points="${pts}" class="${prendidos.includes(seg) ? "on" : "off"}"/>`).join("")}</g>`;
+  }).join("");
+  return `<svg class="lcd-svg" viewBox="0 0 ${digitos * paso + 6} ${H}" role="img" aria-label="${esc(texto.trim())} kg">${cuerpo}</svg>`;
 }
 
 function pillForScale(estado) {
@@ -565,15 +641,15 @@ async function renderPesaje() {
       <p style="margin:6px 0 0">ID de máquina: <code>${esc(state.licencia.maquina)}</code>. No se pueden registrar entradas nuevas; sí cerrar las salidas pendientes.</p>
     </div>` : ""}
     <div class="card peso-card">
-      <div class="peso" id="pesoLed">${state.scale.kilogramos} <small>${esc(state.scale.puerto)} · ${esc(state.scale.estado)}</small></div>
-      <div class="status-grid">
+      <div class="displays ${state.balanzas.length > 1 ? "dos" : ""}" id="displays">${balanzasEnPantalla().map(displayBalanza).join("")}</div>
+      <div class="peso-pie">
         <div class="status-box"><span>Empresa en curso</span>${selectorEmpresa(salida?.empresaId)}</div>
-        ${state.balanzas.length > 1 ? `<div class="status-box"><span>Balanza</span>
-          <select id="balanza" onchange="elegirBalanza(this.value)">${state.balanzas.map(b =>
-            `<option value="${b.balanzaId}" ${b.balanzaId === balanzaActual().balanzaId ? "selected" : ""}>${esc(b.nombre)}</option>`).join("")}</select>
-        </div>` : `<div class="status-box"><span>Peso vivo</span><strong id="scaleKg">${state.scale.kilogramos} kg</strong></div>`}
+        <div class="peso-ayuda">
+          ${state.balanzas.length > 1 ? `<button class="btn" onclick="intercambiarBalanzas()" title="Pasa la balanza de la izquierda a la derecha">⇄ Intercambiar lados</button>
+          <span>Tocá un display para pesar con esa balanza.</span>` : ""}
+          ${state.funciones.exigirEstable ? `<span>Se captura solo con el peso estable.</span>` : ""}
+        </div>
       </div>
-      ${state.funciones.exigirEstable ? `<p style="margin:8px 0 0;color:var(--muted)">Se captura solo con el peso estable.</p>` : ""}
     </div>
     ${modosPesaje().length > 1 ? `<div class="tabs">${modosPesaje().map(([id, label]) =>
       `<button class="tab ${modo === id ? "active" : ""}" onclick="cambiarModoPesaje('${id}')">${label}</button>`).join("")}</div>` : ""}
