@@ -127,6 +127,23 @@ public class WormsTests
     }
 
     [Fact]
+    public async Task Escenario_de_aduana_fijo()
+    {
+        await using var api = await TestApi.Iniciar();
+        await api.Configurar(new() { [ConfigKeys.Aduana] = "true", [ConfigKeys.AduanaEscenario] = "Carga Contenedor Lleno" });
+        using var admin = await api.LoginAdmin();
+
+        // Sin escenario, o con otro, queda el que fijó BFS.
+        var sinEscenario = await Json(admin.PostAsJsonAsync("/api/pesadas/entrada", new { empresaId = Empresa1, patenteChasis = "AB123CD", pesoEntrada = 30000, tipoOperacion = "Aduana" }));
+        var otro = await Json(admin.PostAsJsonAsync("/api/pesadas/entrada", new
+        {
+            empresaId = Empresa1, patenteChasis = "AB123CE", pesoEntrada = 30000, tipoOperacion = "Aduana", aduana = new { escenario = "Ingresa con Contenedor" }
+        }));
+        Assert.Equal("Carga Contenedor Lleno", sinEscenario.GetProperty("aduana").GetProperty("escenario").GetString());
+        Assert.Equal("Carga Contenedor Lleno", otro.GetProperty("aduana").GetProperty("escenario").GetString());
+    }
+
+    [Fact]
     public async Task Corregir_datos_con_clave_e_historial_sin_tocar_pesos()
     {
         await using var api = await TestApi.Iniciar();

@@ -50,7 +50,6 @@ public static class PesadasExcel
         ("N° de operación", f => T(f.Pesada.Aduana?.OperacionId)),
         ("Destinación aduanera", f => T(f.Pesada.Aduana?.DestinacionAduanera)),
         ("Procedencia / destino aduana", f => T(f.Pesada.Aduana?.ProcedenciaDestino)),
-        ("Id. destino", f => T(f.Pesada.Aduana?.IdDestino)),
         ("LOT", f => T(f.Pesada.Aduana?.Lot)),
         ("Contenedor", f => T(f.Pesada.Aduana?.ContenedorId)),
         ("Tara contenedor (kg)", f => f.Pesada.Aduana is { ContenedorId: not null } a ? a.ContenedorTara : Blank.Value),

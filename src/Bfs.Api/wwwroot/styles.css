@@ -347,6 +347,21 @@ tr:hover td { background: #f7fafc; }
   color: #fff;
 }
 
+.empresa-btn:disabled { cursor: default; opacity: 1; }
+
+.salida-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fef9e7;
+  border: 1px solid #f4d58d;
+}
+
+fieldset.seccion :disabled { background: var(--panel); color: var(--text); }
+
 fieldset.seccion {
   border: 1px solid var(--line);
   border-radius: 12px;

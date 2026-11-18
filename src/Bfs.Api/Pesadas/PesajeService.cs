@@ -224,7 +224,6 @@ public class PesajeService
         ("aduana.operacionId", "N° de operación", p => p.Aduana?.OperacionId, (p, v) => p.Aduana!.OperacionId = v),
         ("aduana.destinacionAduanera", "Destinación aduanera", p => p.Aduana?.DestinacionAduanera, (p, v) => p.Aduana!.DestinacionAduanera = v),
         ("aduana.procedenciaDestino", "Procedencia / destino aduana", p => p.Aduana?.ProcedenciaDestino, (p, v) => p.Aduana!.ProcedenciaDestino = v),
-        ("aduana.idDestino", "Id. destino", p => p.Aduana?.IdDestino, (p, v) => p.Aduana!.IdDestino = v),
         ("aduana.contenedorId", "Contenedor", p => p.Aduana?.ContenedorId, (p, v) => p.Aduana!.ContenedorId = v?.ToUpperInvariant()),
         ("aduana.bultoId", "Bulto", p => p.Aduana?.BultoId, (p, v) => p.Aduana!.BultoId = v)
     ];
@@ -400,6 +399,11 @@ public class PesajeService
 
     private static (DatosAduana? Datos, string? Error) ArmarAduana(DatosAduanaDto? dto, EntradaRequest req, Dictionary<string, string> configs)
     {
+        // BFS puede dejar fijo el escenario (ej. un cliente que nunca ingresa con contenedor).
+        if (configs.GetValueOrDefault(ConfigKeys.AduanaEscenario) is { Length: > 0 } fijo && EscenariosAduana.Todos.Contains(fijo))
+        {
+            dto = (dto ?? new DatosAduanaDto(fijo)) with { Escenario = fijo };
+        }
         if (dto == null || !EscenariosAduana.Todos.Contains(dto.Escenario))
         {
             return (null, "Elegí el escenario de aduana: " + string.Join(" o ", EscenariosAduana.Todos));
