@@ -223,7 +223,6 @@ public class PesajeService
         ("aduana.ataCuit", "CUIT ATA", p => p.Aduana?.AtaCuit, (p, v) => p.Aduana!.AtaCuit = v),
         ("aduana.operacionId", "N° de operación", p => p.Aduana?.OperacionId, (p, v) => p.Aduana!.OperacionId = v),
         ("aduana.destinacionAduanera", "Destinación aduanera", p => p.Aduana?.DestinacionAduanera, (p, v) => p.Aduana!.DestinacionAduanera = v),
-        ("aduana.procedenciaDestino", "Procedencia / destino aduana", p => p.Aduana?.ProcedenciaDestino, (p, v) => p.Aduana!.ProcedenciaDestino = v),
         ("aduana.contenedorId", "Contenedor", p => p.Aduana?.ContenedorId, (p, v) => p.Aduana!.ContenedorId = v?.ToUpperInvariant()),
         ("aduana.bultoId", "Bulto", p => p.Aduana?.BultoId, (p, v) => p.Aduana!.BultoId = v)
     ];
