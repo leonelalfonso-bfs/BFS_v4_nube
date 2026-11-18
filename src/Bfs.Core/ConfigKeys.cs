@@ -31,6 +31,9 @@ public static class ConfigKeys
     /// <summary>Hash de la clave que pide la corrección de datos de una pesada.</summary>
     public const string ClaveCorreccionHash = "clave_correccion_hash";
 
+    /// <summary>Escenario de aduana fijo para todas las operaciones; vacío = lo elige el operador.</summary>
+    public const string AduanaEscenario = "aduana_escenario";
+
     public const string AduanaCodigo = "aduana_codigo";
     public const string AduanaLot = "aduana_lot";
     public const string AduanaCertificado1 = "aduana_certificado_1";

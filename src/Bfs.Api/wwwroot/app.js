@@ -172,11 +172,12 @@ function elegirEmpresa(id) {
   document.querySelectorAll(".empresa-btn").forEach(b => b.classList.toggle("active", b.dataset.id === id));
 }
 
-function selectorEmpresa() {
-  const activas = state.empresas.filter(e => e.activa !== false);
-  const actual = empresaEnCurso();
-  return `<div class="empresa-switch">${activas.map((e, i) =>
-    `<button type="button" class="empresa-btn ${e.id === actual ? "active" : ""}" data-id="${e.id}" onclick="elegirEmpresa('${e.id}')"
+/** Con <fijaId> (salida de una pendiente) muestra la empresa de esa pesada y no deja cambiarla. */
+function selectorEmpresa(fijaId) {
+  const activas = state.empresas.filter(e => e.activa !== false || e.id === fijaId);
+  const actual = fijaId || empresaEnCurso();
+  return `<div class="empresa-switch">${activas.map((e, i) => fijaId && e.id !== fijaId ? "" :
+    `<button type="button" class="empresa-btn ${e.id === actual ? "active" : ""}" data-id="${e.id}" ${fijaId ? "disabled" : `onclick="elegirEmpresa('${e.id}')"`}
       title="Empresa ${i + 1}">${i + 1}. ${esc(e.nombre)}</button>`).join("")}</div>`;
 }
 
@@ -399,7 +400,9 @@ function bloqueAduana() {
     <div id="aduanaBox" style="display:none">
       <fieldset class="seccion"><legend>Operación aduanera</legend>
         <div class="grid3">
-          <div><label>Escenario *</label><select id="ad_escenario"><option value="">Elegir...</option>${opciones(ESCENARIOS_ADUANA)}</select></div>
+          ${state.funciones.aduanaEscenario
+            ? `<div><label>Escenario</label><select id="ad_escenario" disabled>${opciones([state.funciones.aduanaEscenario])}</select></div>`
+            : `<div><label>Escenario *</label><select id="ad_escenario"><option value="">Elegir...</option>${opciones(ESCENARIOS_ADUANA)}</select></div>`}
           <div><label>N° de operación</label><input id="ad_operacionId" /></div>
           <div><label>LOT</label><input value="${esc(state.funciones.aduanaLot || "")}" disabled title="Sale de Planta → Aduana" /></div>
           <div><label>Exportador / importador</label><input id="ad_exportador" list="dl_exportadores" autocomplete="off" onchange="completarCuit('ad_exportador', 'ad_exportadorCuit', state.catalogos.exportadores)" /></div>
@@ -410,7 +413,7 @@ function bloqueAduana() {
           <div></div>
           <div><label>Destinación aduanera</label><input id="ad_destinacion" /></div>
           <div><label>Procedencia / destino</label><input id="ad_procDestino" /></div>
-          <div><label>Id. destino</label><input id="ad_idDestino" /></div>
+          <div></div>
           <div><label>Contenedor N°</label><input id="ad_contenedorId" /></div>
           <div><label>Tara contenedor (kg)</label><input id="ad_contenedorTara" type="number" value="0" /></div>
           <div></div>
@@ -449,7 +452,6 @@ function datosAduana() {
       ataCuit: val("ad_ataCuit") || null,
       destinacionAduanera: val("ad_destinacion") || null,
       procedenciaDestino: val("ad_procDestino") || null,
-      idDestino: val("ad_idDestino") || null,
       contenedorId: val("ad_contenedorId") || null,
       contenedorTara: n("ad_contenedorTara") || 0,
       bultoId: val("ad_bultoId") || null,
@@ -473,6 +475,9 @@ async function renderPesaje() {
   if (!modosPesaje().some(([id]) => id === state.modoPesaje)) state.modoPesaje = "normal";
   const modo = state.modoPesaje;
   const sinLicencia = state.licencia && !state.licencia.puedePesar;
+  // Pendiente elegida: la pantalla muestra sus datos de entrada y solo deja capturar la salida.
+  const salida = modo === "normal" ? pendientes.find(p => p.id === state.selectedPesadaId) : null;
+  if (!salida) state.selectedPesadaId = null;
   const f = (key, html) => visible(key) ? html : "";
   const lbl = (key, porDefecto) => field(key)?.label || porDefecto;
 
@@ -522,7 +527,12 @@ async function renderPesaje() {
       <p id="ultimo"></p>
     </div>` : `
     <div class="card">
-      <h3 style="margin-top:0">${modo === "tara" ? "Pesar con tara conocida" : "Datos del ticket"}</h3>
+      ${salida ? `
+      <div class="salida-head">
+        <div><h3 style="margin:0">Salida del ticket ${esc(salida.ticketNumero)}</h3>
+          <p style="margin:4px 0 0">${esc(empresaName(salida.empresaId))} · entrada ${esc(hora(salida.entradaEn))} · ${salida.pesoEntrada} kg${salida.entradaManualPor ? " (manual)" : ""}</p></div>
+        <span class="pill pill-warn">Pesada de salida</span>
+      </div>` : `<h3 style="margin-top:0">${modo === "tara" ? "Pesar con tara conocida" : "Datos del ticket"}</h3>`}
       ${datosVehiculo}
       ${modo === "tara" && puedeManual() ? `
       <details style="margin-top:12px"><summary>Usar otra tara (ingreso manual)</summary>
@@ -533,8 +543,10 @@ async function renderPesaje() {
       <div class="btn-row">
         ${modo === "tara"
           ? `<button class="btn-primary" onclick="guardarTaraConocida()" ${sinLicencia ? "disabled" : ""}>Pesar</button>`
-          : `<button class="btn-primary" onclick="guardarEntrada()" ${sinLicencia ? "disabled" : ""}>Capturar entrada</button>
-             <button class="btn" onclick="guardarSalida()">Capturar salida</button>`}
+          : salida
+            ? `<button class="btn-primary" onclick="guardarSalida()">Capturar salida</button>
+               <button class="btn" onclick="selectPesada('${salida.id}')">Cancelar</button>`
+            : `<button class="btn-primary" onclick="guardarEntrada()" ${sinLicencia ? "disabled" : ""}>Capturar entrada</button>`}
       </div>
       <p id="ultimo"></p>
     </div>`;
@@ -555,7 +567,7 @@ async function renderPesaje() {
     <div class="card peso-card">
       <div class="peso" id="pesoLed">${state.scale.kilogramos} <small>${esc(state.scale.puerto)} · ${esc(state.scale.estado)}</small></div>
       <div class="status-grid">
-        <div class="status-box"><span>Empresa en curso</span>${selectorEmpresa()}</div>
+        <div class="status-box"><span>Empresa en curso</span>${selectorEmpresa(salida?.empresaId)}</div>
         ${state.balanzas.length > 1 ? `<div class="status-box"><span>Balanza</span>
           <select id="balanza" onchange="elegirBalanza(this.value)">${state.balanzas.map(b =>
             `<option value="${b.balanzaId}" ${b.balanzaId === balanzaActual().balanzaId ? "selected" : ""}>${esc(b.nombre)}</option>`).join("")}</select>
@@ -584,6 +596,33 @@ async function renderPesaje() {
       </table>
     </div>` : ""}
   `;
+  if (salida) mostrarEntrada(salida);
+}
+
+/** Campos del formulario de pesaje y de dónde sale cada valor en una pesada. */
+const CAMPOS_PANTALLA = [
+  ["tipo", p => p.tipo], ["tipoOperacion", p => p.tipoOperacion], ["producto", p => p.producto], ["cliente", p => p.cliente],
+  ["transporte", p => p.transporte], ["procedencia", p => p.procedencia], ["destino", p => p.destino], ["comprobante", p => p.comprobante],
+  ["taraPallets", p => p.taraPallets], ["patenteChasis", p => p.patenteChasis], ["patenteAcoplado", p => p.patenteAcoplado],
+  ["conductor", p => p.conductor], ["tipoDocumento", p => p.tipoDocumento], ["documento", p => p.documento],
+  ["nacionalidad", p => p.nacionalidad], ["observaciones", p => p.observaciones],
+  ["ad_escenario", p => p.aduana?.escenario], ["ad_operacionId", p => p.aduana?.operacionId], ["ad_exportador", p => p.aduana?.exportador],
+  ["ad_exportadorCuit", p => p.aduana?.exportadorCuit], ["ad_ata", p => p.aduana?.ata], ["ad_ataCuit", p => p.aduana?.ataCuit],
+  ["ad_destinacion", p => p.aduana?.destinacionAduanera], ["ad_procDestino", p => p.aduana?.procedenciaDestino],
+  ["ad_contenedorId", p => p.aduana?.contenedorId], ["ad_contenedorTara", p => p.aduana?.contenedorTara],
+  ["ad_bultoId", p => p.aduana?.bultoId], ["ad_bultoBruto", p => p.aduana?.bultoBruto], ["ad_bultoTara", p => p.aduana?.bultoTara]
+];
+
+/** Carga en pantalla los datos de la entrada y los deja de solo lectura (salvo la tara de pallets, que se ajusta al salir). */
+function mostrarEntrada(p) {
+  for (const [id, leer] of CAMPOS_PANTALLA) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    el.value = leer(p) ?? "";
+    if (id !== "taraPallets") el.disabled = true;
+  }
+  toggleAduana();
+  document.querySelector(".salida-head")?.scrollIntoView({ block: "center" });
 }
 
 async function bajarArchivo(path) {
@@ -1201,6 +1240,9 @@ async function renderConfigGeneral() {
         <div><label>Tara conocida</label>${yesNo("c_tara", c.tara_conocida)}</div>
         <div><label>Aduana</label>${yesNo("c_adu", c.aduana)}</div>
         <div><label>Contenedores</label>${yesNo("c_cont", c.contenedores)}</div>
+        <div><label>Escenario de aduana</label><select id="c_adu_esc">
+          <option value="">Lo elige el operador</option>${opciones(ESCENARIOS_ADUANA.map(x => x), c.aduana_escenario || "")}
+        </select></div>
         <div><label>Impresora térmica</label>${yesNo("c_term", c.termica)}</div>
         <div><label>Impresora térmica</label><select id="c_term_imp">
           <option value="">${impresoras.length ? "Elegir..." : "No se encontraron impresoras"}</option>
@@ -1561,6 +1603,7 @@ async function saveGeneral() {
     tara_conocida: val("c_tara"),
     aduana: val("c_adu"),
     contenedores: val("c_cont"),
+    aduana_escenario: val("c_adu_esc"),
     termica: val("c_term"),
     termica_impresora: val("c_term_imp"),
     termica_ancho: val("c_term_ancho"),
@@ -1749,7 +1792,6 @@ const CORREGIBLES = [
   ["aduana.operacionId", "N° de operación", p => p.aduana?.operacionId],
   ["aduana.destinacionAduanera", "Destinación aduanera", p => p.aduana?.destinacionAduanera],
   ["aduana.procedenciaDestino", "Procedencia / destino aduana", p => p.aduana?.procedenciaDestino],
-  ["aduana.idDestino", "Id. destino", p => p.aduana?.idDestino],
   ["aduana.contenedorId", "Contenedor", p => p.aduana?.contenedorId],
   ["aduana.bultoId", "Bulto", p => p.aduana?.bultoId]
 ];

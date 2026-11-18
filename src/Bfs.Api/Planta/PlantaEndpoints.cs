@@ -59,6 +59,7 @@ public static class PlantaEndpoints
                 claveCorreccion = !string.IsNullOrEmpty(c.GetValueOrDefault(ConfigKeys.ClaveCorreccionHash)),
                 exigirEstable = Si(ConfigKeys.ExigirEstable, "true"),
                 aduanaLot = c.GetValueOrDefault(ConfigKeys.AduanaLot, ""),
+                aduanaEscenario = c.GetValueOrDefault(ConfigKeys.AduanaEscenario, ""),
                 puesto = int.TryParse(c.GetValueOrDefault(ConfigKeys.Puesto), out var puesto) ? puesto : 1
             });
         });
