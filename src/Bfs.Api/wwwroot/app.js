@@ -1089,15 +1089,21 @@ async function guardarClaveCorreccion() {
   }
 }
 
-async function guardarEmpresa(id) {
+/** <desdeTicket>: se guardó desde Configuración → Ticket y logo (vuelve ahí en vez de a Planta). */
+async function guardarEmpresa(id, desdeTicket = false) {
   const body = {};
   for (const key of ["nombre", "cuit", "direccion", "localidad", "provincia", "telefono", "email"]) {
     body[key] = val(`em_${key}_${id}`);
   }
   try {
     await api(`/api/empresas/${id}`, { method: "PUT", body: JSON.stringify(body) });
-    toast("Empresa guardada");
-    renderPlanta();
+    // Con una sola empresa, su razón social es también el nombre que se ve arriba y en el ingreso.
+    if (state.empresas.filter(e => e.activa !== false).length === 1 && isVendor() && body.nombre) {
+      await saveConfig({ cliente_nombre: body.nombre });
+    }
+    state.empresas = await api("/api/empresas");
+    toast(desdeTicket ? "Encabezado guardado" : "Empresa guardada");
+    if (desdeTicket) render(); else renderPlanta();
   } catch (e) {
     toast(limpiarError(e), "err");
   }
@@ -1501,9 +1507,31 @@ function renderConfigCampos() {
     </div>`;
 }
 
-function renderConfigTicket() {
+const CAMPOS_ENCABEZADO = [
+  ["nombre", "Razón social"], ["cuit", "CUIT"], ["direccion", "Dirección"], ["localidad", "Localidad"],
+  ["provincia", "Provincia"], ["email", "Mail"], ["telefono", "Teléfono"]
+];
+
+/** Encabezado del ticket: los datos de cada empresa (los mismos de Planta), como en la configuración de la 3.x. */
+function encabezadoEmpresa(e, varias) {
+  return `
+    <div class="card">
+      <h3 style="margin-top:0">Encabezado del ticket${varias ? ` · ${esc(e.nombre)}` : ""}</h3>
+      <div class="grid2">
+        ${CAMPOS_ENCABEZADO.map(([key, label]) =>
+          `<div><label>${label}</label><input id="em_${key}_${e.id}" value="${esc(e[key] ?? "")}" /></div>`).join("")}
+      </div>
+      <div class="btn-row"><button class="btn-primary" onclick="guardarEmpresa('${e.id}', true)">Guardar encabezado</button></div>
+    </div>`;
+}
+
+async function renderConfigTicket() {
   const c = state.config;
+  state.empresas = await api("/api/empresas");
+  const empresas = state.empresas.filter(e => e.activa !== false);
+  const e = empresas[0];
   document.getElementById("configBody").innerHTML = `
+    ${empresas.map(x => encabezadoEmpresa(x, empresas.length > 1)).join("")}
     <div class="grid2">
       <div class="card">
         <div><label>Título del ticket</label><input id="t_titulo" value="${esc(c.ticket_titulo || "")}" /></div>
@@ -1521,7 +1549,9 @@ function renderConfigTicket() {
       <div class="card ticket-preview">
         ${state.branding.logoUrl ? `<img src="${state.branding.logoUrl}?t=${Date.now()}" alt="logo" />` : bfsLogo("login-logo")}
         <h3>${esc(c.ticket_titulo || "Comprobante de pesaje")}</h3>
-        <p>${esc(c.cliente_nombre || "Cliente")}</p>
+        <p><strong>${esc(e?.nombre || c.cliente_nombre || "Cliente")}</strong>${e?.cuit ? ` · CUIT ${esc(e.cuit)}` : ""}</p>
+        <p>${esc([e?.direccion, e?.localidad, e?.provincia].filter(Boolean).join(", "))}</p>
+        <p>${esc([e?.telefono, e?.email].filter(Boolean).join(" · "))}</p>
         <p>Ticket 0001 · INGRESO · 12.480 kg</p>
         <p>${esc(c.ticket_pie || "Balanzas Full Service")}</p>
       </div>
