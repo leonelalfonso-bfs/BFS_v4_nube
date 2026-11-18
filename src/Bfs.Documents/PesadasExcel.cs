@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Bfs.Core;
 using Bfs.Core.Entities;
 using ClosedXML.Excel;
@@ -7,19 +8,75 @@ namespace Bfs.Documents;
 /// <summary>Una fila del Excel, con nombres y fechas ya resueltos.</summary>
 public record FilaExcel(Pesada Pesada, string Empresa, DateTime EntradaLocal, DateTime? SalidaLocal);
 
-/// <summary>Exportación de pesadas a .xlsx (equivalente a <c>ExcelExporter.java</c>), con totales y filtros de Excel.</summary>
+/// <summary>
+/// Exportación de pesadas a .xlsx (equivalente a <c>ExcelExporter.java</c>), con totales y filtros de Excel.
+/// Lleva todos los datos que se cargan al abrir el ticket; las correcciones van en una hoja aparte.
+/// </summary>
 public static class PesadasExcel
 {
-    private static readonly string[] Columnas =
+    private static readonly (string Nombre, Func<FilaExcel, XLCellValue> Valor)[] Columnas =
     [
-        "Ticket", "Estado", "Modo", "Operación", "Empresa", "Entrada", "Salida", "Patente", "Acoplado", "Chofer", "Documento",
-        "Cliente", "Transporte", "Producto", "Procedencia", "Destino", "Remito", "Peso entrada (kg)", "Peso salida (kg)",
-        "Bruto (kg)", "Tara (kg)", "Tara pallets (kg)", "Neto (kg)", "Contenedor", "Neto contenedor (kg)",
-        "Peso manual", "Operador", "Observaciones", "Motivo anulación"
+        ("Ticket", f => f.Pesada.TicketNumero),
+        ("Empresa", f => f.Empresa),
+        ("Estado", f => f.Pesada.Estado switch { EstadosPesada.Entrada => "Pendiente", EstadosPesada.Salida => "Cerrada", _ => "Anulada" }),
+        ("Tipo", f => f.Pesada.Tipo),
+        ("Modo", f => f.Pesada.Modo == ModosPesaje.TaraConocida ? "Tara conocida" : "Normal"),
+        ("Operación", f => f.Pesada.TipoOperacion),
+        ("Entrada", f => f.EntradaLocal),
+        ("Salida", f => f.SalidaLocal.HasValue ? f.SalidaLocal.Value : Blank.Value),
+        ("Patente", f => f.Pesada.PatenteChasis),
+        ("Acoplado", f => T(f.Pesada.PatenteAcoplado)),
+        ("Chofer", f => T(f.Pesada.Conductor)),
+        ("Tipo doc.", f => T(f.Pesada.TipoDocumento)),
+        ("Documento", f => T(f.Pesada.Documento)),
+        ("Nacionalidad", f => T(f.Pesada.Nacionalidad)),
+        ("Cliente", f => T(f.Pesada.Cliente)),
+        ("Transporte", f => T(f.Pesada.Transporte)),
+        ("Producto", f => T(f.Pesada.Producto)),
+        ("Procedencia", f => T(f.Pesada.Procedencia)),
+        ("Destino", f => T(f.Pesada.Destino)),
+        ("Remito", f => T(f.Pesada.Comprobante)),
+        ("Peso entrada (kg)", f => f.Pesada.PesoEntrada),
+        ("Peso salida (kg)", f => Num(f.Pesada.PesoSalida)),
+        ("Bruto (kg)", f => Num(f.Pesada.Bruto)),
+        ("Tara (kg)", f => Num(f.Pesada.Tara)),
+        ("Tara pallets (kg)", f => f.Pesada.TaraPallets),
+        ("Neto (kg)", f => f.Pesada.Estado == EstadosPesada.Anulada ? Blank.Value : Num(f.Pesada.Neto)),
+        ("Escenario aduana", f => T(f.Pesada.Aduana?.Escenario)),
+        ("Exportador / importador", f => T(f.Pesada.Aduana?.Exportador)),
+        ("CUIT exportador", f => T(f.Pesada.Aduana?.ExportadorCuit)),
+        ("ATA", f => T(f.Pesada.Aduana?.Ata)),
+        ("CUIT ATA", f => T(f.Pesada.Aduana?.AtaCuit)),
+        ("N° de operación", f => T(f.Pesada.Aduana?.OperacionId)),
+        ("Destinación aduanera", f => T(f.Pesada.Aduana?.DestinacionAduanera)),
+        ("Procedencia / destino aduana", f => T(f.Pesada.Aduana?.ProcedenciaDestino)),
+        ("Id. destino", f => T(f.Pesada.Aduana?.IdDestino)),
+        ("LOT", f => T(f.Pesada.Aduana?.Lot)),
+        ("Contenedor", f => T(f.Pesada.Aduana?.ContenedorId)),
+        ("Tara contenedor (kg)", f => f.Pesada.Aduana is { ContenedorId: not null } a ? a.ContenedorTara : Blank.Value),
+        ("Bruto contenedor (kg)", f => Num(f.Pesada.Aduana?.ContenedorBruto)),
+        ("Neto contenedor (kg)", f => Num(f.Pesada.Aduana?.ContenedorNeto)),
+        ("Bulto", f => T(f.Pesada.Aduana?.BultoId)),
+        ("Bulto bruto (kg)", f => Num(f.Pesada.Aduana?.BultoBruto)),
+        ("Bulto tara (kg)", f => Num(f.Pesada.Aduana?.BultoTara)),
+        ("Balanza entrada", f => T(f.Pesada.Balanza)),
+        ("Balanza salida", f => T(f.Pesada.BalanzaSalida)),
+        ("Operador", f => f.Pesada.Operador),
+        ("Operador salida", f => T(f.Pesada.OperadorSalida)),
+        ("Peso entrada manual por", f => T(f.Pesada.EntradaManualPor)),
+        ("Peso salida manual por", f => T(f.Pesada.SalidaManualPor)),
+        ("Observaciones", f => T(f.Pesada.Observaciones)),
+        ("Anulada por", f => T(f.Pesada.AnuladaPor)),
+        ("Motivo anulación", f => T(f.Pesada.MotivoAnulacion)),
+        ("Correcciones", f => Correcciones(f.Pesada).Count is var n and > 0 ? n : Blank.Value)
     ];
 
-    public static byte[] Generar(IReadOnlyList<FilaExcel> filas, string titulo)
+    private static readonly JsonSerializerOptions JsonWeb = new(JsonSerializerDefaults.Web);
+
+    /// <param name="horaLocal">Para las fechas de las correcciones (las de entrada y salida ya vienen en la fila).</param>
+    public static byte[] Generar(IReadOnlyList<FilaExcel> filas, string titulo, Func<DateTimeOffset, DateTime>? horaLocal = null)
     {
+        horaLocal ??= d => d.LocalDateTime;
         using var wb = new XLWorkbook();
         var ws = wb.Worksheets.Add("Pesadas");
 
@@ -28,46 +85,15 @@ public static class PesadasExcel
         ws.Cell(1, 1).Style.Font.FontSize = 13;
 
         const int encabezado = 3;
-        for (var i = 0; i < Columnas.Length; i++) ws.Cell(encabezado, i + 1).Value = Columnas[i];
+        for (var i = 0; i < Columnas.Length; i++) ws.Cell(encabezado, i + 1).Value = Columnas[i].Nombre;
         var fila = encabezado;
         foreach (var f in filas)
         {
             fila++;
-            var p = f.Pesada;
-            var c = 1;
-            void V(XLCellValue v) => ws.Cell(fila, c++).Value = v;
-            V(p.TicketNumero);
-            V(p.Estado switch { EstadosPesada.Entrada => "Pendiente", EstadosPesada.Salida => "Cerrada", _ => "Anulada" });
-            V(p.Modo == ModosPesaje.TaraConocida ? "Tara conocida" : "Normal");
-            V(p.TipoOperacion);
-            V(f.Empresa);
-            V(f.EntradaLocal);
-            V(f.SalidaLocal.HasValue ? f.SalidaLocal.Value : Blank.Value);
-            V(p.PatenteChasis);
-            V(p.PatenteAcoplado ?? "");
-            V(p.Conductor ?? "");
-            V(p.Documento ?? "");
-            V(p.Cliente ?? "");
-            V(p.Transporte ?? "");
-            V(p.Producto ?? "");
-            V(p.Procedencia ?? "");
-            V(p.Destino ?? "");
-            V(p.Comprobante ?? "");
-            V(p.PesoEntrada);
-            V(Num(p.PesoSalida));
-            V(Num(p.Bruto));
-            V(Num(p.Tara));
-            V(p.TaraPallets);
-            V(p.Estado == EstadosPesada.Anulada ? Blank.Value : Num(p.Neto));
-            V(p.Aduana?.ContenedorId ?? "");
-            V(Num(p.Aduana?.ContenedorNeto));
-            V(p.EntradaManualPor != null || p.SalidaManualPor != null ? "Sí" : "");
-            V(p.Operador);
-            V(p.Observaciones ?? "");
-            V(p.MotivoAnulacion ?? "");
+            for (var i = 0; i < Columnas.Length; i++) ws.Cell(fila, i + 1).Value = Columnas[i].Valor(f);
         }
 
-        var colNeto = Array.IndexOf(Columnas, "Neto (kg)") + 1;
+        var colNeto = Col("Neto (kg)");
         if (filas.Count > 0)
         {
             var total = fila + 1;
@@ -78,23 +104,62 @@ public static class PesadasExcel
             ws.Range(encabezado, 1, fila, Columnas.Length).SetAutoFilter();
         }
 
-        var header = ws.Range(encabezado, 1, encabezado, Columnas.Length);
-        header.Style.Font.Bold = true;
-        header.Style.Fill.BackgroundColor = XLColor.FromHtml("#0f766e");
-        header.Style.Font.FontColor = XLColor.White;
-        ws.Column(Array.IndexOf(Columnas, "Entrada") + 1).Style.DateFormat.Format = "dd/mm/yyyy hh:mm";
-        ws.Column(Array.IndexOf(Columnas, "Salida") + 1).Style.DateFormat.Format = "dd/mm/yyyy hh:mm";
-        foreach (var nombre in Columnas.Where(n => n.EndsWith("(kg)")))
+        Encabezado(ws.Range(encabezado, 1, encabezado, Columnas.Length));
+        ws.Column(Col("Entrada")).Style.DateFormat.Format = "dd/mm/yyyy hh:mm";
+        ws.Column(Col("Salida")).Style.DateFormat.Format = "dd/mm/yyyy hh:mm";
+        foreach (var (nombre, _) in Columnas.Where(c => c.Nombre.EndsWith("(kg)")))
         {
-            ws.Column(Array.IndexOf(Columnas, nombre) + 1).Style.NumberFormat.Format = "#,##0";
+            ws.Column(Col(nombre)).Style.NumberFormat.Format = "#,##0";
         }
         ws.SheetView.FreezeRows(encabezado);
         ws.Columns().AdjustToContents(encabezado, Math.Min(fila, encabezado + 200));
+
+        HojaCorrecciones(wb, filas, horaLocal);
 
         using var ms = new MemoryStream();
         wb.SaveAs(ms);
         return ms.ToArray();
     }
+
+    /// <summary>Una fila por campo corregido: ticket, cuándo, quién, por qué, valor anterior y nuevo.</summary>
+    private static void HojaCorrecciones(XLWorkbook wb, IReadOnlyList<FilaExcel> filas, Func<DateTimeOffset, DateTime> horaLocal)
+    {
+        var detalle = filas.SelectMany(f => Correcciones(f.Pesada).SelectMany(c => c.Cambios.Select(x => (f, c, x)))).ToList();
+        if (detalle.Count == 0) return;
+
+        var ws = wb.Worksheets.Add("Correcciones");
+        string[] columnas = ["Ticket", "Empresa", "Fecha", "Usuario", "Motivo", "Campo", "Antes", "Después"];
+        for (var i = 0; i < columnas.Length; i++) ws.Cell(1, i + 1).Value = columnas[i];
+        var fila = 1;
+        foreach (var (f, c, x) in detalle)
+        {
+            fila++;
+            XLCellValue[] v = [f.Pesada.TicketNumero, f.Empresa, horaLocal(c.En), c.Por, c.Motivo, x.Campo, T(x.Antes), T(x.Despues)];
+            for (var i = 0; i < v.Length; i++) ws.Cell(fila, i + 1).Value = v[i];
+        }
+        Encabezado(ws.Range(1, 1, 1, columnas.Length));
+        ws.Column(3).Style.DateFormat.Format = "dd/mm/yyyy hh:mm";
+        ws.Range(1, 1, fila, columnas.Length).SetAutoFilter();
+        ws.SheetView.FreezeRows(1);
+        ws.Columns().AdjustToContents();
+    }
+
+    public static List<CorreccionPesada> Correcciones(Pesada p)
+    {
+        try { return JsonSerializer.Deserialize<List<CorreccionPesada>>(p.CorreccionesJson, JsonWeb) ?? []; }
+        catch (JsonException) { return []; }
+    }
+
+    private static void Encabezado(IXLRange header)
+    {
+        header.Style.Font.Bold = true;
+        header.Style.Fill.BackgroundColor = XLColor.FromHtml("#0f766e");
+        header.Style.Font.FontColor = XLColor.White;
+    }
+
+    private static int Col(string nombre) => Array.FindIndex(Columnas, c => c.Nombre == nombre) + 1;
+
+    private static XLCellValue T(string? s) => s ?? "";
 
     private static XLCellValue Num(int? v) => v.HasValue ? v.Value : Blank.Value;
 }

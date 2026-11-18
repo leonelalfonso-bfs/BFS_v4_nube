@@ -13,6 +13,8 @@ public static class FieldCatalog
         new("patenteAcoplado", "Patente acoplado", true, false),
         new("conductor", "Conductor", true, false),
         new("documento", "Documento", true, false),
+        new("tipoDocumento", "Tipo de documento", true, false),
+        new("nacionalidad", "Nacionalidad", true, false),
         new("cliente", "Cliente", true, false),
         new("transporte", "Transporte", true, false),
         new("producto", "Producto", true, false),
@@ -36,7 +38,10 @@ public static class FieldCatalog
             {
                 PropertyNameCaseInsensitive = true
             });
-            return parsed is { Count: > 0 } ? parsed : Defaults.ToList();
+            if (parsed is not { Count: > 0 }) return Defaults.ToList();
+            // Campos agregados en versiones nuevas: aparecen con su valor por defecto en las instalaciones existentes.
+            parsed.AddRange(Defaults.Where(d => parsed.All(f => f.Key != d.Key)));
+            return parsed;
         }
         catch
         {

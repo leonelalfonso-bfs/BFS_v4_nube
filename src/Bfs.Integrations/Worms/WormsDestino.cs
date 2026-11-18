@@ -31,7 +31,8 @@ public sealed class WormsDestino : IDestinoIntegracion
         return code switch
         {
             200 or 201 or 409 => new Envio(ResultadoEnvio.Enviado),
-            400 or 401 or 403 or 422 => new Envio(ResultadoEnvio.Rechazado, $"{code}: {Recortar(await response.Content.ReadAsStringAsync(ct))}"),
+            401 or 403 => new Envio(ResultadoEnvio.Rechazado, $"{code}: clave de WORMS inválida o vencida, avisar a sistemas de WORMS"),
+            400 or 422 => new Envio(ResultadoEnvio.Rechazado, $"{code}: {Recortar(await response.Content.ReadAsStringAsync(ct))}"),
             _ => new Envio(ResultadoEnvio.Reintentar, $"WORMS respondió {code}")
         };
     }

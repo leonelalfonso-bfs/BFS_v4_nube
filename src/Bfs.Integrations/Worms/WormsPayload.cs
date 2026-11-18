@@ -5,6 +5,11 @@ namespace Bfs.Integrations.Worms;
 public class WormsPayload
 {
     [JsonPropertyName("ticket_nro")] public string TicketNro { get; set; } = "";
+    /// <summary>
+    /// No está en la especificación de WORMS (20/10/2026): lo pidió el cliente para distinguir las empresas.
+    /// Confirmar con WORMS el nombre del campo antes de pasar a producción.
+    /// </summary>
+    [JsonPropertyName("empresa")] public string? Empresa { get; set; }
     [JsonPropertyName("evento")] public string Evento { get; set; } = "";
     [JsonPropertyName("tipo")] public string Tipo { get; set; } = "";
     [JsonPropertyName("balanza")] public string Balanza { get; set; } = "";
@@ -22,5 +27,7 @@ public class WormsPayload
     [JsonPropertyName("documento")] public string? Documento { get; set; }
     [JsonPropertyName("patente_chasis")] public string PatenteChasis { get; set; } = "";
     [JsonPropertyName("patente_acoplado")] public string? PatenteAcoplado { get; set; }
+    [JsonPropertyName("contenedor_nro")] public string? ContenedorNro { get; set; }
+    [JsonPropertyName("tara_contenedor")] public int? TaraContenedor { get; set; }
     [JsonPropertyName("observaciones")] public string? Observaciones { get; set; }
 }

@@ -549,6 +549,10 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                     b.Property<string>("Conductor")
                         .HasColumnType("text");
 
+                    b.Property<string>("CorreccionesJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
                     b.Property<DateTimeOffset>("CreadoEn")
                         .HasColumnType("timestamp with time zone");
 
@@ -586,6 +590,9 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                         .HasColumnType("text");
 
                     b.Property<string>("MotivoAnulacion")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Nacionalidad")
                         .HasColumnType("text");
 
                     b.Property<int?>("Neto")
@@ -644,6 +651,9 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
 
                     b.Property<string>("Tipo")
                         .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TipoDocumento")
                         .HasColumnType("text");
 
                     b.Property<string>("TipoOperacion")
@@ -900,6 +910,12 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                             b1.Property<Guid>("PesadaId")
                                 .HasColumnType("uuid");
 
+                            b1.Property<string>("Ata")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("AtaCuit")
+                                .HasColumnType("text");
+
                             b1.Property<int?>("BultoBruto")
                                 .HasColumnType("integer");
 
@@ -927,6 +943,9 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                             b1.Property<int>("ContenedorTara")
                                 .HasColumnType("integer");
 
+                            b1.Property<string>("DestinacionAduanera")
+                                .HasColumnType("text");
+
                             b1.Property<string>("Escenario")
                                 .IsRequired()
                                 .HasColumnType("text");
@@ -937,7 +956,16 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                             b1.Property<string>("ExportadorCuit")
                                 .HasColumnType("text");
 
+                            b1.Property<string>("IdDestino")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Lot")
+                                .HasColumnType("text");
+
                             b1.Property<string>("OperacionId")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("ProcedenciaDestino")
                                 .HasColumnType("text");
 
                             b1.HasKey("PesadaId");

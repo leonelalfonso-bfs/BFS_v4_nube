@@ -77,9 +77,9 @@ public class IntegracionesTests
         new([new WormsDestino()], new Fabrica(worms), NullLogger<DespachadorOutbox>.Instance, reloj);
 
     [Fact]
-    public void La_espera_crece_hasta_30_minutos()
+    public void La_espera_crece_hasta_5_minutos()
     {
-        Assert.Equal([1, 2, 4, 8, 16, 30, 30], new[] { 1, 2, 3, 4, 5, 6, 20 }.Select(i => DespachadorOutbox.Espera(i).TotalMinutes));
+        Assert.Equal([1, 2, 4, 5, 5], new[] { 1, 2, 3, 4, 20 }.Select(i => DespachadorOutbox.Espera(i).TotalMinutes));
     }
 
     [Fact]

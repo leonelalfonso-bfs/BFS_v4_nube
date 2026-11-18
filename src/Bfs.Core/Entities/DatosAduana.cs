@@ -7,6 +7,18 @@ public class DatosAduana
     public string? Exportador { get; set; }
     public string? ExportadorCuit { get; set; }
     public string? OperacionId { get; set; }
+
+    /// <summary>Agente de transporte aduanero (transporte del catálogo marcado como ATA).</summary>
+    public string? Ata { get; set; }
+    public string? AtaCuit { get; set; }
+    public string? DestinacionAduanera { get; set; }
+
+    /// <summary>Procedencia o destino de la operación aduanera (la de la pesada es la del movimiento).</summary>
+    public string? ProcedenciaDestino { get; set; }
+    public string? IdDestino { get; set; }
+
+    /// <summary>Código LOT de la planta al momento de la pesada (sale de Planta → Aduana).</summary>
+    public string? Lot { get; set; }
     public string? ChoferTipoDocumento { get; set; }
     public string? ChoferNacionalidad { get; set; }
     public string? ContenedorId { get; set; }

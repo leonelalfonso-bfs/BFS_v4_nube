@@ -84,7 +84,9 @@ public class DocumentosService
             (null, { } h) => $"hasta {h:dd/MM/yyyy}",
             ({ } d, { } h) => $"del {d:dd/MM/yyyy} al {h:dd/MM/yyyy}"
         };
-        return PesadasExcel.Generar(filas, $"Pesadas {rango}");
+        // Filtrado por empresa, el título lo dice: los informes de cada empresa quedan separados.
+        var empresa = filtro.EmpresaId is { } id && empresas.TryGetValue(id, out var nombre) ? $" de {nombre}" : "";
+        return PesadasExcel.Generar(filas, $"Pesadas{empresa} {rango}", _options.HoraLocal);
     }
 
     private async Task<byte[]?> Logo(string? archivo)

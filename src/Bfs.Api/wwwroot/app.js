@@ -15,6 +15,8 @@ const DEFAULT_FIELDS = [
   { key: "patenteAcoplado", label: "Patente acoplado", visible: true, required: false },
   { key: "conductor", label: "Conductor", visible: true, required: false },
   { key: "documento", label: "Documento", visible: true, required: false },
+  { key: "tipoDocumento", label: "Tipo de documento", visible: true, required: false },
+  { key: "nacionalidad", label: "Nacionalidad", visible: true, required: false },
   { key: "cliente", label: "Cliente", visible: true, required: false },
   { key: "transporte", label: "Transporte", visible: true, required: false },
   { key: "producto", label: "Producto", visible: true, required: false },
@@ -155,6 +157,27 @@ function empresaOptions(selected) {
   return `<option value="">Todas las empresas</option>` + state.empresas.map(e =>
     `<option value="${e.id}" ${e.id === selected ? "selected" : ""}>${esc(e.nombre)}</option>`
   ).join("");
+}
+
+/** Empresa con la que se abren los tickets. Se recuerda en esta PC para no elegirla en cada pesada. */
+function empresaEnCurso() {
+  const activas = state.empresas.filter(e => e.activa !== false);
+  let id = null;
+  try { id = localStorage.getItem("bfs_empresa"); } catch {}
+  return activas.some(e => e.id === id) ? id : activas[0]?.id || "";
+}
+
+function elegirEmpresa(id) {
+  try { localStorage.setItem("bfs_empresa", id); } catch {}
+  document.querySelectorAll(".empresa-btn").forEach(b => b.classList.toggle("active", b.dataset.id === id));
+}
+
+function selectorEmpresa() {
+  const activas = state.empresas.filter(e => e.activa !== false);
+  const actual = empresaEnCurso();
+  return `<div class="empresa-switch">${activas.map((e, i) =>
+    `<button type="button" class="empresa-btn ${e.id === actual ? "active" : ""}" data-id="${e.id}" onclick="elegirEmpresa('${e.id}')"
+      title="Empresa ${i + 1}">${i + 1}. ${esc(e.nombre)}</button>`).join("")}</div>`;
 }
 
 function bfsLogo(extraClass = "brand-logo") {
@@ -359,31 +382,45 @@ function manual() {
   return { peso: kg ? Number(kg) : null, clave: val("pm_clave") || null };
 }
 
+const TIPOS_DOCUMENTO = ["DNI", "Pasaporte", "CI", "Otro"];
+
+function opciones(values, selected) {
+  return values.map(v => `<option value="${esc(v)}" ${v === selected ? "selected" : ""}>${esc(v)}</option>`).join("");
+}
+
+function seccion(titulo, html) {
+  return html.trim() ? `<fieldset class="seccion"><legend>${titulo}</legend><div class="grid3">${html}</div></fieldset>` : "";
+}
+
 function bloqueAduana() {
   if (!state.funciones.aduana) return "";
-  const opt = values => values.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join("");
+  const atas = (state.catalogos.transportes || []).filter(t => t.esAta);
   return `
-    <div class="grid2" style="margin-top:12px">
-      <div><label>Operación</label><select id="tipoOperacion" onchange="toggleAduana()">
-        <option value="Normal">Normal</option><option value="Aduana">Aduana</option>
-      </select></div>
-    </div>
-    <div id="aduanaBox" style="display:none;margin-top:12px">
-      <h4 style="margin:0 0 8px">Operación aduanera</h4>
-      <div class="grid2">
-        <div><label>Escenario *</label><select id="ad_escenario"><option value="">Elegir...</option>${opt(ESCENARIOS_ADUANA)}</select></div>
-        <div><label>Exportador</label><input id="ad_exportador" list="dl_exportadores" autocomplete="off" onchange="completarExportador()" /></div>
-        <div><label>CUIT exportador</label><input id="ad_exportadorCuit" /></div>
-        <div><label>N° de operación</label><input id="ad_operacionId" /></div>
-        <div><label>Tipo de documento del chofer</label><select id="ad_tipoDoc"><option></option>${opt(["DNI", "Pasaporte", "Otro"])}</select></div>
-        <div><label>Nacionalidad del chofer</label><input id="ad_nacionalidad" /></div>
-        <div><label>Contenedor</label><input id="ad_contenedorId" /></div>
-        <div><label>Tara contenedor (kg)</label><input id="ad_contenedorTara" type="number" value="0" /></div>
-        <div><label>Bulto</label><input id="ad_bultoId" /></div>
-        <div><label>Bulto bruto (kg)</label><input id="ad_bultoBruto" type="number" /></div>
-        <div><label>Bulto tara (kg)</label><input id="ad_bultoTara" type="number" /></div>
-      </div>
+    <div id="aduanaBox" style="display:none">
+      <fieldset class="seccion"><legend>Operación aduanera</legend>
+        <div class="grid3">
+          <div><label>Escenario *</label><select id="ad_escenario"><option value="">Elegir...</option>${opciones(ESCENARIOS_ADUANA)}</select></div>
+          <div><label>N° de operación</label><input id="ad_operacionId" /></div>
+          <div><label>LOT</label><input value="${esc(state.funciones.aduanaLot || "")}" disabled title="Sale de Planta → Aduana" /></div>
+          <div><label>Exportador / importador</label><input id="ad_exportador" list="dl_exportadores" autocomplete="off" onchange="completarCuit('ad_exportador', 'ad_exportadorCuit', state.catalogos.exportadores)" /></div>
+          <div><label>CUIT</label><input id="ad_exportadorCuit" /></div>
+          <div></div>
+          <div><label>Agente de transporte (ATA)</label><input id="ad_ata" list="dl_atas" autocomplete="off" onchange="completarCuit('ad_ata', 'ad_ataCuit', state.catalogos.transportes)" /></div>
+          <div><label>CUIT ATA</label><input id="ad_ataCuit" /></div>
+          <div></div>
+          <div><label>Destinación aduanera</label><input id="ad_destinacion" /></div>
+          <div><label>Procedencia / destino</label><input id="ad_procDestino" /></div>
+          <div><label>Id. destino</label><input id="ad_idDestino" /></div>
+          <div><label>Contenedor N°</label><input id="ad_contenedorId" /></div>
+          <div><label>Tara contenedor (kg)</label><input id="ad_contenedorTara" type="number" value="0" /></div>
+          <div></div>
+          <div><label>Bulto</label><input id="ad_bultoId" /></div>
+          <div><label>Bulto bruto (kg)</label><input id="ad_bultoBruto" type="number" /></div>
+          <div><label>Bulto tara (kg)</label><input id="ad_bultoTara" type="number" /></div>
+        </div>
+      </fieldset>
       ${datalist("dl_exportadores", (state.catalogos.exportadores || []).map(x => x.razonSocial))}
+      ${datalist("dl_atas", atas.map(x => x.razonSocial))}
     </div>`;
 }
 
@@ -392,9 +429,10 @@ function toggleAduana() {
   if (box) box.style.display = val("tipoOperacion") === "Aduana" ? "" : "none";
 }
 
-function completarExportador() {
-  const x = (state.catalogos.exportadores || []).find(e => e.razonSocial === val("ad_exportador"));
-  if (x?.cuit && !val("ad_exportadorCuit")) document.getElementById("ad_exportadorCuit").value = x.cuit;
+/** Al elegir del catálogo, completa el CUIT si estaba vacío. */
+function completarCuit(campo, campoCuit, catalogo) {
+  const x = (catalogo || []).find(e => e.razonSocial === val(campo));
+  if (x?.cuit && !val(campoCuit)) document.getElementById(campoCuit).value = x.cuit;
 }
 
 function datosAduana() {
@@ -407,8 +445,11 @@ function datosAduana() {
       exportador: val("ad_exportador") || null,
       exportadorCuit: val("ad_exportadorCuit") || null,
       operacionId: val("ad_operacionId") || null,
-      choferTipoDocumento: val("ad_tipoDoc") || null,
-      choferNacionalidad: val("ad_nacionalidad") || null,
+      ata: val("ad_ata") || null,
+      ataCuit: val("ad_ataCuit") || null,
+      destinacionAduanera: val("ad_destinacion") || null,
+      procedenciaDestino: val("ad_procDestino") || null,
+      idDestino: val("ad_idDestino") || null,
       contenedorId: val("ad_contenedorId") || null,
       contenedorTara: n("ad_contenedorTara") || 0,
       bultoId: val("ad_bultoId") || null,
@@ -432,26 +473,37 @@ async function renderPesaje() {
   if (!modosPesaje().some(([id]) => id === state.modoPesaje)) state.modoPesaje = "normal";
   const modo = state.modoPesaje;
   const sinLicencia = state.licencia && !state.licencia.puedePesar;
-  const empresas = state.empresas.map(e => `<option value="${e.id}">${esc(e.nombre)}</option>`).join("");
   const f = (key, html) => visible(key) ? html : "";
+  const lbl = (key, porDefecto) => field(key)?.label || porDefecto;
+
+  const operacion = `
+        ${f("tipo", inputField("tipo", lbl("tipo", "Tipo"), { type: "select", options: "<option>INGRESO</option><option>EGRESO</option>" }))}
+        ${state.funciones.aduana ? `<div><label>Operación</label><select id="tipoOperacion" onchange="toggleAduana()">
+          <option value="Normal">Normal</option><option value="Aduana">Aduana</option>
+        </select></div>` : ""}`;
+  const carga = `
+        ${f("producto", inputField("producto", lbl("producto", "Producto"), { list: "dl_productos" }))}
+        ${f("cliente", inputField("cliente", lbl("cliente", "Cliente"), { list: "dl_clientes" }))}
+        ${f("transporte", inputField("transporte", lbl("transporte", "Transporte"), { list: "dl_transportes" }))}
+        ${f("procedencia", inputField("procedencia", lbl("procedencia", "Procedencia")))}
+        ${f("destino", inputField("destino", lbl("destino", "Destino")))}
+        ${f("comprobante", inputField("comprobante", lbl("comprobante", "Remito")))}
+        ${f("taraPallets", inputField("taraPallets", lbl("taraPallets", "Tara pallets (kg)"), { type: "number", value: "0" }))}`;
+  const vehiculo = `
+        ${f("patenteChasis", inputField("patenteChasis", modo === "tara" ? "Patente / carro" : lbl("patenteChasis", "Patente chasis"), { blur: "autocompletarPatente()" }))}
+        ${modo === "tara" ? `<div class="status-box"><span>Tara guardada</span><strong id="taraGuardada">-</strong></div>` : ""}
+        ${f("patenteAcoplado", inputField("patenteAcoplado", lbl("patenteAcoplado", "Patente acoplado")))}
+        ${f("conductor", inputField("conductor", lbl("conductor", "Conductor")))}
+        ${f("tipoDocumento", inputField("tipoDocumento", lbl("tipoDocumento", "Tipo de documento"), { type: "select", options: `<option></option>${opciones(TIPOS_DOCUMENTO)}` }))}
+        ${f("documento", inputField("documento", lbl("documento", "Documento")))}
+        ${f("nacionalidad", inputField("nacionalidad", lbl("nacionalidad", "Nacionalidad")))}`;
 
   const datosVehiculo = `
-      <div class="grid2">
-        ${f("tipo", inputField("tipo", field("tipo")?.label || "Tipo", { type: "select", options: "<option>INGRESO</option><option>EGRESO</option>" }))}
-        ${f("patenteChasis", inputField("patenteChasis", modo === "tara" ? "Patente / carro" : field("patenteChasis")?.label || "Patente chasis", { blur: "autocompletarPatente()" }))}
-        ${modo === "tara" ? `<div class="status-box"><span>Tara guardada</span><strong id="taraGuardada">-</strong></div>` : ""}
-        ${f("patenteAcoplado", inputField("patenteAcoplado", field("patenteAcoplado")?.label || "Patente acoplado"))}
-        ${f("conductor", inputField("conductor", field("conductor")?.label || "Conductor"))}
-        ${f("documento", inputField("documento", field("documento")?.label || "Documento"))}
-        ${f("cliente", inputField("cliente", field("cliente")?.label || "Cliente", { list: "dl_clientes" }))}
-        ${f("transporte", inputField("transporte", field("transporte")?.label || "Transporte", { list: "dl_transportes" }))}
-        ${f("producto", inputField("producto", field("producto")?.label || "Producto", { list: "dl_productos" }))}
-        ${f("procedencia", inputField("procedencia", field("procedencia")?.label || "Procedencia"))}
-        ${f("destino", inputField("destino", field("destino")?.label || "Destino"))}
-        ${f("comprobante", inputField("comprobante", field("comprobante")?.label || "Remito"))}
-        ${f("taraPallets", inputField("taraPallets", field("taraPallets")?.label || "Tara pallets (kg)", { type: "number", value: "0" }))}
-        ${f("observaciones", inputField("observaciones", field("observaciones")?.label || "Observaciones", { type: "textarea" }))}
-      </div>
+      ${seccion("Operación", operacion)}
+      ${seccion("Carga", carga)}
+      ${seccion("Vehículo y chofer", vehiculo)}
+      ${bloqueAduana()}
+      ${visible("observaciones") ? `<div style="margin-top:12px">${inputField("observaciones", lbl("observaciones", "Observaciones"), { type: "textarea" })}</div>` : ""}
       ${datalist("dl_clientes", clientes.map(c => c.razonSocial))}
       ${datalist("dl_transportes", transportes.map(t => t.razonSocial))}
       ${datalist("dl_productos", productos.map(p => p.nombre))}`;
@@ -470,9 +522,8 @@ async function renderPesaje() {
       <p id="ultimo"></p>
     </div>` : `
     <div class="card">
-      <h3 style="margin-top:0">${modo === "tara" ? "Pesar con tara conocida" : "Datos del vehículo"}</h3>
+      <h3 style="margin-top:0">${modo === "tara" ? "Pesar con tara conocida" : "Datos del ticket"}</h3>
       ${datosVehiculo}
-      ${bloqueAduana()}
       ${modo === "tara" && puedeManual() ? `
       <details style="margin-top:12px"><summary>Usar otra tara (ingreso manual)</summary>
         <div class="grid2" style="margin-top:8px"><div><label>Tara (kg)</label><input id="tc_tara" type="number" min="1" /></div></div>
@@ -504,9 +555,7 @@ async function renderPesaje() {
     <div class="card peso-card">
       <div class="peso" id="pesoLed">${state.scale.kilogramos} <small>${esc(state.scale.puerto)} · ${esc(state.scale.estado)}</small></div>
       <div class="status-grid">
-        <div class="status-box"><span>Empresa en curso</span>
-          <select id="empresa">${empresas}</select>
-        </div>
+        <div class="status-box"><span>Empresa en curso</span>${selectorEmpresa()}</div>
         ${state.balanzas.length > 1 ? `<div class="status-box"><span>Balanza</span>
           <select id="balanza" onchange="elegirBalanza(this.value)">${state.balanzas.map(b =>
             `<option value="${b.balanzaId}" ${b.balanzaId === balanzaActual().balanzaId ? "selected" : ""}>${esc(b.nombre)}</option>`).join("")}</select>
@@ -613,13 +662,15 @@ function collectPesaje() {
   if (missing.length) throw new Error("Completá: " + missing.map(f => f.label).join(", "));
   const m = manual();
   return {
-    empresaId: val("empresa"),
+    empresaId: empresaEnCurso(),
     balanzaId: balanzaActual().balanzaId || null,
     tipo: visible("tipo") ? val("tipo") : undefined,
     patenteChasis: val("patenteChasis"),
     patenteAcoplado: val("patenteAcoplado") || null,
     conductor: val("conductor") || null,
     documento: val("documento") || null,
+    tipoDocumento: val("tipoDocumento") || null,
+    nacionalidad: val("nacionalidad") || null,
     cliente: val("cliente") || null,
     transporte: val("transporte") || null,
     producto: val("producto") || null,
@@ -902,7 +953,25 @@ async function renderPlanta() {
       <p>${state.funciones.claveManual ? "Hay una clave configurada." : "Sin clave: alcanza con el permiso de supervisor."} Dejala vacía para quitarla.</p>
       <div class="grid2"><div><label>Nueva clave</label><input id="cm_clave" type="password" autocomplete="new-password" /></div></div>
       <div class="btn-row"><button class="btn-primary" onclick="guardarClaveManual()">Guardar clave</button></div>
-    </div>` : ""}`;
+    </div>` : ""}
+    <div class="card">
+      <h3 style="margin-top:0">Clave de corrección de pesadas</h3>
+      <p>Para corregir datos de un ticket (nunca los pesos) desde Pesadas → Corregir. Queda registrado quién lo cambió, cuándo y por qué.
+        ${state.funciones.claveCorreccion ? "Hay una clave configurada." : "Sin clave: alcanza con el permiso de supervisor."} Dejala vacía para quitarla.</p>
+      <div class="grid2"><div><label>Nueva clave</label><input id="cc_clave" type="password" autocomplete="new-password" /></div></div>
+      <div class="btn-row"><button class="btn-primary" onclick="guardarClaveCorreccion()">Guardar clave</button></div>
+    </div>`;
+}
+
+async function guardarClaveCorreccion() {
+  try {
+    const r = await api("/api/planta/clave-correccion", { method: "PUT", body: JSON.stringify({ clave: val("cc_clave") }) });
+    state.funciones.claveCorreccion = r.claveCorreccion;
+    toast(r.claveCorreccion ? "Clave guardada" : "Clave quitada");
+    renderPlanta();
+  } catch (e) {
+    toast(limpiarError(e), "err");
+  }
 }
 
 async function guardarEmpresa(id) {
@@ -963,8 +1032,8 @@ async function autocompletarPatente() {
   fill("conductor", d.conductor);
   fill("documento", d.documento);
   fill("transporte", d.transporte);
-  fill("ad_nacionalidad", d.nacionalidad);
-  const tipoDoc = document.getElementById("ad_tipoDoc");
+  fill("nacionalidad", d.nacionalidad);
+  const tipoDoc = document.getElementById("tipoDocumento");
   if (tipoDoc && !tipoDoc.value && d.tipoDocumento) tipoDoc.value = d.tipoDocumento;
   toast("Datos de la última vez completados");
 }
@@ -1145,6 +1214,7 @@ async function renderConfigGeneral() {
         <div><label>Ingreso manual de peso</label>${yesNo("c_manual", c.ingreso_manual ?? "true")}</div>
         <div><label>Capturar solo con peso estable</label>${yesNo("c_estable", c.exigir_estable ?? "true")}</div>
         <div><label>Número de puesto (va en el ticket: 01-000123)</label><input id="c_puesto" type="number" min="1" max="99" value="${esc(c.puesto || "1")}" /></div>
+        <div><label>Tickets solo con número (sigue la numeración del cliente; un solo puesto)</label>${yesNo("c_solonum", c.ticket_solo_numero || "false")}</div>
       </div>
       <div class="btn-row"><button class="btn-primary" onclick="saveGeneral()">Guardar general</button></div>
     </div>`;
@@ -1354,6 +1424,11 @@ function renderConfigApi() {
             <option ${c.worms_tipo_default === "EGRESO" ? "selected" : ""}>EGRESO</option>
           </select>
         </div>
+        <div><label>Al corregir un ticket, volver a enviarlo</label>${yesNo("c_reenviar", c.worms_reenviar_correcciones || "false")}</div>
+        <div style="grid-column:1/-1"><label>Empresas que envían (cada envío lleva el nombre de la empresa)</label>
+          <div class="btn-row" style="margin:4px 0 0">${state.empresas.map(e => `<label style="display:flex;gap:6px;align-items:center;font-weight:normal">
+            <input type="checkbox" class="c_wemp" value="${e.id}" style="width:auto" ${empresasWorms(c).includes(e.id) ? "checked" : ""} /> ${esc(e.nombre)}</label>`).join("")}</div>
+        </div>
       </div>
       <div class="btn-row"><button class="btn-primary" onclick="saveApi()">Guardar API</button></div>
     </div>
@@ -1389,7 +1464,7 @@ async function cargarEnvios(filtro = state.enviosFiltro || "") {
         ${d.errores ? `<button class="btn" style="margin-top:6px" onclick="reintentarErrores('${esc(d.nombre)}')">Reintentar rechazados</button>` : ""}
       </div>`).join("")}
     </div>
-    <p>Si el sistema del cliente no responde, BFS reintenta solo, esperando cada vez más (de 1 a 30 minutos). Lo que el sistema rechaza queda acá hasta que lo reintentes o lo descartes; mientras tanto, la salida de esa pesada espera.</p>
+    <p>Si el sistema del cliente no responde, BFS reintenta solo, al minuto y después cada vez un poco más (hasta 5 minutos). Lo que el sistema rechaza queda acá hasta que lo reintentes o lo descartes; mientras tanto, la salida de esa pesada espera.</p>
     <div class="btn-row">
       <select style="width:auto" onchange="cargarEnvios(this.value)">
         ${[["", "Todos"], ["pendiente", "Pendientes"], ["error", "Rechazados"], ["enviado", "Enviados"], ["descartado", "Descartados"]]
@@ -1491,7 +1566,8 @@ async function saveGeneral() {
     termica_ancho: val("c_term_ancho"),
     ingreso_manual: val("c_manual"),
     exigir_estable: val("c_estable"),
-    puesto: String(Math.min(99, Math.max(1, num("c_puesto") || 1)))
+    puesto: String(Math.min(99, Math.max(1, num("c_puesto") || 1))),
+    ticket_solo_numero: val("c_solonum")
   });
   state.funciones = await api("/api/funciones");
   renderConfig();
@@ -1527,13 +1603,28 @@ async function subirLogo() {
   render();
 }
 
+/** Lista vacía en la configuración = todas las empresas envían. */
+function empresasWorms(c) {
+  const lista = (c.worms_empresas || "").split(",").filter(Boolean);
+  return lista.length ? lista : state.empresas.map(e => e.id);
+}
+
+/** Todas tildadas = "" (también las que se agreguen después); ninguna = "ninguna". */
+function listaEmpresasWorms() {
+  const tildadas = [...document.querySelectorAll(".c_wemp:checked")].map(x => x.value);
+  if (tildadas.length === state.empresas.length) return "";
+  return tildadas.length ? tildadas.join(",") : "ninguna";
+}
+
 async function saveApi() {
   await saveConfig({
     worms_enabled: val("c_api"),
     worms_endpoint: val("c_ep"),
     worms_api_key: val("c_key"),
     worms_balanza: val("c_bal"),
-    worms_tipo_default: val("c_tipo")
+    worms_tipo_default: val("c_tipo"),
+    worms_reenviar_correcciones: val("c_reenviar"),
+    worms_empresas: listaEmpresasWorms()
   });
   renderConfig();
 }
@@ -1578,6 +1669,7 @@ async function renderReportes() {
   const f = state.filtros;
   const r = await api(`/api/reportes/pesadas?${filtrosQuery({ pagina: state.pagina, tamano: 50 })}`);
   const paginas = Math.max(1, Math.ceil(r.total / r.tamano));
+  state.reporteItems = r.items;
   const t = r.totales;
   const opt = (values, sel) => values.map(([v, l]) => `<option value="${v}" ${v === sel ? "selected" : ""}>${l}</option>`).join("");
   document.getElementById("main").innerHTML = `
@@ -1621,6 +1713,7 @@ async function renderReportes() {
           <td><div class="btn-row" style="margin:0">
             ${botonesTicket(p.id)}
             ${p.estado === "ENTRADA" && can("pesaje.operar") ? `<button class="btn" onclick="retomarPesada('${p.id}')">Retomar</button>` : ""}
+            ${p.estado !== "ANULADA" && can("pesaje.corregir") ? `<button class="btn" onclick="corregirPesada('${p.id}')">Corregir</button>` : ""}
             ${p.estado !== "ANULADA" && can("pesaje.anular") ? `<button class="btn-danger" onclick="anularPesada('${p.id}')">Anular</button>` : ""}
           </div></td>
         </tr>`).join("") : `<tr><td colspan="11">No hay pesadas con esos filtros.</td></tr>`}
@@ -1631,6 +1724,99 @@ async function renderReportes() {
         <button class="btn" ${state.pagina >= paginas ? "disabled" : ""} onclick="state.pagina++;renderReportes()">Siguiente</button>
       </div>
     </div>`;
+}
+
+/** Campos que se pueden corregir (los pesos, fechas, empresa y número de ticket nunca). */
+const CORREGIBLES = [
+  ["tipo", "Tipo", p => p.tipo, "tipo"],
+  ["producto", "Producto", p => p.producto, "dl_productos"],
+  ["cliente", "Cliente", p => p.cliente, "dl_clientes"],
+  ["transporte", "Transporte", p => p.transporte, "dl_transportes"],
+  ["procedencia", "Procedencia", p => p.procedencia],
+  ["destino", "Destino", p => p.destino],
+  ["comprobante", "Remito", p => p.comprobante],
+  ["patenteChasis", "Patente chasis", p => p.patenteChasis],
+  ["patenteAcoplado", "Patente acoplado", p => p.patenteAcoplado],
+  ["conductor", "Conductor", p => p.conductor],
+  ["tipoDocumento", "Tipo de documento", p => p.tipoDocumento, "tipoDoc"],
+  ["documento", "Documento", p => p.documento],
+  ["nacionalidad", "Nacionalidad", p => p.nacionalidad],
+  ["observaciones", "Observaciones", p => p.observaciones],
+  ["aduana.exportador", "Exportador / importador", p => p.aduana?.exportador],
+  ["aduana.exportadorCuit", "CUIT exportador", p => p.aduana?.exportadorCuit],
+  ["aduana.ata", "ATA", p => p.aduana?.ata],
+  ["aduana.ataCuit", "CUIT ATA", p => p.aduana?.ataCuit],
+  ["aduana.operacionId", "N° de operación", p => p.aduana?.operacionId],
+  ["aduana.destinacionAduanera", "Destinación aduanera", p => p.aduana?.destinacionAduanera],
+  ["aduana.procedenciaDestino", "Procedencia / destino aduana", p => p.aduana?.procedenciaDestino],
+  ["aduana.idDestino", "Id. destino", p => p.aduana?.idDestino],
+  ["aduana.contenedorId", "Contenedor", p => p.aduana?.contenedorId],
+  ["aduana.bultoId", "Bulto", p => p.aduana?.bultoId]
+];
+
+function historialCorrecciones(p) {
+  let lista = [];
+  try { lista = JSON.parse(p.correccionesJson || "[]"); } catch {}
+  if (!lista.length) return "<p>Sin correcciones.</p>";
+  return `<ul class="historial">${lista.slice().reverse().map(c => `<li>
+    <strong>${esc(new Date(c.en).toLocaleString([], { dateStyle: "short", timeStyle: "short" }))}</strong> · ${esc(c.por)} · ${esc(c.motivo)}<br>
+    ${c.cambios.map(x => `${esc(x.campo)}: <s>${esc(x.antes || "(vacío)")}</s> → ${esc(x.despues || "(vacío)")}`).join("<br>")}
+  </li>`).join("")}</ul>`;
+}
+
+async function corregirPesada(id) {
+  const p = (state.reporteItems || []).find(x => x.id === id);
+  if (!p) return;
+  const [clientes, transportes, productos] = await Promise.all([
+    api("/api/catalogos/clientes"), api("/api/catalogos/transportes"), api("/api/catalogos/productos")]);
+  state.catalogos = { ...state.catalogos, clientes, transportes, productos };
+  const campos = CORREGIBLES.filter(([key]) => !key.startsWith("aduana.") || p.aduana)
+    .filter(([key]) => key.startsWith("aduana.") || visible(key));
+  const input = ([key, label, leer, extra]) => {
+    const v = leer(p) || "";
+    const id = "co_" + key.replace(".", "_");
+    if (extra === "tipo") return `<div><label>${label}</label><select id="${id}">${opciones(["INGRESO", "EGRESO"], v)}</select></div>`;
+    if (extra === "tipoDoc") return `<div><label>${label}</label><select id="${id}"><option></option>${opciones(TIPOS_DOCUMENTO, v)}</select></div>`;
+    return `<div><label>${label}</label><input id="${id}" value="${esc(v)}" ${extra ? `list="${extra}"` : ""} autocomplete="off" /></div>`;
+  };
+  document.getElementById("main").innerHTML = `
+    <div class="page-head"><div><h2>Corregir ticket ${esc(p.ticketNumero)}</h2>
+      <p>${esc(empresaName(p.empresaId))} · entrada ${esc(hora(p.entradaEn))} · ${p.pesoEntrada} kg${p.pesoSalida != null ? ` · salida ${p.pesoSalida} kg` : ""}. Los pesos no se pueden corregir.</p></div></div>
+    <div class="card">
+      <div class="grid3">${campos.map(input).join("")}</div>
+      ${datalist("dl_productos", state.catalogos.productos.map(x => x.nombre))}
+      ${datalist("dl_clientes", state.catalogos.clientes.map(x => x.razonSocial))}
+      ${datalist("dl_transportes", state.catalogos.transportes.map(x => x.razonSocial))}
+      <div class="grid2" style="margin-top:12px">
+        <div><label>Motivo de la corrección *</label><input id="co_motivo" /></div>
+        ${state.funciones.claveCorreccion ? `<div><label>Clave de corrección *</label><input id="co_clave" type="password" autocomplete="off" /></div>` : ""}
+      </div>
+      <p class="error" id="err"></p>
+      <div class="btn-row">
+        <button class="btn-primary" onclick="guardarCorreccion('${p.id}')">Guardar corrección</button>
+        <button class="btn" onclick="renderReportes()">Volver</button>
+      </div>
+    </div>
+    <div class="card"><h3 style="margin-top:0">Historial</h3>${historialCorrecciones(p)}</div>`;
+}
+
+async function guardarCorreccion(id) {
+  const p = state.reporteItems.find(x => x.id === id);
+  const datos = {};
+  for (const [key, , leer] of CORREGIBLES) {
+    const el = document.getElementById("co_" + key.replace(".", "_"));
+    if (el && el.value.trim() !== (leer(p) || "")) datos[key] = el.value.trim();
+  }
+  try {
+    const r = await api(`/api/pesadas/${id}/corregir`, {
+      method: "POST",
+      body: JSON.stringify({ motivo: val("co_motivo"), clave: val("co_clave") || null, datos })
+    });
+    toast(`Ticket ${r.ticketNumero} corregido`);
+    await renderReportes();
+  } catch (e) {
+    mostrarError(e);
+  }
 }
 
 async function exportarExcel() {

@@ -47,4 +47,7 @@ public static class Tickets
 {
     /// <summary>"01-000123": el puesto adelante para que dos puestos (o uno sin internet) nunca repitan número.</summary>
     public static string Formatear(int puesto, int numero) => $"{puesto:D2}-{numero:D6}";
+
+    /// <summary>Con <paramref name="soloNumero"/>, "78271": para seguir la numeración que traía el cliente (un solo puesto).</summary>
+    public static string Formatear(int puesto, int numero, bool soloNumero) => soloNumero ? numero.ToString() : Formatear(puesto, numero);
 }

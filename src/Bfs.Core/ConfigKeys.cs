@@ -25,6 +25,12 @@ public static class ConfigKeys
     /// <summary>Hash de la clave que pide el ingreso manual de peso (la 3.x la guardaba en texto plano).</summary>
     public const string ClaveManualHash = "clave_manual_hash";
 
+    /// <summary>"true": tickets solo con número ("78271") en vez de "01-000001". Pensado para un solo puesto.</summary>
+    public const string TicketSoloNumero = "ticket_solo_numero";
+
+    /// <summary>Hash de la clave que pide la corrección de datos de una pesada.</summary>
+    public const string ClaveCorreccionHash = "clave_correccion_hash";
+
     public const string AduanaCodigo = "aduana_codigo";
     public const string AduanaLot = "aduana_lot";
     public const string AduanaCertificado1 = "aduana_certificado_1";
@@ -36,6 +42,12 @@ public static class ConfigKeys
     public const string WormsApiKey = "worms_api_key";
     public const string WormsBalanza = "worms_balanza";
     public const string WormsTipoDefault = "worms_tipo_default";
+
+    /// <summary>Ids de las empresas que envían a WORMS, separados por coma. Vacío = todas.</summary>
+    public const string WormsEmpresas = "worms_empresas";
+
+    /// <summary>"true": al corregir los datos de una pesada se vuelven a mandar sus eventos (WORMS guarda la última versión).</summary>
+    public const string WormsReenviarCorrecciones = "worms_reenviar_correcciones";
     public const string ClienteNombre = "cliente_nombre";
     public const string ScaleMode = "scale_mode";
     public const string ScalePort = "scale_port";

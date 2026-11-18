@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Bfs.Api.Config;
 using Bfs.Api.Licencias;
 using Bfs.Core;
@@ -74,7 +75,7 @@ public class PesajeService
 
         _db.Pesadas.Add(pesada);
         await RecordarVehiculo(pesada);
-        WormsOutbox.Encolar(_db, configs, pesada, "ENTRADA");
+        await EncolarWorms(configs, pesada, WormsEventos.Entrada);
         await _db.SaveChangesAsync();
         return ResultadoPesaje.Ok(pesada);
     });
@@ -96,7 +97,7 @@ public class PesajeService
         pesada.OperadorSalida = op.Email;
         pesada.TaraPallets = req.TaraPallets ?? pesada.TaraPallets;
         Cerrar(pesada);
-        WormsOutbox.Encolar(_db, configs, pesada, "SALIDA");
+        await EncolarWorms(configs, pesada, WormsEventos.Salida);
         await _db.SaveChangesAsync();
         return ResultadoPesaje.Ok(pesada);
     });
@@ -150,8 +151,7 @@ public class PesajeService
 
         _db.Pesadas.Add(pesada);
         await RecordarVehiculo(pesada);
-        WormsOutbox.Encolar(_db, configs, pesada, "ENTRADA");
-        WormsOutbox.Encolar(_db, configs, pesada, "SALIDA");
+        await EncolarWorms(configs, pesada, WormsEventos.Entrada, WormsEventos.Salida);
         await _db.SaveChangesAsync();
         return ResultadoPesaje.Ok(pesada);
     });
@@ -200,6 +200,120 @@ public class PesajeService
         return ResultadoPesaje.Ok(pesada);
     }
 
+    /// <summary>Campos que se pueden corregir: clave (como en el formulario), nombre para el historial, lectura y escritura.</summary>
+    private static readonly (string Clave, string Nombre, Func<Pesada, string?> Leer, Action<Pesada, string?> Escribir)[] Corregibles =
+    [
+        ("tipo", "Tipo", p => p.Tipo, (p, v) => p.Tipo = v!),
+        ("patenteChasis", "Patente chasis", p => p.PatenteChasis, (p, v) => p.PatenteChasis = v!),
+        ("patenteAcoplado", "Patente acoplado", p => p.PatenteAcoplado, (p, v) => p.PatenteAcoplado = v),
+        ("conductor", "Conductor", p => p.Conductor, (p, v) => p.Conductor = v),
+        ("documento", "Documento", p => p.Documento, (p, v) => p.Documento = v),
+        ("tipoDocumento", "Tipo de documento", p => p.TipoDocumento, (p, v) => p.TipoDocumento = v),
+        ("nacionalidad", "Nacionalidad", p => p.Nacionalidad, (p, v) => p.Nacionalidad = v),
+        ("cliente", "Cliente", p => p.Cliente, (p, v) => p.Cliente = v),
+        ("transporte", "Transporte", p => p.Transporte, (p, v) => p.Transporte = v),
+        ("producto", "Producto", p => p.Producto, (p, v) => p.Producto = v),
+        ("procedencia", "Procedencia", p => p.Procedencia, (p, v) => p.Procedencia = v),
+        ("destino", "Destino", p => p.Destino, (p, v) => p.Destino = v),
+        ("comprobante", "Remito", p => p.Comprobante, (p, v) => p.Comprobante = v),
+        ("observaciones", "Observaciones", p => p.Observaciones, (p, v) => p.Observaciones = v),
+        ("aduana.exportador", "Exportador", p => p.Aduana?.Exportador, (p, v) => p.Aduana!.Exportador = v),
+        ("aduana.exportadorCuit", "CUIT exportador", p => p.Aduana?.ExportadorCuit, (p, v) => p.Aduana!.ExportadorCuit = v),
+        ("aduana.ata", "ATA", p => p.Aduana?.Ata, (p, v) => p.Aduana!.Ata = v),
+        ("aduana.ataCuit", "CUIT ATA", p => p.Aduana?.AtaCuit, (p, v) => p.Aduana!.AtaCuit = v),
+        ("aduana.operacionId", "N° de operación", p => p.Aduana?.OperacionId, (p, v) => p.Aduana!.OperacionId = v),
+        ("aduana.destinacionAduanera", "Destinación aduanera", p => p.Aduana?.DestinacionAduanera, (p, v) => p.Aduana!.DestinacionAduanera = v),
+        ("aduana.procedenciaDestino", "Procedencia / destino aduana", p => p.Aduana?.ProcedenciaDestino, (p, v) => p.Aduana!.ProcedenciaDestino = v),
+        ("aduana.idDestino", "Id. destino", p => p.Aduana?.IdDestino, (p, v) => p.Aduana!.IdDestino = v),
+        ("aduana.contenedorId", "Contenedor", p => p.Aduana?.ContenedorId, (p, v) => p.Aduana!.ContenedorId = v?.ToUpperInvariant()),
+        ("aduana.bultoId", "Bulto", p => p.Aduana?.BultoId, (p, v) => p.Aduana!.BultoId = v)
+    ];
+
+    /// <summary>
+    /// Corrige datos de una pesada sin tocar la base a mano: pide permiso, motivo y (si hay) la clave de corrección,
+    /// y deja en el historial quién cambió qué. Los pesos, fechas, empresa y número de ticket no se corrigen.
+    /// </summary>
+    public async Task<ResultadoPesaje> CorregirAsync(Guid id, CorreccionRequest req, string usuario)
+    {
+        var configs = await _config.GlobalAsync();
+        var hash = configs.GetValueOrDefault(ConfigKeys.ClaveCorreccionHash);
+        if (!string.IsNullOrEmpty(hash) && (string.IsNullOrEmpty(req.Clave)
+                || _hasher.VerifyHashedPassword(new Usuario(), hash, req.Clave) == PasswordVerificationResult.Failed))
+        {
+            return ResultadoPesaje.Prohibida("Clave de corrección incorrecta");
+        }
+        if (string.IsNullOrWhiteSpace(req.Motivo)) return ResultadoPesaje.Invalida("Indicá el motivo de la corrección");
+
+        var pesada = await _db.Pesadas.FirstOrDefaultAsync(p => p.Id == id);
+        if (pesada == null) return ResultadoPesaje.Inexistente();
+        if (pesada.Estado == EstadosPesada.Anulada) return ResultadoPesaje.Invalida("La pesada está anulada");
+
+        var cambios = new List<CambioCampo>();
+        foreach (var (clave, valor) in req.Datos ?? [])
+        {
+            var campo = Corregibles.FirstOrDefault(c => c.Clave == clave);
+            if (campo.Clave == null) return ResultadoPesaje.Invalida($"El campo {clave} no se puede corregir");
+            if (clave.StartsWith("aduana.", StringComparison.Ordinal) && pesada.Aduana == null)
+            {
+                return ResultadoPesaje.Invalida("La pesada no es una operación de aduana");
+            }
+
+            var (nuevo, error) = NormalizarCorreccion(clave, valor);
+            if (error != null) return ResultadoPesaje.Invalida(error);
+            var anterior = campo.Leer(pesada);
+            if (anterior == nuevo) continue;
+            campo.Escribir(pesada, nuevo);
+            cambios.Add(new CambioCampo(campo.Nombre, anterior, nuevo));
+        }
+        if (cambios.Count == 0) return ResultadoPesaje.Invalida("No hay cambios");
+
+        var faltan = FieldCatalog.Parse(configs.GetValueOrDefault(ConfigKeys.FieldsJson))
+            .Where(f => f.Visible && f.Required && Corregibles.Any(c => c.Clave == f.Key)
+                && string.IsNullOrWhiteSpace(Corregibles.First(c => c.Clave == f.Key).Leer(pesada)))
+            .Select(f => f.Label)
+            .ToList();
+        if (faltan.Count > 0) return ResultadoPesaje.Invalida("No se puede dejar vacío: " + string.Join(", ", faltan));
+
+        if (req.Datos!.ContainsKey("cliente")) pesada.ClienteId = await ResolverCliente(null, pesada.Cliente);
+
+        var historial = JsonSerializer.Deserialize<List<CorreccionPesada>>(pesada.CorreccionesJson, JsonWeb) ?? [];
+        historial.Add(new CorreccionPesada(DateTimeOffset.UtcNow, usuario, req.Motivo.Trim(), cambios));
+        pesada.CorreccionesJson = JsonSerializer.Serialize(historial, JsonWeb);
+
+        // WORMS guarda la última versión de cada evento: se reenvían los que ya salieron (si BFS lo habilitó).
+        if (Si(configs, ConfigKeys.WormsReenviarCorrecciones))
+        {
+            await EncolarWorms(configs, pesada, pesada.Estado == EstadosPesada.Salida
+                ? [WormsEventos.Entrada, WormsEventos.Salida]
+                : [WormsEventos.Entrada]);
+        }
+        await _db.SaveChangesAsync();
+        return ResultadoPesaje.Ok(pesada);
+    }
+
+    private static readonly JsonSerializerOptions JsonWeb = new(JsonSerializerDefaults.Web);
+
+    private static (string? Valor, string? Error) NormalizarCorreccion(string clave, string? valor)
+    {
+        var v = Vacio(valor);
+        switch (clave)
+        {
+            case "tipo":
+                return v is "INGRESO" or "EGRESO" ? (v, null) : (null, "El tipo es INGRESO o EGRESO");
+            case "patenteChasis":
+                var patente = Patente.Normalizar(v ?? "");
+                return patente.Length == 0 ? (null, "Falta la patente") : (patente, null);
+            case "patenteAcoplado":
+                return (v == null ? null : Patente.Normalizar(v), null);
+            case "aduana.exportadorCuit":
+            case "aduana.ataCuit":
+                var (cuit, error) = Cuit.Normalizar(v);
+                return error != null ? (null, error) : (cuit, null);
+            default:
+                return (v, null);
+        }
+    }
+
     /// <summary>Arma la pesada con los datos del camión y le asigna número de ticket. Todavía sin pesos.</summary>
     private async Task<(Pesada? Pesada, ResultadoPesaje? Error)> NuevaPesada(EntradaRequest req, Operador op, Dictionary<string, string> configs)
     {
@@ -207,6 +321,12 @@ public class PesajeService
         if (empresa == null) return (null, ResultadoPesaje.Invalida("Empresa inexistente"));
         var patente = Patente.Normalizar(req.PatenteChasis);
         if (patente.Length == 0) return (null, ResultadoPesaje.Invalida("Falta la patente"));
+
+        var faltan = FieldCatalog.Parse(configs.GetValueOrDefault(ConfigKeys.FieldsJson))
+            .Where(f => f.Visible && f.Required && CampoEntrada(req, f.Key) is { } v && string.IsNullOrWhiteSpace(v))
+            .Select(f => f.Label)
+            .ToList();
+        if (faltan.Count > 0) return (null, ResultadoPesaje.Invalida("Completá: " + string.Join(", ", faltan)));
 
         var clienteId = await ResolverCliente(req.ClienteId, req.Cliente);
         if (req.ClienteId.HasValue && clienteId == null) return (null, ResultadoPesaje.Invalida("Cliente inexistente"));
@@ -216,7 +336,7 @@ public class PesajeService
         if (tipoOperacion == TiposOperacion.Aduana)
         {
             if (!Si(configs, ConfigKeys.Aduana)) return (null, ResultadoPesaje.Prohibida("Las operaciones de aduana no están habilitadas"));
-            var (datos, errorAduana) = ArmarAduana(req.Aduana);
+            var (datos, errorAduana) = ArmarAduana(req.Aduana, req, configs);
             if (errorAduana != null) return (null, ResultadoPesaje.Invalida(errorAduana));
             aduana = datos;
         }
@@ -226,13 +346,14 @@ public class PesajeService
         }
 
         var puesto = int.TryParse(configs.GetValueOrDefault(ConfigKeys.Puesto), out var p) && p is >= 1 and <= 99 ? p : 1;
-        var numero = await ProximoTicket(empresa, puesto);
+        var soloNumero = Si(configs, ConfigKeys.TicketSoloNumero);
+        var ticket = await ProximoTicket(empresa, puesto, soloNumero);
 
         return (new Pesada
         {
             Id = Guid.NewGuid(),
             EmpresaId = empresa.Id,
-            TicketNumero = Tickets.Formatear(puesto, numero),
+            TicketNumero = ticket,
             Tipo = string.IsNullOrWhiteSpace(req.Tipo) ? configs.GetValueOrDefault(ConfigKeys.WormsTipoDefault, "INGRESO") : req.Tipo,
             Estado = EstadosPesada.Entrada,
             Modo = ModosPesaje.Normal,
@@ -242,6 +363,8 @@ public class PesajeService
             PatenteAcoplado = string.IsNullOrWhiteSpace(req.PatenteAcoplado) ? null : Patente.Normalizar(req.PatenteAcoplado),
             Conductor = Vacio(req.Conductor),
             Documento = Vacio(req.Documento),
+            TipoDocumento = Vacio(req.TipoDocumento) ?? aduana?.ChoferTipoDocumento,
+            Nacionalidad = Vacio(req.Nacionalidad) ?? aduana?.ChoferNacionalidad,
             Cliente = Vacio(req.Cliente),
             ClienteId = clienteId,
             Transporte = Vacio(req.Transporte),
@@ -256,7 +379,26 @@ public class PesajeService
         }, null);
     }
 
-    private static (DatosAduana? Datos, string? Error) ArmarAduana(DatosAduanaDto? dto)
+    /// <summary>El valor de un campo del formulario en el pedido; null si el campo no es de texto (no se valida acá).</summary>
+    private static string? CampoEntrada(EntradaRequest r, string clave) => clave switch
+    {
+        "patenteChasis" => r.PatenteChasis ?? "",
+        "patenteAcoplado" => r.PatenteAcoplado ?? "",
+        "conductor" => r.Conductor ?? "",
+        "documento" => r.Documento ?? "",
+        "tipoDocumento" => r.TipoDocumento ?? r.Aduana?.ChoferTipoDocumento ?? "",
+        "nacionalidad" => r.Nacionalidad ?? r.Aduana?.ChoferNacionalidad ?? "",
+        "cliente" => r.Cliente ?? "",
+        "transporte" => r.Transporte ?? "",
+        "producto" => r.Producto ?? "",
+        "procedencia" => r.Procedencia ?? "",
+        "destino" => r.Destino ?? "",
+        "comprobante" => r.Comprobante ?? "",
+        "observaciones" => r.Observaciones ?? "",
+        _ => null
+    };
+
+    private static (DatosAduana? Datos, string? Error) ArmarAduana(DatosAduanaDto? dto, EntradaRequest req, Dictionary<string, string> configs)
     {
         if (dto == null || !EscenariosAduana.Todos.Contains(dto.Escenario))
         {
@@ -265,6 +407,8 @@ public class PesajeService
         if (dto.ContenedorTara < 0) return (null, "La tara del contenedor no puede ser negativa");
         var (cuit, errorCuit) = Cuit.Normalizar(dto.ExportadorCuit);
         if (errorCuit != null) return (null, "Exportador: " + errorCuit);
+        var (ataCuit, errorAta) = Cuit.Normalizar(dto.AtaCuit);
+        if (errorAta != null) return (null, "ATA: " + errorAta);
 
         return (new DatosAduana
         {
@@ -272,8 +416,14 @@ public class PesajeService
             Exportador = Vacio(dto.Exportador),
             ExportadorCuit = cuit,
             OperacionId = Vacio(dto.OperacionId),
-            ChoferTipoDocumento = Vacio(dto.ChoferTipoDocumento),
-            ChoferNacionalidad = Vacio(dto.ChoferNacionalidad),
+            Ata = Vacio(dto.Ata),
+            AtaCuit = ataCuit,
+            DestinacionAduanera = Vacio(dto.DestinacionAduanera),
+            ProcedenciaDestino = Vacio(dto.ProcedenciaDestino),
+            IdDestino = Vacio(dto.IdDestino),
+            Lot = Vacio(configs.GetValueOrDefault(ConfigKeys.AduanaLot)),
+            ChoferTipoDocumento = Vacio(dto.ChoferTipoDocumento) ?? Vacio(req.TipoDocumento),
+            ChoferNacionalidad = Vacio(dto.ChoferNacionalidad) ?? Vacio(req.Nacionalidad),
             ContenedorId = Vacio(dto.ContenedorId)?.ToUpperInvariant(),
             ContenedorTara = dto.ContenedorTara,
             BultoId = Vacio(dto.BultoId),
@@ -342,9 +492,23 @@ public class PesajeService
         return null;
     }
 
-    private async Task<int> ProximoTicket(Empresa empresa, int puesto)
+    /// <summary>
+    /// Toma el próximo número del contador. Si ese ticket ya existe (por ejemplo, con "solo número" la numeración
+    /// arrancó por debajo de uno importado), se saltea hasta uno libre.
+    /// </summary>
+    private async Task<string> ProximoTicket(Empresa empresa, int puesto, bool soloNumero)
     {
-        var contador = await _db.ContadoresTicket.FirstOrDefaultAsync(c => c.EmpresaId == empresa.Id && c.Puesto == puesto);
+        while (true)
+        {
+            var ticket = Tickets.Formatear(puesto, await ProximoNumero(empresa, puesto), soloNumero);
+            if (!await _db.Pesadas.IgnoreQueryFilters().AnyAsync(p => p.EmpresaId == empresa.Id && p.TicketNumero == ticket)) return ticket;
+        }
+    }
+
+    private async Task<int> ProximoNumero(Empresa empresa, int puesto)
+    {
+        var contador = _db.ContadoresTicket.Local.FirstOrDefault(c => c.EmpresaId == empresa.Id && c.Puesto == puesto)
+            ?? await _db.ContadoresTicket.FirstOrDefaultAsync(c => c.EmpresaId == empresa.Id && c.Puesto == puesto);
         if (contador == null)
         {
             // El puesto 1 sigue la numeración que traía la empresa (spike / importación de la 3.x).
@@ -389,8 +553,15 @@ public class PesajeService
         datos.Conductor = p.Conductor ?? datos.Conductor;
         datos.Documento = p.Documento ?? datos.Documento;
         datos.Transporte = p.Transporte ?? datos.Transporte;
-        datos.TipoDocumento = p.Aduana?.ChoferTipoDocumento ?? datos.TipoDocumento;
-        datos.Nacionalidad = p.Aduana?.ChoferNacionalidad ?? datos.Nacionalidad;
+        datos.TipoDocumento = p.TipoDocumento ?? datos.TipoDocumento;
+        datos.Nacionalidad = p.Nacionalidad ?? datos.Nacionalidad;
+    }
+
+    private async Task EncolarWorms(Dictionary<string, string> configs, Pesada pesada, params string[] eventos)
+    {
+        if (!WormsOutbox.EmpresaEnvia(configs, pesada.EmpresaId)) return;
+        var empresa = await _db.Empresas.AsNoTracking().Where(e => e.Id == pesada.EmpresaId).Select(e => e.Nombre).FirstOrDefaultAsync() ?? "";
+        foreach (var evento in eventos) WormsOutbox.Encolar(_db, configs, pesada, evento, empresa);
     }
 
     private static bool Si(Dictionary<string, string> c, string clave, string porDefecto = "false") =>
