@@ -2,9 +2,9 @@ namespace Bfs.Core;
 
 public sealed class BfsPaths
 {
-    public BfsPaths(string? root)
+    public BfsPaths(string? root, Edicion edicion = Edicion.Completa)
     {
-        Root = string.IsNullOrWhiteSpace(root) ? DefaultRoot() : root;
+        Root = string.IsNullOrWhiteSpace(root) ? DefaultRoot(edicion) : root;
         Directory.CreateDirectory(Root);
     }
 
@@ -38,9 +38,9 @@ public sealed class BfsPaths
         return dir;
     }
 
-    private static string DefaultRoot()
+    private static string DefaultRoot(Edicion edicion)
     {
         var programData = Environment.GetEnvironmentVariable("ProgramData") ?? Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
-        return Path.Combine(programData, "bfs-4");
+        return Path.Combine(programData, Ediciones.CarpetaDatos(edicion));
     }
 }

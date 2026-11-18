@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text;
 using Bfs.Api.Auth;
 using Bfs.Api.Branding;
@@ -32,7 +33,7 @@ namespace Bfs.Api;
 
 public static class ApiHost
 {
-    public const string DefaultUrl = "http://127.0.0.1:5080";
+    public static string DefaultUrl => Ediciones.UrlLocal(Ediciones.Compilada);
 
     public static WebApplication Create(string[] args)
     {
@@ -42,7 +43,12 @@ public static class ApiHost
         builder.Environment.WebRootFileProvider = new ManifestEmbeddedFileProvider(typeof(ApiHost).Assembly, "wwwroot");
 
         var options = builder.Configuration.GetSection(BfsOptions.Seccion).Get<BfsOptions>() ?? new BfsOptions();
-        var paths = new BfsPaths(options.DataPath);
+        options.Edicion = Ediciones.Efectiva(options.Edicion);
+        if (options.Edicion == Edicion.Estandar && options.Modo == ModoDespliegue.Nube)
+        {
+            throw new InvalidOperationException("La edición Estándar es solo local: no corre como nube.");
+        }
+        var paths = new BfsPaths(options.DataPath, options.Edicion);
         builder.Services.AddSingleton(options);
         builder.Services.AddSingleton(paths);
 
@@ -97,7 +103,7 @@ public static class ApiHost
         {
             using var scope = app.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<BfsDbContext>();
-            DbInitializer.SeedAsync(db).GetAwaiter().GetResult();
+            DbInitializer.SeedAsync(db, datosDePrueba: true, empresas: options.Edicion == Edicion.Estandar ? 1 : 2).GetAwaiter().GetResult();
             BalanzaEndpoints.AplicarAsync(db, app.Services.GetRequiredService<IBalanzas>()).GetAwaiter().GetResult();
         }
 
@@ -127,7 +133,8 @@ public static class ApiHost
         app.MapBrandingEndpoints();
 
         var api = app.MapGroup("/api").RequireAuthorization();
-        api.MapGet("/health", () => Results.Ok(new { status = "ok", version = "4.0.0-spike", modo = options.Modo.ToString() })).AllowAnonymous();
+        var version = typeof(ApiHost).Assembly.GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "4.0";
+        api.MapGet("/health", () => Results.Ok(new { status = "ok", version, modo = options.Modo.ToString(), edicion = options.Edicion.ToString() })).AllowAnonymous();
         api.MapBalanzaEndpoints();
         api.MapConfigEndpoints();
         api.MapCatalogoEndpoints();
@@ -139,7 +146,8 @@ public static class ApiHost
         api.MapReporteEndpoints();
         api.MapSistemaEndpoints();
         api.MapImportacionEndpoints();
-        api.MapIntegracionEndpoints();
+        // La Estándar no tiene API para conectar con otros sistemas ni nube.
+        if (options.Edicion == Edicion.Completa) api.MapIntegracionEndpoints();
         if (options.Modo == ModoDespliegue.Nube)
         {
             api.MapSuperadminEndpoints();
@@ -147,7 +155,7 @@ public static class ApiHost
         }
         else
         {
-            api.MapNubeNodoEndpoints();
+            if (options.Edicion == Edicion.Completa) api.MapNubeNodoEndpoints();
         }
 
         // Una ruta de la API que no existe es 404; cualquier otra ruta es la aplicación web.
@@ -200,11 +208,14 @@ public static class ApiHost
 
         builder.Services.AddSingleton<IImpresoraTermica, ImpresoraWindows>();
         builder.Services.AddScoped<IIndiceLogins, IndiceLoginsNodo>();
-        builder.Services.AddHostedService<OutboxDispatcher>();
+        if (options.Edicion == Edicion.Completa)
+        {
+            builder.Services.AddHostedService<OutboxDispatcher>();
+            builder.Services.AddHttpClient("nube");
+            builder.Services.AddSingleton<SincronizadorNodo>();
+            builder.Services.AddHostedService(sp => sp.GetRequiredService<SincronizadorNodo>());
+        }
         builder.Services.AddHostedService<RespaldoAutomatico>();
-        builder.Services.AddHttpClient("nube");
-        builder.Services.AddSingleton<SincronizadorNodo>();
-        builder.Services.AddHostedService(sp => sp.GetRequiredService<SincronizadorNodo>());
         builder.Services.AddSingleton<IPuertoSerieFactory, PuertoSerieFactory>();
         builder.Services.AddSingleton<IBalanzas>(sp => new BalanzaManager(
             sp.GetRequiredService<IPuertoSerieFactory>(), sp.GetRequiredService<ILogger<BalanzaManager>>()));

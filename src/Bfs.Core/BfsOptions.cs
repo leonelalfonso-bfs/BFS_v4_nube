@@ -16,7 +16,10 @@ public class BfsOptions
 
     public ModoDespliegue Modo { get; set; } = ModoDespliegue.Nodo;
 
-    /// <summary>Carpeta de datos. Vacío = %ProgramData%\bfs-4.</summary>
+    /// <summary>Completa o Estándar. Ver <see cref="Ediciones"/>: la compilada manda.</summary>
+    public Edicion Edicion { get; set; } = Ediciones.Compilada;
+
+    /// <summary>Carpeta de datos. Vacío = %ProgramData%\bfs-4 (bfs-4-estandar en la Estándar).</summary>
     public string? DataPath { get; set; }
 
     /// <summary>Zona para mostrar fechas en tickets y Excel (en la base todo está en UTC).</summary>

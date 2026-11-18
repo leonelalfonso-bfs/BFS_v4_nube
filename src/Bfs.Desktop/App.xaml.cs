@@ -1,5 +1,6 @@
 ﻿using System.Windows;
 using Bfs.Api;
+using Bfs.Core;
 using Microsoft.AspNetCore.Builder;
 
 namespace Bfs.Desktop;
@@ -7,7 +8,8 @@ namespace Bfs.Desktop;
 public partial class App : Application
 {
     // Una sola instancia por PC: dos copias se pelearían por el puerto COM de la balanza y por el puerto web.
-    private static readonly Mutex Instancia = new(false, @"Global\BFS-Pesaje-4");
+    // Cada edición tiene la suya (y su puerto y su carpeta de datos): se pueden instalar las dos en una PC de prueba.
+    private static readonly Mutex Instancia = new(false, Ediciones.Compilada == Edicion.Estandar ? @"Global\BFS-Pesaje-4-Estandar" : @"Global\BFS-Pesaje-4");
     private WebApplication? _api;
     private bool _esDuena;
 

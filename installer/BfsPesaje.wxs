@@ -1,16 +1,39 @@
 <!--
   Instalador de la PC de portería (modo Nodo). Lo arma installer/build.ps1:
   publica Bfs.Desktop self-contained (no hace falta instalar .NET) y empaqueta esa carpeta.
+  Edicion=Estandar arma la versión para el cliente que solo pesa: es otro producto (otro UpgradeCode,
+  otra carpeta de programa y de datos), así no pisa ni se mezcla con la Completa.
 -->
+<?if $(var.Edicion) = "Estandar" ?>
+  <?define Nombre = "Sistema de Pesaje BFS 4.0 Estándar" ?>
+  <?define Acceso = "Sistema de Pesaje BFS Estándar" ?>
+  <?define UpgradeCode = "9A4C2E61-7B3D-4F18-A5C9-1E6D8B2F7A43" ?>
+  <?define CarpetaPrograma = "BFS Pesaje 4.0 Estandar" ?>
+  <?define CarpetaDatos = "bfs-4-estandar" ?>
+  <?define Registro = "Software\BFS\Pesaje4Estandar" ?>
+  <?define GuidDatos = "2F7B9C14-6E3A-4D85-B0C2-7A9E1D4F6B38" ?>
+  <?define GuidMenu = "C5E83A27-1D9F-4B60-8E4A-3B7C2D9F1E05" ?>
+  <?define GuidEscritorio = "71D4B9E2-5A8C-4E3F-9B16-D2C0F8A3E7B9" ?>
+<?else?>
+  <?define Nombre = "Sistema de Pesaje BFS 4.0" ?>
+  <?define Acceso = "Sistema de Pesaje BFS" ?>
+  <?define UpgradeCode = "5E0E1B7A-4C8B-4E52-9B0B-3F6C2B4D8A10" ?>
+  <?define CarpetaPrograma = "BFS Pesaje 4.0" ?>
+  <?define CarpetaDatos = "bfs-4" ?>
+  <?define Registro = "Software\BFS\Pesaje4" ?>
+  <?define GuidDatos = "8C2D7E51-0B6A-4F7C-9F4E-2B9E5A1C3D77" ?>
+  <?define GuidMenu = "4A3F0C62-9D1E-4B7A-8E25-6C1D2F3B4E90" ?>
+  <?define GuidEscritorio = "B7E19A40-3C5D-4F86-A1E2-9D0C8B7A6F51" ?>
+<?endif?>
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
-  <Package Name="Sistema de Pesaje BFS 4.0"
+  <Package Name="$(var.Nombre)"
            Manufacturer="Balanzas Full Service SRL"
            Version="$(var.Version)"
-           UpgradeCode="5E0E1B7A-4C8B-4E52-9B0B-3F6C2B4D8A10"
+           UpgradeCode="$(var.UpgradeCode)"
            Scope="perMachine"
            Compressed="yes">
 
-    <SummaryInformation Description="Sistema de Pesaje BFS 4.0" />
+    <SummaryInformation Description="$(var.Nombre)" />
     <MajorUpgrade DowngradeErrorMessage="Ya hay instalada una versión más nueva del Sistema de Pesaje BFS." />
     <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
     <Icon Id="bfs.ico" SourceFile="$(var.Icono)" />
@@ -24,13 +47,13 @@
             Message="El Sistema de Pesaje BFS 4.0 necesita Windows 10 u 11. En Windows 7 seguí usando la versión 3." />
 
     <StandardDirectory Id="ProgramFiles64Folder">
-      <Directory Id="INSTALLFOLDER" Name="BFS Pesaje 4.0" />
+      <Directory Id="INSTALLFOLDER" Name="$(var.CarpetaPrograma)" />
     </StandardDirectory>
 
-    <!-- Datos en ProgramData\bfs-4: los usuarios de la PC pueden escribir (la base, los logs y los backups los crea el programa). -->
+    <!-- Datos en ProgramData\bfs-4 (bfs-4-estandar en la Estándar): los usuarios de la PC pueden escribir (la base, los logs y los backups los crea el programa). -->
     <StandardDirectory Id="CommonAppDataFolder">
-      <Directory Id="DATAFOLDER" Name="bfs-4">
-        <Component Id="CarpetaDatos" Guid="8C2D7E51-0B6A-4F7C-9F4E-2B9E5A1C3D77" Permanent="yes">
+      <Directory Id="DATAFOLDER" Name="$(var.CarpetaDatos)">
+        <Component Id="CarpetaDatos" Guid="$(var.GuidDatos)" Permanent="yes">
           <CreateFolder>
             <PermissionEx Sddl="D:(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1301bf;;;BU)" />
           </CreateFolder>
@@ -40,20 +63,20 @@
 
     <StandardDirectory Id="ProgramMenuFolder">
       <Directory Id="MenuBfs" Name="BFS">
-        <Component Id="AccesoMenu" Guid="4A3F0C62-9D1E-4B7A-8E25-6C1D2F3B4E90">
-          <Shortcut Id="AccesoMenuInicio" Name="Sistema de Pesaje BFS" Target="[INSTALLFOLDER]Bfs.Desktop.exe"
+        <Component Id="AccesoMenu" Guid="$(var.GuidMenu)">
+          <Shortcut Id="AccesoMenuInicio" Name="$(var.Acceso)" Target="[INSTALLFOLDER]Bfs.Desktop.exe"
                     WorkingDirectory="INSTALLFOLDER" Icon="bfs.ico" />
           <RemoveFolder Id="QuitarMenuBfs" On="uninstall" />
-          <RegistryValue Root="HKLM" Key="Software\BFS\Pesaje4" Name="AccesoMenu" Type="integer" Value="1" KeyPath="yes" />
+          <RegistryValue Root="HKLM" Key="$(var.Registro)" Name="AccesoMenu" Type="integer" Value="1" KeyPath="yes" />
         </Component>
       </Directory>
     </StandardDirectory>
 
     <StandardDirectory Id="DesktopFolder">
-      <Component Id="AccesoEscritorio" Guid="B7E19A40-3C5D-4F86-A1E2-9D0C8B7A6F51">
-        <Shortcut Id="AccesoEscritorio" Name="Sistema de Pesaje BFS" Target="[INSTALLFOLDER]Bfs.Desktop.exe"
+      <Component Id="AccesoEscritorio" Guid="$(var.GuidEscritorio)">
+        <Shortcut Id="AccesoEscritorio" Name="$(var.Acceso)" Target="[INSTALLFOLDER]Bfs.Desktop.exe"
                   WorkingDirectory="INSTALLFOLDER" Icon="bfs.ico" />
-        <RegistryValue Root="HKLM" Key="Software\BFS\Pesaje4" Name="AccesoEscritorio" Type="integer" Value="1" KeyPath="yes" />
+        <RegistryValue Root="HKLM" Key="$(var.Registro)" Name="AccesoEscritorio" Type="integer" Value="1" KeyPath="yes" />
       </Component>
     </StandardDirectory>
 
@@ -61,7 +84,7 @@
       <Files Include="$(var.PublishDir)\**" />
     </ComponentGroup>
 
-    <Feature Id="Principal" Title="Sistema de Pesaje BFS 4.0">
+    <Feature Id="Principal" Title="$(var.Nombre)">
       <ComponentGroupRef Id="Programa" />
       <ComponentRef Id="CarpetaDatos" />
       <ComponentRef Id="AccesoMenu" />

@@ -6,4 +6,9 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <!-- Edición del programa: dotnet publish -p:BfsEdicion=Estandar (ver Edicion.cs). -->
+  <ItemGroup Condition="'$(BfsEdicion)' != ''">
+    <AssemblyMetadata Include="BfsEdicion" Value="$(BfsEdicion)" />
+  </ItemGroup>
+
 </Project>

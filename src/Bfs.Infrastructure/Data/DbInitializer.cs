@@ -17,16 +17,18 @@ public static class DbInitializer
     /// false para un cliente de la nube: sin "Empresa 1/2" ni los usuarios bfs@/admin@bfs.local
     /// (tendrían clave conocida y el mismo email en todos los clientes). La empresa y el admin los crea el alta.
     /// </param>
-    public static async Task SeedAsync(BfsDbContext db, bool datosDePrueba)
+    /// <param name="empresas">Cuántas empresas de ejemplo crea en una base nueva (la edición Estándar tiene una sola).</param>
+    public static async Task SeedAsync(BfsDbContext db, bool datosDePrueba, int empresas = 2)
     {
         await db.Database.MigrateAsync();
 
         if (datosDePrueba && !await db.Empresas.AnyAsync())
         {
-            db.Empresas.AddRange(
-                new Empresa { Id = Guid.Parse("11111111-1111-1111-1111-111111111111"), Nombre = "Empresa 1", Activa = true, ProximoTicket = 1 },
-                new Empresa { Id = Guid.Parse("22222222-2222-2222-2222-222222222222"), Nombre = "Empresa 2", Activa = true, ProximoTicket = 1 }
-            );
+            db.Empresas.Add(new Empresa { Id = Guid.Parse("11111111-1111-1111-1111-111111111111"), Nombre = "Empresa 1", Activa = true, ProximoTicket = 1 });
+            if (empresas > 1)
+            {
+                db.Empresas.Add(new Empresa { Id = Guid.Parse("22222222-2222-2222-2222-222222222222"), Nombre = "Empresa 2", Activa = true, ProximoTicket = 1 });
+            }
         }
 
         if (datosDePrueba && !await db.Usuarios.AnyAsync())
