@@ -13,7 +13,22 @@ En la 3.x, `license.key` era la MAC en texto plano: cualquiera podía escribirla
 
 > **Hacé una copia de la clave privada fuera de esta PC** (pendrive, gestor de contraseñas). Si se pierde, hay que generar otra, cambiar la pública en el código y reemitir todas las licencias. Si alguien la obtiene, puede fabricar licencias.
 
-## Emitir una licencia
+## Emitir una licencia (con el generador)
+
+`artifacts\herramientas\GeneradorLicenciasBFS.exe` (un solo archivo, no hace falta instalar nada). Para volver a armarlo:
+
+```powershell
+dotnet publish tools/Bfs.Licencias.Gui -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=none -o artifacts/herramientas
+```
+
+1. Abrir el generador. Toma solo la clave privada de `%USERPROFILE%\.bfs` y avisa si el archivo no es la clave que acepta el sistema (por ejemplo, la de la nube).
+2. Escribir el cliente y el ID de máquina como lo dicte el cliente (`MAC-...`, con o sin espacios o dos puntos).
+3. Elegir "Sin vencimiento" o una fecha (vale hasta el final de ese día) y **Generar licencia**.
+4. **Copiar** y pegar en Configuración → Licencia del cliente, o **Guardar license.key**.
+
+Cada licencia queda anotada en `%USERPROFILE%\.bfs\licencias-emitidas.csv` (se abre con Excel); tocando una en la lista se vuelve a ver su texto. El generador no contiene la clave: sin el archivo `.pem` no firma nada, así que no sirve si se copia a otra PC sin la clave.
+
+## Emitir una licencia (por consola)
 
 1. En la PC del cliente: entrar como `bfs@bfs.local` → **Configuración → Licencia** y anotar el **ID de máquina** (`MAC-XXXXXXXXXXXX`). Sin licencia también aparece en la pantalla de Pesaje.
 2. En tu PC:
