@@ -407,12 +407,9 @@ function bloqueAduana() {
           <div><label>LOT</label><input value="${esc(state.funciones.aduanaLot || "")}" disabled title="Sale de Planta → Aduana" /></div>
           <div><label>Exportador / importador</label><input id="ad_exportador" list="dl_exportadores" autocomplete="off" onchange="completarCuit('ad_exportador', 'ad_exportadorCuit', state.catalogos.exportadores)" /></div>
           <div><label>CUIT</label><input id="ad_exportadorCuit" /></div>
-          <div></div>
+          <div><label>Destinación aduanera</label><input id="ad_destinacion" /></div>
           <div><label>Agente de transporte (ATA)</label><input id="ad_ata" list="dl_atas" autocomplete="off" onchange="completarCuit('ad_ata', 'ad_ataCuit', state.catalogos.transportes)" /></div>
           <div><label>CUIT ATA</label><input id="ad_ataCuit" /></div>
-          <div></div>
-          <div><label>Destinación aduanera</label><input id="ad_destinacion" /></div>
-          <div><label>Procedencia / destino</label><input id="ad_procDestino" /></div>
           <div></div>
           <div><label>Contenedor N°</label><input id="ad_contenedorId" /></div>
           <div><label>Tara contenedor (kg)</label><input id="ad_contenedorTara" type="number" value="0" /></div>
@@ -451,7 +448,6 @@ function datosAduana() {
       ata: val("ad_ata") || null,
       ataCuit: val("ad_ataCuit") || null,
       destinacionAduanera: val("ad_destinacion") || null,
-      procedenciaDestino: val("ad_procDestino") || null,
       contenedorId: val("ad_contenedorId") || null,
       contenedorTara: n("ad_contenedorTara") || 0,
       bultoId: val("ad_bultoId") || null,
@@ -608,7 +604,7 @@ const CAMPOS_PANTALLA = [
   ["nacionalidad", p => p.nacionalidad], ["observaciones", p => p.observaciones],
   ["ad_escenario", p => p.aduana?.escenario], ["ad_operacionId", p => p.aduana?.operacionId], ["ad_exportador", p => p.aduana?.exportador],
   ["ad_exportadorCuit", p => p.aduana?.exportadorCuit], ["ad_ata", p => p.aduana?.ata], ["ad_ataCuit", p => p.aduana?.ataCuit],
-  ["ad_destinacion", p => p.aduana?.destinacionAduanera], ["ad_procDestino", p => p.aduana?.procedenciaDestino],
+  ["ad_destinacion", p => p.aduana?.destinacionAduanera],
   ["ad_contenedorId", p => p.aduana?.contenedorId], ["ad_contenedorTara", p => p.aduana?.contenedorTara],
   ["ad_bultoId", p => p.aduana?.bultoId], ["ad_bultoBruto", p => p.aduana?.bultoBruto], ["ad_bultoTara", p => p.aduana?.bultoTara]
 ];
@@ -1791,7 +1787,6 @@ const CORREGIBLES = [
   ["aduana.ataCuit", "CUIT ATA", p => p.aduana?.ataCuit],
   ["aduana.operacionId", "N° de operación", p => p.aduana?.operacionId],
   ["aduana.destinacionAduanera", "Destinación aduanera", p => p.aduana?.destinacionAduanera],
-  ["aduana.procedenciaDestino", "Procedencia / destino aduana", p => p.aduana?.procedenciaDestino],
   ["aduana.contenedorId", "Contenedor", p => p.aduana?.contenedorId],
   ["aduana.bultoId", "Bulto", p => p.aduana?.bultoId]
 ];
