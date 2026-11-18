@@ -12,6 +12,7 @@ public partial class MainWindow : Window
     {
         _url = url;
         InitializeComponent();
+        Title = Bfs.Core.Ediciones.Nombre(Bfs.Core.Ediciones.Compilada);
         Loaded += OnLoaded;
     }
 

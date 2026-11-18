@@ -40,11 +40,21 @@ En modo nube hay una base central (`bfs_central`: clientes, índice de emails, s
 
 ## Instalador (PC de portería)
 
+Hay dos ediciones, del mismo código:
+
+| Edición | Para quién | Qué tiene |
+|---------|-----------|-----------|
+| **Completa** | Clientes con integraciones o varias empresas (ej. Worms) | Varias empresas, API para otros sistemas (WORMS), conexión con la nube |
+| **Estándar** | El cliente que solo pesa | Una empresa, pesaje normal, tara conocida y aduana, hasta dos balanzas, todo local. Sin API ni nube |
+
 ```powershell
-powershell -ExecutionPolicy Bypass -File installeruild.ps1 -Version 4.0.0
+powershell -ExecutionPolicy Bypass -File installer\build.ps1 -Version 4.0.3
+powershell -ExecutionPolicy Bypass -File installer\build.ps1 -Version 4.0.3 -Edicion Estandar
 ```
 
-Deja `artifacts\BFS-Pesaje-4.0.0.msi` (self-contained, Windows 10/11). Después de instalar, BFS entra con su usuario, activa la licencia (Configuración → Licencia) y, si el cliente venía de la 3.x, importa sus datos desde Sistema → Importar desde la 3.x.
+La Completa deja `artifacts\BFS-Pesaje-4.0.3.msi`; la Estándar, `artifacts\estandar\BFS-Pesaje-Estandar-4.0.3.msi`. Son productos distintos (otro nombre, carpeta de programa, carpeta de datos `ProgramData\bfs-4-estandar` y puerto): se pueden instalar las dos en la misma PC sin mezclarse. La edición queda grabada al compilar; la configuración no puede convertir una Estándar en Completa.
+
+Después de instalar, BFS entra con su usuario, activa la licencia (Configuración → Licencia) y, si el cliente venía de la 3.x, importa sus datos desde Sistema → Importar desde la 3.x.
 
 ## Nube (servidor)
 

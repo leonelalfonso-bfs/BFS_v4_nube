@@ -35,8 +35,12 @@ public class PesajeService
     private readonly LicenciaService _licencia;
     private readonly PasswordHasher<Usuario> _hasher;
 
-    public PesajeService(BfsDbContext db, IBalanzas balanzas, ConfigService config, LicenciaService licencia, PasswordHasher<Usuario> hasher)
+    private readonly Edicion _edicion;
+
+    public PesajeService(BfsDbContext db, IBalanzas balanzas, ConfigService config, LicenciaService licencia, PasswordHasher<Usuario> hasher,
+        BfsOptions? opciones = null)
     {
+        _edicion = opciones?.Edicion ?? Ediciones.Compilada;
         _db = db;
         _balanzas = balanzas;
         _config = config;
@@ -562,7 +566,7 @@ public class PesajeService
 
     private async Task EncolarWorms(Dictionary<string, string> configs, Pesada pesada, params string[] eventos)
     {
-        if (!WormsOutbox.EmpresaEnvia(configs, pesada.EmpresaId)) return;
+        if (_edicion == Edicion.Estandar || !WormsOutbox.EmpresaEnvia(configs, pesada.EmpresaId)) return;
         var empresa = await _db.Empresas.AsNoTracking().Where(e => e.Id == pesada.EmpresaId).Select(e => e.Nombre).FirstOrDefaultAsync() ?? "";
         foreach (var evento in eventos) WormsOutbox.Encolar(_db, configs, pesada, evento, empresa);
     }

@@ -20,8 +20,12 @@ public static class PlantaEndpoints
         api.MapGet("/empresas", async (BfsDbContext db) =>
             Results.Ok(await db.Empresas.OrderBy(e => e.Nombre).ToListAsync()));
 
-        api.MapPost("/empresas", async (EmpresaDto dto, BfsDbContext db) =>
+        api.MapPost("/empresas", async (EmpresaDto dto, BfsDbContext db, BfsOptions opciones) =>
         {
+            if (opciones.Edicion == Edicion.Estandar && await db.Empresas.AnyAsync())
+            {
+                return Results.BadRequest("La edición Estándar trabaja con una sola empresa");
+            }
             var empresa = new Empresa { Id = Guid.NewGuid() };
             var error = await Aplicar(db, dto, empresa);
             if (error != null) return error;

@@ -108,6 +108,9 @@ function num(id) {
   return Number(val(id) || 0);
 }
 
+/** Edición Estándar: una empresa, pesaje normal y aduana, local. Sin API para otros sistemas ni nube. */
+function esEstandar() { return state.edicion === "Estandar"; }
+
 function isVendor() { return state.user?.rol === "vendor"; }
 function can(permiso) { return (state.user?.permisos || []).includes(permiso); }
 function canVerPesadas() { return can("pesadas.ver") || can("pesadas.ver_propias"); }
@@ -176,6 +179,7 @@ function elegirEmpresa(id) {
 function selectorEmpresa(fijaId) {
   const activas = state.empresas.filter(e => e.activa !== false || e.id === fijaId);
   const actual = fijaId || empresaEnCurso();
+  if (activas.length === 1) return `<strong>${esc(activas[0].nombre)}</strong>`;
   return `<div class="empresa-switch">${activas.map((e, i) => fijaId && e.id !== fijaId ? "" :
     `<button type="button" class="empresa-btn ${e.id === actual ? "active" : ""}" data-id="${e.id}" ${fijaId ? "disabled" : `onclick="elegirEmpresa('${e.id}')"`}
       title="Empresa ${i + 1}">${i + 1}. ${esc(e.nombre)}</button>`).join("")}</div>`;
@@ -230,7 +234,7 @@ function render() {
         <div class="brand">
           ${bfsLogo()}
           <div>
-            <h1>Sistema de Pesaje BFS 4.0</h1>
+            <h1>Sistema de Pesaje BFS 4.0${esEstandar() ? " <small>Estándar</small>" : ""}</h1>
             <p>${esc(state.user?.tenant || state.branding.clienteNombre || "Planta local")}</p>
           </div>
         </div>
@@ -1188,10 +1192,11 @@ async function renderConfig() {
     ["balanza", "Balanzas"],
     ["campos", "Campos"],
     ["ticket", "Ticket y logo"],
-    ["api", "API"],
+    ...(esEstandar() ? [] : [["api", "API"]]),
     ["licencia", "Licencia"],
-    ...(state.modo === "Nube" ? [] : [["nube", "Nube"]])
+    ...(state.modo === "Nube" || esEstandar() ? [] : [["nube", "Nube"]])
   ];
+  if (!tabs.some(([id]) => id === state.configTab)) state.configTab = "general";
   document.getElementById("main").innerHTML = `
     <div class="page-head"><div><h2>Configuración BFS</h2><p>Estas opciones las arma el instalador. El cliente no las ve.</p></div></div>
     <div class="tabs">
@@ -1670,7 +1675,12 @@ async function saveApi() {
 
 async function start() {
   try { state.branding = await api("/api/branding"); } catch { state.branding = {}; }
-  try { state.modo = (await api("/api/health")).modo; } catch { state.modo = "Nodo"; }
+  try {
+    const h = await api("/api/health");
+    state.modo = h.modo;
+    state.edicion = h.edicion || "Completa";
+    state.version = h.version;
+  } catch { state.modo = "Nodo"; state.edicion = "Completa"; }
   if (state.token) {
     try {
       state.user = await api("/api/me");
@@ -2173,7 +2183,7 @@ function pillNube() {
 }
 
 async function actualizarNube() {
-  if (state.modo === "Nube" || !state.token) return;
+  if (state.modo === "Nube" || esEstandar() || !state.token) return;
   try { state.nube = await api("/api/nube"); } catch { state.nube = null; }
 }
 

@@ -96,6 +96,16 @@ a { color: inherit; }
   letter-spacing: 0.02em;
 }
 
+.brand h1 small {
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--amber);
+  color: var(--navy);
+  font-size: 11px;
+  vertical-align: middle;
+}
+
 .brand p {
   margin: 2px 0 0;
   font-size: 12px;

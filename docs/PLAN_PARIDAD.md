@@ -287,6 +287,11 @@ Pedido del cliente (18/11/2026) y especificación "API Balanza – Sistema WORMS
 > - **Ajustes tras la prueba del cliente:** al elegir una pendiente, la pantalla muestra los datos de su entrada (solo lectura, salvo la tara de pallets), la empresa queda fija y solo se puede capturar la salida. Se quitaron "Id. destino" y la "Procedencia / destino" de aduana: la procedencia y el destino de la sección Carga sirven para las dos operaciones (las columnas quedan en la base sin uso). BFS puede fijar el escenario de aduana (Configuración → General) para clientes que no ingresan con contenedor.
 > - **Excel:** todas las columnas cargadas al abrir el ticket (incluye aduana, balanzas, operadores, anulación) más la hoja de correcciones.
 
+
+### Edición Estándar
+
+> **Estado (2026-11-18):** hecha en la rama `edicion-estandar`. Mismo código que la Completa; la edición se elige al compilar (`-p:BfsEdicion=Estandar`, `installer\build.ps1 -Edicion Estandar`) y queda grabada en el programa. Una sola empresa (la base nueva arranca con una y no se pueden agregar), sin API de integraciones ni nube (los endpoints no existen y no se encola nada aunque la configuración diga lo contrario), sin las pestañas API y Nube. Pesaje normal, tara conocida, aduana y dos balanzas igual que la Completa. Instalador propio en `artifacts\estandar`, con otro UpgradeCode, carpeta de programa, carpeta de datos (`bfs-4-estandar`), puerto (5081) y nombre: convive con la Completa en la misma PC.
+
 ---
 
 ## 5. Fuera de alcance
