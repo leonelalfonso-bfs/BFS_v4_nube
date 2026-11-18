@@ -45,6 +45,30 @@ public class DocumentosTests
     }
 
     [Fact]
+    public void Original_y_duplicado_en_una_sola_hoja_aunque_haya_mucho_texto()
+    {
+        var larga = Cerrada();
+        larga.Observaciones = string.Join(" ", Enumerable.Repeat("Observación muy larga para probar que la copia se achica y no pasa a otra hoja.", 30));
+        larga.EntradaManualPor = "sup@planta.com";
+        larga.TaraPallets = 500;
+        foreach (var p in new[] { Cerrada(), larga })
+        {
+            var pdf = TicketPdf.Generar(Datos(p));
+            AssertPdf(pdf);
+            Assert.Equal(1, Paginas(pdf));
+            // Para mirarlo: BFS_PDF_SALIDA=<carpeta> dotnet test --filter Original_y_duplicado
+            if (Environment.GetEnvironmentVariable("BFS_PDF_SALIDA") is { Length: > 0 } carpeta)
+            {
+                File.WriteAllBytes(Path.Combine(carpeta, $"ticket-{(p == larga ? "largo" : "normal")}.pdf"), pdf);
+            }
+        }
+        Assert.Equal(QuestPDF.Helpers.PageSizes.A4.Height / 2, TicketPdf.MediaHoja);
+    }
+
+    private static int Paginas(byte[] pdf) =>
+        System.Text.RegularExpressions.Regex.Matches(Encoding.Latin1.GetString(pdf), @"/Type\s*/Page(?![a-zA-Z])").Count;
+
+    [Fact]
     public void Pdf_con_logo_del_cliente()
     {
         var png = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
