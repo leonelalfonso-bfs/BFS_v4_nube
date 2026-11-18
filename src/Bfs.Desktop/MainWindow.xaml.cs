@@ -21,8 +21,10 @@ public partial class MainWindow : Window
         try
         {
             // Los datos del navegador van con los del sistema, no en la carpeta del programa (que es de solo lectura).
+            // Cada edición los suyos: si no, la Completa y la Estándar compartirían la sesión y lo recordado en la PC.
             var programData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
-            var env = await CoreWebView2Environment.CreateAsync(userDataFolder: Path.Combine(programData, "bfs-4", "webview"));
+            var carpeta = Bfs.Core.Ediciones.CarpetaDatos(Bfs.Core.Ediciones.Compilada);
+            var env = await CoreWebView2Environment.CreateAsync(userDataFolder: Path.Combine(programData, carpeta, "webview"));
             await Browser.EnsureCoreWebView2Async(env);
         }
         catch (WebView2RuntimeNotFoundException)

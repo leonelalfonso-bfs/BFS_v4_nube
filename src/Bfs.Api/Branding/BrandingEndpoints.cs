@@ -51,9 +51,10 @@ public static class BrandingEndpoints
             if (file == null || file.Length == 0) return Results.BadRequest("Archivo requerido");
             if (file.Length > 2 * 1024 * 1024) return Results.BadRequest("El logo no puede superar 2 MB");
             var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
-            if (ext is not (".png" or ".jpg" or ".jpeg" or ".webp" or ".svg"))
+            // SVG no: el ticket PDF no lo puede dibujar y el cliente se quedaría sin logo en el papel.
+            if (ext is not (".png" or ".jpg" or ".jpeg" or ".webp"))
             {
-                return Results.BadRequest("Usá PNG, JPG, WEBP o SVG");
+                return Results.BadRequest("Usá PNG, JPG o WEBP");
             }
 
             var dir = tenant.CarpetaBranding(paths);
@@ -71,5 +72,15 @@ public static class BrandingEndpoints
             await config.GuardarAsync([new(ConfigKeys.LogoFile, name)]);
             return Results.Ok(new { logoUrl = "/api/branding/logo" });
         }).RequireAuthorization(Permisos.ConfigBfs).DisableAntiforgery();
+
+        app.MapDelete("/api/branding/logo", async (ConfigService config, BfsPaths paths, Nube.TenantActual tenant) =>
+        {
+            foreach (var old in Directory.GetFiles(tenant.CarpetaBranding(paths), "logo.*"))
+            {
+                try { File.Delete(old); } catch (IOException) { /* si está en uso queda, pero ya no se referencia */ }
+            }
+            await config.GuardarAsync([new(ConfigKeys.LogoFile, "")]);
+            return Results.NoContent();
+        }).RequireAuthorization(Permisos.ConfigBfs);
     }
 }

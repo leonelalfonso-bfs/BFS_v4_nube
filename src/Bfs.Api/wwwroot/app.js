@@ -1509,12 +1509,13 @@ function renderConfigTicket() {
         <div><label>Título del ticket</label><input id="t_titulo" value="${esc(c.ticket_titulo || "")}" /></div>
         <div style="margin-top:12px"><label>Pie de ticket</label><input id="t_pie" value="${esc(c.ticket_pie || "")}" /></div>
         <div style="margin-top:12px">
-          <label>Logo</label>
-          <input id="t_logo" type="file" accept=".png,.jpg,.jpeg,.webp,.svg" />
+          <label>Logo del cliente (sale arriba del ticket)</label>
+          <input id="t_logo" type="file" accept=".png,.jpg,.jpeg,.webp" onchange="subirLogo()" />
+          <p style="margin:6px 0 0;color:var(--muted);font-size:13px">Se guarda apenas lo elegís. PNG, JPG o WEBP, hasta 2 MB.</p>
         </div>
         <div class="btn-row">
-          <button class="btn-primary" onclick="saveTicket()">Guardar ticket</button>
-          <button class="btn" onclick="subirLogo()">Subir logo</button>
+          <button class="btn-primary" onclick="saveTicket()">Guardar</button>
+          ${state.branding.logoUrl ? `<button class="btn-danger" onclick="quitarLogo()">Quitar logo</button>` : ""}
         </div>
       </div>
       <div class="card ticket-preview">
@@ -1705,6 +1706,8 @@ async function saveCampos() {
 }
 
 async function saveTicket() {
+  // Si eligió un logo y no se subió todavía (o falló), va junto con el resto.
+  if (document.getElementById("t_logo")?.files?.[0] && !(await subirLogo())) return;
   await saveConfig({
     ticket_titulo: val("t_titulo"),
     ticket_pie: val("t_pie")
@@ -1712,15 +1715,36 @@ async function saveTicket() {
   renderConfig();
 }
 
+/** Sube el logo elegido. Devuelve false si no se pudo (y lo avisa). */
 async function subirLogo() {
-  const file = document.getElementById("t_logo")?.files?.[0];
-  if (!file) return toast("Elegí un archivo", "err");
+  const input = document.getElementById("t_logo");
+  const file = input?.files?.[0];
+  if (!file) return true;
   const body = new FormData();
   body.append("file", file);
-  await api("/api/branding/logo", { method: "POST", body });
+  try {
+    await api("/api/branding/logo", { method: "POST", body });
+  } catch (e) {
+    toast("No se pudo guardar el logo: " + limpiarError(e), "err");
+    return false;
+  }
+  input.value = "";
   state.branding = await api("/api/branding");
-  toast("Logo actualizado");
-  render();
+  toast("Logo guardado");
+  renderConfig();
+  return true;
+}
+
+async function quitarLogo() {
+  if (!confirm("¿Quitar el logo del cliente? El ticket sale sin logo arriba.")) return;
+  try {
+    await api("/api/branding/logo", { method: "DELETE" });
+    state.branding = await api("/api/branding");
+    toast("Logo quitado");
+    renderConfig();
+  } catch (e) {
+    toast(limpiarError(e), "err");
+  }
 }
 
 /** Lista vacía en la configuración = todas las empresas envían. */
