@@ -30,7 +30,7 @@ public class ConfigService
         {
             // Los secretos se muestran enmascarados: si vuelven así, no se tocan.
             if (clave == ConfigKeys.WormsApiKey && valor is "********" or "") continue;
-            if (clave == ConfigKeys.ClaveManualHash && valor == "********") continue;
+            if (clave is ConfigKeys.ClaveManualHash or ConfigKeys.ClaveCorreccionHash && valor == "********") continue;
 
             var row = await _db.Configuraciones.FirstOrDefaultAsync(c => c.Clave == clave && c.EmpresaId == null);
             if (row == null)

@@ -273,6 +273,19 @@ Cada fase termina compilando y con algo que se pueda demostrar. Las fases 0 a 6 
 
 > **Estado (2026-10-30):** primera parte hecha en la rama `fase-8`. El despacho del outbox es común a todos los destinos (`IDestinoIntegracion`; WORMS es el primero): los envíos de una pesada salen en orden (la SALIDA espera a la ENTRADA), una falla pasajera se reintenta con espera creciente (1, 2, 4… hasta 30 minutos) y un rechazo (400/401/403/422) queda en "Rechazado" y traba solo esa pesada. Configuración → API muestra los envíos (pendientes, rechazados, enviados, descartados, con el motivo) y permite Reintentar, Descartar, Reintentar rechazados y Enviar ahora. Los envíos salen desde la portería (modo Nodo). **Esperando documentación:** el conector de Centum (tiene su propia API: dirección, autenticación, formato y cómo confirma o rechaza) y el aviso de anulación a WORMS (hoy se mandan ENTRADA y SALIDA, igual que la 3.x).
 
+
+### Fase 9 — Worms Argentina (local, con la API de WORMS)
+
+Pedido del cliente (18/11/2026) y especificación "API Balanza – Sistema WORMS" (20/10/2026).
+
+> **Estado (2026-11-18):** hecha en la rama `fase-9`.
+> - **Envío según la especificación:** campos que la balanza no registra se omiten; `contenedor_nro` y `tara_contenedor`; en los egresos `procedencia` lleva el destino; 401/403 avisa "clave inválida, avisar a sistemas"; reintento al minuto y como mucho cada 5. Se agrega `empresa` (nombre) a pedido del cliente: **no está en la especificación, confirmar con WORMS el nombre del campo** antes de producción.
+> - **Por empresa:** en Configuración → API se eligen las empresas que envían (ej. Worms sí, Movimientos internos no). Selector rápido de empresa en Pesaje (botones, se recuerda en la PC). Cada empresa con su numeración; informes y Excel filtrados por empresa (el título lo indica). Una sola base: así lo acordó el cliente.
+> - **Campos:** tipo de documento y nacionalidad para cualquier pesada; en aduana se suman ATA (transporte marcado como ATA) con CUIT, destinación aduanera, procedencia/destino de aduana, Id. destino y el LOT de la planta. Formulario ordenado en secciones (Operación, Carga, Vehículo y chofer, Aduana). Los obligatorios se configuran en Campos y ahora los controla también el servidor. Para Worms: producto, cliente, transporte, procedencia, patente chasis y conductor.
+> - **Numeración:** opción "tickets solo con número" (Configuración → General) y el primer número se fija en Sistema → Numeración (ej. 78271). Si un número ya existe se saltea.
+> - **Corrección de datos:** Pesadas → Corregir, con permiso (supervisor/admin), motivo y clave de corrección opcional (Planta). Nunca pesos, fechas, empresa ni número de ticket. Queda el historial en la pesada y en la hoja "Correcciones" del Excel. Reenvío a WORMS opcional (apagado hasta que el gerente lo defina; la especificación dice que WORMS guarda la última versión).
+> - **Excel:** todas las columnas cargadas al abrir el ticket (incluye aduana, balanzas, operadores, anulación) más la hoja de correcciones.
+
 ---
 
 ## 5. Fuera de alcance

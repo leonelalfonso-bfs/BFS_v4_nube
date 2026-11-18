@@ -125,7 +125,7 @@ public class SistemaService
         if (empresa == null) return "Empresa inexistente";
         var puesto = await Puesto();
         var maximo = await MaximoUsado(empresaId, puesto);
-        if (proximo <= maximo) return $"Ya existe el ticket {Tickets.Formatear(puesto, maximo)}: el próximo tiene que ser mayor a {maximo}";
+        if (proximo <= maximo) return $"Ya existe el ticket {Tickets.Formatear(puesto, maximo, await SoloNumero())}: el próximo tiene que ser mayor a {maximo}";
 
         var contador = await _db.ContadoresTicket.FirstOrDefaultAsync(c => c.EmpresaId == empresaId && c.Puesto == puesto);
         if (contador == null)
@@ -144,16 +144,23 @@ public class SistemaService
         return int.TryParse(c.GetValueOrDefault(ConfigKeys.Puesto), out var p) && p is >= 1 and <= 99 ? p : 1;
     }
 
-    /// <summary>Tickets "PP-NNNNNN" de este puesto; en el puesto 1 también los numéricos importados de la 3.x.</summary>
+    private async Task<bool> SoloNumero() =>
+        (await _config.GlobalAsync()).GetValueOrDefault(ConfigKeys.TicketSoloNumero) == "true";
+
+    /// <summary>
+    /// Tickets "PP-NNNNNN" de este puesto; en el puesto 1 (o con tickets "solo número") también los numéricos,
+    /// importados de la 3.x o de otro sistema.
+    /// </summary>
     private async Task<int> MaximoUsado(Guid empresaId, int puesto)
     {
+        var soloNumero = await SoloNumero();
         var prefijo = $"{puesto:D2}-";
         var tickets = await _db.Pesadas.IgnoreQueryFilters().AsNoTracking()
             .Where(p => p.EmpresaId == empresaId)
             .Select(p => p.TicketNumero)
             .ToListAsync();
         return tickets
-            .Select(t => t.StartsWith(prefijo, StringComparison.Ordinal) ? t[prefijo.Length..] : puesto == 1 && t.All(char.IsDigit) ? t : null)
+            .Select(t => t.StartsWith(prefijo, StringComparison.Ordinal) ? t[prefijo.Length..] : (puesto == 1 || soloNumero) && t.All(char.IsDigit) ? t : null)
             .Select(n => int.TryParse(n, out var v) ? v : 0)
             .DefaultIfEmpty(0)
             .Max();

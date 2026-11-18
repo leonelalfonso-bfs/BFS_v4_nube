@@ -40,6 +40,10 @@ public static class PesadaEndpoints
             ToResult(await pesaje.AnularAsync(id, req.Motivo, Operador(user))))
             .RequireAuthorization(Permisos.PesajeAnular);
 
+        api.MapPost("/pesadas/{id:guid}/corregir", async (Guid id, CorreccionRequest req, PesajeService pesaje, ClaimsPrincipal user) =>
+            ToResult(await pesaje.CorregirAsync(id, req, user.Email())))
+            .RequireAuthorization(Permisos.PesajeCorregir);
+
         api.MapPost("/taras/tomar", async (TomarTaraRequest req, PesajeService pesaje, ClaimsPrincipal user) =>
         {
             var (tara, error) = await pesaje.TomarTaraAsync(req, Operador(user));
@@ -76,7 +80,9 @@ public record EntradaRequest(
     Guid? BalanzaId = null,
     string? ClaveManual = null,
     string? TipoOperacion = null,
-    DatosAduanaDto? Aduana = null);
+    DatosAduanaDto? Aduana = null,
+    string? TipoDocumento = null,
+    string? Nacionalidad = null);
 
 public record SalidaRequest(int? PesoSalida, int? TaraPallets, Guid? BalanzaId = null, string? ClaveManual = null);
 
@@ -99,4 +105,12 @@ public record DatosAduanaDto(
     int ContenedorTara = 0,
     string? BultoId = null,
     int? BultoBruto = null,
-    int? BultoTara = null);
+    int? BultoTara = null,
+    string? Ata = null,
+    string? AtaCuit = null,
+    string? DestinacionAduanera = null,
+    string? ProcedenciaDestino = null,
+    string? IdDestino = null);
+
+/// <param name="Datos">Solo los campos que cambian: clave del campo (como en el formulario) → valor nuevo.</param>
+public record CorreccionRequest(string? Motivo, string? Clave, Dictionary<string, string?>? Datos);

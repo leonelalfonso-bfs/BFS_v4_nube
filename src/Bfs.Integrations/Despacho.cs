@@ -44,13 +44,14 @@ public interface IDestinoIntegracion
 /// <summary>
 /// Manda lo pendiente del outbox. Reglas:
 /// - Los envíos de una misma pesada salen en orden: si la ENTRADA está esperando, la SALIDA no se adelanta.
-/// - Una falla pasajera se reintenta con espera creciente (1, 2, 4... hasta 30 minutos).
+/// - Una falla pasajera se reintenta con espera creciente (1, 2, 4 y después cada 5 minutos).
 /// - Un rechazo queda en "error" para que BFS lo vea y lo reintente o lo descarte.
 /// </summary>
 public sealed class DespachadorOutbox(IEnumerable<IDestinoIntegracion> destinos, IHttpClientFactory http, ILogger<DespachadorOutbox> log, TimeProvider? clock = null)
 {
     public const int Lote = 20;
-    public static readonly TimeSpan EsperaMaxima = TimeSpan.FromMinutes(30);
+    /// <summary>WORMS sugiere reintentar cada minuto; se espera algo más si sigue sin responder, pero nunca más de 5.</summary>
+    public static readonly TimeSpan EsperaMaxima = TimeSpan.FromMinutes(5);
 
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
 

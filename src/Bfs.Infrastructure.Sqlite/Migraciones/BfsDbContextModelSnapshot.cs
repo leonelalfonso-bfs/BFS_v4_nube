@@ -544,6 +544,10 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                     b.Property<string>("Conductor")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("CorreccionesJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<long>("CreadoEn")
                         .HasColumnType("INTEGER");
 
@@ -581,6 +585,9 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                         .HasColumnType("TEXT");
 
                     b.Property<string>("MotivoAnulacion")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Nacionalidad")
                         .HasColumnType("TEXT");
 
                     b.Property<int?>("Neto")
@@ -639,6 +646,9 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
 
                     b.Property<string>("Tipo")
                         .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TipoDocumento")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("TipoOperacion")
@@ -895,6 +905,12 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                             b1.Property<Guid>("PesadaId")
                                 .HasColumnType("TEXT");
 
+                            b1.Property<string>("Ata")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("AtaCuit")
+                                .HasColumnType("TEXT");
+
                             b1.Property<int?>("BultoBruto")
                                 .HasColumnType("INTEGER");
 
@@ -922,6 +938,9 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                             b1.Property<int>("ContenedorTara")
                                 .HasColumnType("INTEGER");
 
+                            b1.Property<string>("DestinacionAduanera")
+                                .HasColumnType("TEXT");
+
                             b1.Property<string>("Escenario")
                                 .IsRequired()
                                 .HasColumnType("TEXT");
@@ -932,7 +951,16 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                             b1.Property<string>("ExportadorCuit")
                                 .HasColumnType("TEXT");
 
+                            b1.Property<string>("IdDestino")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("Lot")
+                                .HasColumnType("TEXT");
+
                             b1.Property<string>("OperacionId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("ProcedenciaDestino")
                                 .HasColumnType("TEXT");
 
                             b1.HasKey("PesadaId");

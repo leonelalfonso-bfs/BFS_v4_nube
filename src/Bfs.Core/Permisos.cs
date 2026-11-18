@@ -10,6 +10,9 @@ public static class Permisos
     public const string PesajePesoManual = "pesaje.peso_manual";
     public const string PesajeAnular = "pesaje.anular";
     public const string PesajeReimprimir = "pesaje.reimprimir";
+
+    /// <summary>Corregir los datos de una pesada (nunca los pesos). Además pide la clave de corrección si hay una.</summary>
+    public const string PesajeCorregir = "pesaje.corregir";
     public const string PesadasVer = "pesadas.ver";
     public const string PesadasVerPropias = "pesadas.ver_propias";
     public const string CatalogosVer = "catalogos.ver";
@@ -30,14 +33,14 @@ public static class Permisos
 
     public static IReadOnlyList<string> Todos { get; } =
     [
-        PesajeOperar, PesajePesoManual, PesajeAnular, PesajeReimprimir,
+        PesajeOperar, PesajePesoManual, PesajeAnular, PesajeReimprimir, PesajeCorregir,
         PesadasVer, PesadasVerPropias,
         CatalogosVer, CatalogosEditar,
         UsuariosGestionar, EmpresasGestionar, ConfigBfs, ConfigPlanta, LicenciaGestionar, SistemaGestionar
     ];
 
     private static readonly string[] Operador = [PesajeOperar, PesajeReimprimir, PesadasVer, CatalogosVer];
-    private static readonly string[] Supervisor = [.. Operador, PesajePesoManual, PesajeAnular, CatalogosEditar];
+    private static readonly string[] Supervisor = [.. Operador, PesajePesoManual, PesajeAnular, PesajeCorregir, CatalogosEditar];
     private static readonly string[] Admin = [.. Supervisor, UsuariosGestionar, ConfigPlanta, SistemaGestionar];
 
     private static readonly IReadOnlyDictionary<string, string[]> PorRol = new Dictionary<string, string[]>

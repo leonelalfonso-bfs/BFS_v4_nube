@@ -14,6 +14,8 @@ public class Pesada : EntidadSync
     public string? PatenteAcoplado { get; set; }
     public string? Conductor { get; set; }
     public string? Documento { get; set; }
+    public string? TipoDocumento { get; set; }
+    public string? Nacionalidad { get; set; }
     public string? Cliente { get; set; }
 
     /// <summary>Cliente del catálogo, si el texto coincide con uno. Es lo que filtra el portal del cliente.</summary>
@@ -45,4 +47,11 @@ public class Pesada : EntidadSync
     public DateTimeOffset? AnuladaEn { get; set; }
     public string? AnuladaPor { get; set; }
     public string? MotivoAnulacion { get; set; }
+
+    /// <summary>Correcciones de datos hechas después de abrir el ticket (lista de <see cref="CorreccionPesada"/>). Los pesos no se corrigen.</summary>
+    public string CorreccionesJson { get; set; } = "[]";
 }
+
+public record CambioCampo(string Campo, string? Antes, string? Despues);
+
+public record CorreccionPesada(DateTimeOffset En, string Por, string Motivo, List<CambioCampo> Cambios);

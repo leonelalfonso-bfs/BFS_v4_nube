@@ -87,12 +87,13 @@ public class DocumentosTests
         var ws = wb.Worksheet("Pesadas");
         Assert.Equal("Pesadas de prueba", ws.Cell(1, 1).GetString());
         Assert.Equal("Ticket", ws.Cell(3, 1).GetString());
-        var colNeto = ws.Row(3).CellsUsed().First(c => c.GetString() == "Neto (kg)").Address.ColumnNumber;
+        int Col(string nombre) => ws.Row(3).CellsUsed().First(c => c.GetString() == nombre).Address.ColumnNumber;
+        var colNeto = Col("Neto (kg)");
 
         Assert.Equal("01-000001", ws.Cell(4, 1).GetString());
         Assert.Equal(34180, ws.Cell(4, colNeto).GetDouble());
-        Assert.Equal(Entrada, ws.Cell(4, 6).GetDateTime());
-        Assert.Equal("Anulada", ws.Cell(5, 2).GetString());
+        Assert.Equal(Entrada, ws.Cell(4, Col("Entrada")).GetDateTime());
+        Assert.Equal("Anulada", ws.Cell(5, Col("Estado")).GetString());
         Assert.True(ws.Cell(5, colNeto).IsEmpty());
         Assert.StartsWith("SUM(", ws.Cell(6, colNeto).FormulaA1);
     }

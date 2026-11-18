@@ -56,7 +56,9 @@ public static class PlantaEndpoints
                 termicaAncho = c.GetValueOrDefault(ConfigKeys.TermicaAncho, "80"),
                 ingresoManual = Si(ConfigKeys.IngresoManual, "true"),
                 claveManual = !string.IsNullOrEmpty(c.GetValueOrDefault(ConfigKeys.ClaveManualHash)),
+                claveCorreccion = !string.IsNullOrEmpty(c.GetValueOrDefault(ConfigKeys.ClaveCorreccionHash)),
                 exigirEstable = Si(ConfigKeys.ExigirEstable, "true"),
+                aduanaLot = c.GetValueOrDefault(ConfigKeys.AduanaLot, ""),
                 puesto = int.TryParse(c.GetValueOrDefault(ConfigKeys.Puesto), out var puesto) ? puesto : 1
             });
         });
@@ -89,16 +91,16 @@ public static class PlantaEndpoints
 
         // Vacía = sin clave. Se guarda con hash; la 3.x la tenía en texto plano.
         api.MapPut("/planta/clave-manual", async (ClaveManualDto dto, ConfigService config, PasswordHasher<Usuario> hasher) =>
-        {
-            var clave = dto.Clave ?? "";
-            if (clave.Length is > 0 and < LargoMinimoClaveManual)
-            {
-                return Results.BadRequest($"La clave tiene que tener al menos {LargoMinimoClaveManual} caracteres");
-            }
-            var hash = clave.Length == 0 ? "" : hasher.HashPassword(new Usuario(), clave);
-            await config.GuardarAsync(new Dictionary<string, string> { [ConfigKeys.ClaveManualHash] = hash });
-            return Results.Ok(new { claveManual = hash.Length > 0 });
-        }).RequireAuthorization(Permisos.ConfigPlanta);
+            await GuardarClave(dto.Clave, ConfigKeys.ClaveManualHash, config, hasher) is { } hash
+                ? Results.Ok(new { claveManual = hash.Length > 0 })
+                : Results.BadRequest($"La clave tiene que tener al menos {LargoMinimoClaveManual} caracteres"))
+            .RequireAuthorization(Permisos.ConfigPlanta);
+
+        api.MapPut("/planta/clave-correccion", async (ClaveManualDto dto, ConfigService config, PasswordHasher<Usuario> hasher) =>
+            await GuardarClave(dto.Clave, ConfigKeys.ClaveCorreccionHash, config, hasher) is { } hash
+                ? Results.Ok(new { claveCorreccion = hash.Length > 0 })
+                : Results.BadRequest($"La clave tiene que tener al menos {LargoMinimoClaveManual} caracteres"))
+            .RequireAuthorization(Permisos.ConfigPlanta);
 
         api.MapGet("/vehiculos/{patente}", async (string patente, BfsDbContext db) =>
         {
@@ -109,6 +111,16 @@ public static class PlantaEndpoints
                 ? Results.NotFound()
                 : Results.Ok(new { datos, tara });
         }).RequireAuthorization(Permisos.PesajeOperar);
+    }
+
+    /// <summary>Guarda el hash de la clave (vacía = sin clave). Null si es demasiado corta.</summary>
+    private static async Task<string?> GuardarClave(string? clave, string configKey, ConfigService config, PasswordHasher<Usuario> hasher)
+    {
+        clave ??= "";
+        if (clave.Length is > 0 and < LargoMinimoClaveManual) return null;
+        var hash = clave.Length == 0 ? "" : hasher.HashPassword(new Usuario(), clave);
+        await config.GuardarAsync(new Dictionary<string, string> { [configKey] = hash });
+        return hash;
     }
 
     private static DateOnly? Fecha(string? s) => DateOnly.TryParse(s, out var d) ? d : null;
