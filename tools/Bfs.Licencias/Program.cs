@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Security.Cryptography;
 using Bfs.Core.Licencias;
 
@@ -49,24 +49,15 @@ static int NuevaClave(string privada)
 static int Generar(Dictionary<string, string> opts)
 {
     using var clave = LicenciaCodec.ClaveDesdePem(File.ReadAllText(Requerido(opts, "privada")));
-    var maquina = Requerido(opts, "maquina").Trim().ToUpperInvariant();
-    if (!maquina.StartsWith("MAC-", StringComparison.Ordinal))
+    var maquina = MaquinaId.Normalizar(Requerido(opts, "maquina"));
+    if (maquina == null)
     {
         Console.Error.WriteLine("La máquina tiene que tener el formato MAC-XXXXXXXXXXXX (se ve en el sistema, pantalla Licencia).");
         return 2;
     }
 
-    // Vale hasta el último segundo de ese día, en la hora de esta PC (Argentina).
-    DateTimeOffset? vence = null;
-    if (opts.TryGetValue("vence", out var v))
-    {
-        var dia = DateTime.ParseExact(v, "yyyy-MM-dd", CultureInfo.InvariantCulture);
-        var fin = dia.AddDays(1).AddSeconds(-1);
-        vence = new DateTimeOffset(fin, TimeZoneInfo.Local.GetUtcOffset(fin));
-    }
-
-    var licencia = new Licencia(Requerido(opts, "cliente"), maquina, DateTimeOffset.UtcNow, vence);
-    var texto = LicenciaCodec.Firmar(licencia, clave);
+    DateOnly? vence = opts.TryGetValue("vence", out var v) ? DateOnly.ParseExact(v, "yyyy-MM-dd", CultureInfo.InvariantCulture) : null;
+    var (licencia, texto) = LicenciaCodec.Emitir(Requerido(opts, "cliente"), maquina, vence, clave);
 
     if (opts.TryGetValue("salida", out var salida))
     {

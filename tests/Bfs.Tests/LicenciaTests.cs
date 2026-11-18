@@ -33,6 +33,32 @@ public class LicenciaTests : IDisposable
     private string Emitir(string maquina = Maquina, DateTimeOffset? vence = null) =>
         LicenciaCodec.Firmar(new Licencia("Agro SA", maquina, _clock.Ahora, vence), _privada);
 
+    [Theory]
+    [InlineData("MAC-A82BDD69836D", "MAC-A82BDD69836D")]
+    [InlineData(" mac-a82b dd69 836d ", "MAC-A82BDD69836D")]
+    [InlineData("A8:2B:DD:69:83:6D", "MAC-A82BDD69836D")]
+    [InlineData("a8-2b-dd-69-83-6d", "MAC-A82BDD69836D")]
+    [InlineData("MAC-A82BDD6983", null)]
+    [InlineData("MAC-A82BDD69836Z", null)]
+    [InlineData("", null)]
+    public void Id_de_maquina_como_lo_dicte_el_cliente(string texto, string? esperado) =>
+        Assert.Equal(esperado, MaquinaId.Normalizar(texto));
+
+    [Fact]
+    public void Emitir_vence_al_final_del_dia_y_reconoce_la_clave_del_sistema()
+    {
+        var (licencia, texto) = LicenciaCodec.Emitir(" Agro SA ", Maquina, new DateOnly(2027, 3, 31), _privada);
+        Assert.Equal("Agro SA", licencia.Cliente);
+        var fin = licencia.Vence!.Value.ToLocalTime();
+        Assert.Equal(new DateTime(2027, 3, 31, 23, 59, 59), fin.DateTime);
+        using var publica = ECDsa.Create(_privada.ExportParameters(false));
+        Assert.Equal(licencia, LicenciaCodec.Verificar(texto, publica));
+        Assert.Null(LicenciaCodec.Emitir("x", Maquina, null, _privada).Licencia.Vence);
+
+        // Una clave cualquiera (o la de la nube) no es la que acepta el sistema instalado.
+        Assert.False(LicenciaCodec.EsLaClaveDelSistema(_privada));
+    }
+
     [Fact]
     public void Firma_valida_se_verifica_y_alterada_no()
     {

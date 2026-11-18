@@ -42,6 +42,33 @@ public static class LicenciaCodec
         }
     }
 
+    /// <summary>
+    /// Arma y firma una licencia. Con <paramref name="vence"/> vale hasta el último segundo de ese día
+    /// en la hora de la PC que la emite (Argentina).
+    /// </summary>
+    public static (Licencia Licencia, string Texto) Emitir(string cliente, string maquina, DateOnly? vence, ECDsa clavePrivada)
+    {
+        DateTimeOffset? hasta = null;
+        if (vence is { } dia)
+        {
+            var fin = dia.ToDateTime(TimeOnly.MaxValue).AddTicks(-(TimeSpan.TicksPerSecond - 1));
+            hasta = new DateTimeOffset(fin, TimeZoneInfo.Local.GetUtcOffset(fin));
+        }
+        var licencia = new Licencia(cliente.Trim(), maquina, DateTimeOffset.UtcNow, hasta);
+        return (licencia, Firmar(licencia, clavePrivada));
+    }
+
+    /// <summary>
+    /// ¿Esta clave privada firma licencias que el sistema acepta? Si no, todo lo que firme va a salir "Invalida"
+    /// (por ejemplo, si se eligió por error la clave de la nube o un archivo viejo).
+    /// </summary>
+    public static bool EsLaClaveDelSistema(ECDsa clavePrivada)
+    {
+        var prueba = Firmar(new Licencia("prueba", "MAC-000000000000", DateTimeOffset.UtcNow, null), clavePrivada);
+        using var publica = ClaveDesdePem(LicenciaClave.PublicaPem);
+        return Verificar(prueba, publica) != null;
+    }
+
     public static ECDsa ClaveDesdePem(string pem)
     {
         var ecdsa = ECDsa.Create();

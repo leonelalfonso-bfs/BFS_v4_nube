@@ -36,6 +36,18 @@ public static class MaquinaId
 
     public static string Formatear(byte[] mac) => "MAC-" + Convert.ToHexString(mac);
 
+    /// <summary>
+    /// Acepta el id como lo dicte o pegue el cliente ("MAC-A82BDD69836D", "mac-a82b dd69 836d", "A8:2B:DD:69:83:6D")
+    /// y lo devuelve en el formato de la licencia. Null si no son 12 dígitos hexadecimales.
+    /// </summary>
+    public static string? Normalizar(string? texto)
+    {
+        var t = (texto ?? "").Trim().ToUpperInvariant();
+        if (t.StartsWith("MAC-", StringComparison.Ordinal)) t = t[4..];
+        var hex = new string(t.Where(c => c is not (' ' or ':' or '-' or '.')).ToArray());
+        return hex.Length == 12 && hex.All(Uri.IsHexDigit) ? "MAC-" + hex : null;
+    }
+
     private static bool TieneMac(NetworkInterface n)
     {
         if (n.NetworkInterfaceType is NetworkInterfaceType.Loopback or NetworkInterfaceType.Tunnel) return false;
