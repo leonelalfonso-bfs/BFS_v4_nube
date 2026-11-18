@@ -135,6 +135,37 @@ public class DocumentosTests
         Assert.Equal(2, FilasExcel(await admin.GetByteArrayAsync($"/api/pesadas/excel?desde={hoy}&hasta={hoy}")));
     }
 
+    [Fact]
+    public async Task Logo_del_cliente_se_guarda_sale_en_el_ticket_y_se_quita()
+    {
+        await using var api = await TestApi.Iniciar();
+        using var vendor = await api.LoginVendor();
+        using var admin = await api.LoginAdmin();
+        var id = await Entrada_(admin, "Agro SA");
+        var sinLogo = await admin.GetByteArrayAsync($"/api/pesadas/{id}/ticket");
+
+        // Un PNG de 1x1 (así no depende de un archivo).
+        using var png = new MemoryStream(Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="));
+        HttpContent Archivo(byte[] bytes, string nombre) =>
+            new MultipartFormDataContent { { new ByteArrayContent(bytes), "file", nombre } };
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await admin.PostAsync("/api/branding/logo", Archivo(png.ToArray(), "logo.png"))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await vendor.PostAsync("/api/branding/logo", Archivo("<svg/>"u8.ToArray(), "logo.svg"))).StatusCode);
+        (await vendor.PostAsync("/api/branding/logo", Archivo(png.ToArray(), "Logo Cliente.PNG"))).EnsureSuccessStatusCode();
+
+        var branding = await vendor.GetFromJsonAsync<JsonElement>("/api/branding");
+        Assert.Equal("/api/branding/logo", branding.GetProperty("logoUrl").GetString());
+        Assert.Equal(png.ToArray(), await vendor.GetByteArrayAsync("/api/branding/logo"));
+        // El ticket lleva la imagen: el PDF crece.
+        Assert.True((await admin.GetByteArrayAsync($"/api/pesadas/{id}/ticket")).Length > sinLogo.Length);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await vendor.DeleteAsync("/api/branding/logo")).StatusCode);
+        branding = await vendor.GetFromJsonAsync<JsonElement>("/api/branding");
+        Assert.Equal(JsonValueKind.Null, branding.GetProperty("logoUrl").ValueKind);
+        Assert.Equal(HttpStatusCode.NotFound, (await vendor.GetAsync("/api/branding/logo")).StatusCode);
+    }
+
     private static async Task<Guid> Entrada_(HttpClient http, string cliente)
     {
         var res = await http.PostAsJsonAsync("/api/pesadas/entrada", new { empresaId = TestApi.Empresa1, patenteChasis = "AA111AA", cliente, pesoEntrada = 30000, taraPallets = 0 });
