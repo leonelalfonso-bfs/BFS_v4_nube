@@ -23,27 +23,37 @@ public static class TicketPdf
         QuestPDF.Settings.License = LicenseType.Community;
     }
 
+    /// <summary>Media A4: el original arriba y el duplicado abajo, para cortar la hoja al medio y que queden iguales.</summary>
+    public static readonly float MediaHoja = PageSizes.A4.Height / 2;
+
+    private const float LineaCorte = 0.5f;
+
     public static byte[] Generar(TicketDatos t) =>
         Document.Create(doc => doc.Page(page =>
         {
             page.Size(PageSizes.A4);
-            page.MarginHorizontal(36);
-            page.MarginVertical(28);
             page.DefaultTextStyle(x => x.FontSize(7.5f).FontFamily(Fuente).LineHeight(1.2f));
+            if (t.EsAduana)
+            {
+                page.MarginHorizontal(36);
+                page.MarginVertical(28);
+                page.Content().Element(c => Aduana(c, t));
+                return;
+            }
+
+            // Sin margen de página: cada copia es una caja de exactamente media hoja con su propio margen,
+            // y la línea punteada cae justo en el medio. Si una copia no entra (observaciones muy largas) se achica.
+            page.Margin(0);
             page.Content().Column(col =>
             {
-                if (t.EsAduana)
-                {
-                    col.Item().Element(c => Aduana(c, t));
-                }
-                else
-                {
-                    col.Item().Element(c => Normal(c, t, "TICKET ORIGINAL"));
-                    col.Item().Height(36);
-                    col.Item().Element(c => Normal(c, t, "TICKET DUPLICADO"));
-                }
+                col.Item().Height(MediaHoja - LineaCorte / 2).Element(c => Copia(c, t, "TICKET ORIGINAL"));
+                col.Item().LineHorizontal(LineaCorte).LineColor(Colors.Grey.Medium).LineDashPattern([4f, 4f]);
+                col.Item().Height(MediaHoja - LineaCorte / 2).Element(c => Copia(c, t, "TICKET DUPLICADO"));
             });
         })).GeneratePdf();
+
+    private static void Copia(IContainer c, TicketDatos t, string copia) =>
+        c.PaddingHorizontal(36).PaddingVertical(24).ScaleToFit().Element(x => Normal(x, t, copia));
 
     private static void Empresa(IContainer c, TicketDatos t)
     {
