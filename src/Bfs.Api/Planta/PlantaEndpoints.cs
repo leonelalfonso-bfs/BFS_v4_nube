@@ -61,6 +61,7 @@ public static class PlantaEndpoints
                 ingresoManual = Si(ConfigKeys.IngresoManual, "true"),
                 claveManual = !string.IsNullOrEmpty(c.GetValueOrDefault(ConfigKeys.ClaveManualHash)),
                 claveCorreccion = !string.IsNullOrEmpty(c.GetValueOrDefault(ConfigKeys.ClaveCorreccionHash)),
+                claveBorrado = !string.IsNullOrEmpty(c.GetValueOrDefault(ConfigKeys.ClaveBorradoHash)),
                 exigirEstable = Si(ConfigKeys.ExigirEstable, "true"),
                 aduanaLot = c.GetValueOrDefault(ConfigKeys.AduanaLot, ""),
                 aduanaEscenario = c.GetValueOrDefault(ConfigKeys.AduanaEscenario, ""),
@@ -108,6 +109,13 @@ public static class PlantaEndpoints
         api.MapPut("/planta/clave-correccion", async (ClaveManualDto dto, ConfigService config, PasswordHasher<Usuario> hasher) =>
             await GuardarClave(dto.Clave, ConfigKeys.ClaveCorreccionHash, config, hasher) is { } hash
                 ? Results.Ok(new { claveCorreccion = hash.Length > 0 })
+                : Results.BadRequest($"La clave tiene que tener al menos {LargoMinimoClaveManual} caracteres"))
+            .RequireAuthorization(Permisos.ConfigPlanta);
+
+        // Borrar un registro de un catálogo (el operador los carga y edita; borrar puede pedir esta clave).
+        api.MapPut("/planta/clave-borrado", async (ClaveManualDto dto, ConfigService config, PasswordHasher<Usuario> hasher) =>
+            await GuardarClave(dto.Clave, ConfigKeys.ClaveBorradoHash, config, hasher) is { } hash
+                ? Results.Ok(new { claveBorrado = hash.Length > 0 })
                 : Results.BadRequest($"La clave tiene que tener al menos {LargoMinimoClaveManual} caracteres"))
             .RequireAuthorization(Permisos.ConfigPlanta);
 

@@ -521,6 +521,11 @@ fieldset.seccion legend {
   .grid2, .grid3, .displays.dos { grid-template-columns: 1fr; }
 }
 
-/* Ventana para elegir qué imprimir (edición INAGRO). */
+/* Campo con botón + para dar de alta en el catálogo sin salir de Pesaje. */
+.con-alta { display: flex; gap: 6px; }
+.con-alta input { flex: 1; min-width: 0; }
+.btn-alta { padding: 0 12px; font-size: 18px; font-weight: 700; line-height: 1; }
+
+/* Ventanas (alta rápida, elegir impresión). */
 .modal-fondo { position: fixed; inset: 0; background: rgba(15, 23, 42, .45); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
-.modal-fondo .modal { max-width: 440px; width: 100%; }
+.modal-fondo .modal { max-width: 520px; width: 100%; }

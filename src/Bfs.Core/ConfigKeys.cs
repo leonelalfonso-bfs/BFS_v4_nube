@@ -31,6 +31,9 @@ public static class ConfigKeys
     /// <summary>Hash de la clave que pide la corrección de datos de una pesada.</summary>
     public const string ClaveCorreccionHash = "clave_correccion_hash";
 
+    /// <summary>Hash de la clave que pide borrar un registro de un catálogo. Vacía = sin clave.</summary>
+    public const string ClaveBorradoHash = "clave_borrado_hash";
+
     /// <summary>Escenario de aduana fijo para todas las operaciones; vacío = lo elige el operador.</summary>
     public const string AduanaEscenario = "aduana_escenario";
 

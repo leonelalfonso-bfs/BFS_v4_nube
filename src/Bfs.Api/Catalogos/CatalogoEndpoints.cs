@@ -156,8 +156,19 @@ public static class CatalogoEndpoints
             return Results.Ok(entity);
         }).RequireAuthorization(Permisos.CatalogosEditar);
 
-        g.MapDelete($"/{ruta}/{{id:guid}}", async (Guid id, BfsDbContext db) =>
+        // Si la planta configuró una clave de borrado, viene en el encabezado X-Clave-Borrado.
+        g.MapDelete($"/{ruta}/{{id:guid}}", async (Guid id, BfsDbContext db, HttpRequest request, Config.ConfigService config,
+            Microsoft.AspNetCore.Identity.PasswordHasher<Usuario> hasher) =>
         {
+            var hash = await config.ValorAsync(ConfigKeys.ClaveBorradoHash);
+            if (!string.IsNullOrEmpty(hash))
+            {
+                var clave = request.Headers["X-Clave-Borrado"].ToString();
+                if (clave.Length == 0 || hasher.VerifyHashedPassword(new Usuario(), hash, clave) == Microsoft.AspNetCore.Identity.PasswordVerificationResult.Failed)
+                {
+                    return Results.Text("Clave de borrado incorrecta", statusCode: StatusCodes.Status403Forbidden);
+                }
+            }
             var entity = await set(db).FirstOrDefaultAsync(e => e.Id == id);
             if (entity == null) return Results.NotFound();
             if (puedeBorrar != null && await puedeBorrar(db, entity) is { } motivo) return Results.Conflict(motivo);
