@@ -4,6 +4,7 @@ using Bfs.Api.Licencias;
 using Bfs.Core;
 using Bfs.Core.Entities;
 using Bfs.Infrastructure.Data;
+using Bfs.Integrations.Centum;
 using Bfs.Integrations.Worms;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -36,10 +37,12 @@ public class PesajeService
     private readonly PasswordHasher<Usuario> _hasher;
 
     private readonly Edicion _edicion;
+    private readonly BfsOptions _opciones;
 
     public PesajeService(BfsDbContext db, IBalanzas balanzas, ConfigService config, LicenciaService licencia, PasswordHasher<Usuario> hasher,
         BfsOptions? opciones = null)
     {
+        _opciones = opciones ?? new BfsOptions();
         _edicion = opciones?.Edicion ?? Ediciones.Compilada;
         _db = db;
         _balanzas = balanzas;
@@ -102,6 +105,7 @@ public class PesajeService
         pesada.TaraPallets = req.TaraPallets ?? pesada.TaraPallets;
         Cerrar(pesada);
         await EncolarWorms(configs, pesada, WormsEventos.Salida);
+        await EncolarCentum(configs, pesada);
         await _db.SaveChangesAsync();
         return ResultadoPesaje.Ok(pesada);
     });
@@ -156,6 +160,7 @@ public class PesajeService
         _db.Pesadas.Add(pesada);
         await RecordarVehiculo(pesada);
         await EncolarWorms(configs, pesada, WormsEventos.Entrada, WormsEventos.Salida);
+        await EncolarCentum(configs, pesada);
         await _db.SaveChangesAsync();
         return ResultadoPesaje.Ok(pesada);
     });
@@ -228,7 +233,21 @@ public class PesajeService
         ("aduana.operacionId", "N° de operación", p => p.Aduana?.OperacionId, (p, v) => p.Aduana!.OperacionId = v),
         ("aduana.destinacionAduanera", "Destinación aduanera", p => p.Aduana?.DestinacionAduanera, (p, v) => p.Aduana!.DestinacionAduanera = v),
         ("aduana.contenedorId", "Contenedor", p => p.Aduana?.ContenedorId, (p, v) => p.Aduana!.ContenedorId = v?.ToUpperInvariant()),
-        ("aduana.bultoId", "Bulto", p => p.Aduana?.BultoId, (p, v) => p.Aduana!.BultoId = v)
+        ("aduana.bultoId", "Bulto", p => p.Aduana?.BultoId, (p, v) => p.Aduana!.BultoId = v),
+        // Edición Inagro. El peso de origen es lo que dice el remito del origen, no un peso de la balanza: se puede corregir.
+        ("inagro.movimiento", "Id de operación", p => p.Inagro?.Movimiento?.ToString(), (p, v) =>
+        {
+            p.Inagro!.Movimiento = int.Parse(v!);
+            p.Tipo = MovimientosInagro.Tipo(p.Inagro.Movimiento);
+            if (!MovimientosInagro.LlevaPesoOrigen(p.Inagro.Movimiento)) p.Inagro.PesoOrigen = null;
+        }),
+        ("inagro.pesoOrigen", "Peso de origen", p => p.Inagro?.PesoOrigen?.ToString(), (p, v) => p.Inagro!.PesoOrigen = v == null ? null : int.Parse(v)),
+        ("inagro.tanque", "Tanque", p => p.Inagro?.Tanque, (p, v) => p.Inagro!.Tanque = v),
+        ("inagro.analisis", "Análisis", p => p.Inagro?.Analisis, (p, v) => p.Inagro!.Analisis = v),
+        ("inagro.precintos", "Precintos", p => p.Inagro?.Precintos, (p, v) => p.Inagro!.Precintos = v),
+        ("inagro.productoCodigo", "Código de producto", p => p.Inagro?.ProductoCodigo, (p, v) => p.Inagro!.ProductoCodigo = v),
+        ("inagro.cuilChofer", "CUIL chofer", p => p.Inagro?.CuilChofer, (p, v) => p.Inagro!.CuilChofer = v),
+        ("inagro.observacionesRemito", "Observaciones del remito", p => p.Inagro?.ObservacionesRemito, (p, v) => p.Inagro!.ObservacionesRemito = v)
     ];
 
     /// <summary>
@@ -258,6 +277,16 @@ public class PesajeService
             if (clave.StartsWith("aduana.", StringComparison.Ordinal) && pesada.Aduana == null)
             {
                 return ResultadoPesaje.Invalida("La pesada no es una operación de aduana");
+            }
+            if (clave.StartsWith("inagro.", StringComparison.Ordinal) && pesada.Inagro == null)
+            {
+                return ResultadoPesaje.Invalida("La pesada no tiene datos de INAGRO");
+            }
+            if (clave == "inagro.pesoOrigen" && !MovimientosInagro.LlevaPesoOrigen(
+                    req.Datos!.TryGetValue("inagro.movimiento", out var mov) && int.TryParse(mov, out var m) ? m : pesada.Inagro!.Movimiento)
+                && !string.IsNullOrWhiteSpace(valor))
+            {
+                return ResultadoPesaje.Invalida("El peso de origen es solo para compras y órdenes de traspaso");
             }
 
             var (nuevo, error) = NormalizarCorreccion(clave, valor);
@@ -311,6 +340,15 @@ public class PesajeService
             case "aduana.ataCuit":
                 var (cuit, error) = Cuit.Normalizar(v);
                 return error != null ? (null, error) : (cuit, null);
+            case "inagro.movimiento":
+                return v is "1" or "2" or "3" ? (v, null) : (null, "El Id de operación es 1 (compras), 2 (ventas) o 3 (OT)");
+            case "inagro.pesoOrigen":
+                if (v == null) return (null, null);
+                return int.TryParse(v, out var kg) && kg >= 0 ? (kg.ToString(), null) : (null, "El peso de origen son kilos (número entero)");
+            case "inagro.analisis":
+                return ValidarAnalisis(v);
+            case "inagro.cuilChofer":
+                return ValidarCuil(v);
             default:
                 return (v, null);
         }
@@ -347,16 +385,29 @@ public class PesajeService
             return (null, ResultadoPesaje.Invalida("Tipo de operación inválido"));
         }
 
+        DatosInagro? inagro = null;
+        if (_edicion == Edicion.Inagro)
+        {
+            var (datos, errorInagro) = await ArmarInagro(req, clienteId, configs);
+            if (errorInagro != null) return (null, ResultadoPesaje.Invalida(errorInagro));
+            inagro = datos;
+        }
+
         var puesto = int.TryParse(configs.GetValueOrDefault(ConfigKeys.Puesto), out var p) && p is >= 1 and <= 99 ? p : 1;
         var soloNumero = Si(configs, ConfigKeys.TicketSoloNumero);
         var ticket = await ProximoTicket(empresa, puesto, soloNumero);
+
+        var tipo = inagro != null
+            ? MovimientosInagro.Tipo(inagro.Movimiento)
+            : string.IsNullOrWhiteSpace(req.Tipo) ? configs.GetValueOrDefault(ConfigKeys.WormsTipoDefault, "INGRESO") : req.Tipo;
 
         return (new Pesada
         {
             Id = Guid.NewGuid(),
             EmpresaId = empresa.Id,
             TicketNumero = ticket,
-            Tipo = string.IsNullOrWhiteSpace(req.Tipo) ? configs.GetValueOrDefault(ConfigKeys.WormsTipoDefault, "INGRESO") : req.Tipo,
+            Tipo = tipo,
+            Inagro = inagro,
             Estado = EstadosPesada.Entrada,
             Modo = ModosPesaje.Normal,
             TipoOperacion = tipoOperacion,
@@ -439,6 +490,87 @@ public class PesajeService
         }, null);
     }
 
+    /// <summary>
+    /// Campos de INAGRO: valida lo que cargó el operador y le suma lo que la 3.x guardaba con la pesada
+    /// (datos del cliente y del transporte del catálogo, código del producto y planta de la instalación).
+    /// </summary>
+    private async Task<(DatosInagro? Datos, string? Error)> ArmarInagro(EntradaRequest req, Guid? clienteId, Dictionary<string, string> configs)
+    {
+        var dto = req.Inagro;
+        if (dto?.Movimiento is not (MovimientosInagro.Compras or MovimientosInagro.Ventas or MovimientosInagro.Traspaso))
+        {
+            return (null, "Elegí el Id de operación: compras, ventas u OT");
+        }
+        int? pesoOrigen = null;
+        if (MovimientosInagro.LlevaPesoOrigen(dto.Movimiento) && dto.PesoOrigen is { } origen)
+        {
+            if (origen < 0) return (null, "El peso de origen no puede ser negativo");
+            pesoOrigen = origen;
+        }
+        var (analisis, errorAnalisis) = ValidarAnalisis(Vacio(dto.Analisis));
+        if (errorAnalisis != null) return (null, errorAnalisis);
+        var (cuil, errorCuil) = ValidarCuil(Vacio(dto.CuilChofer));
+        if (errorCuil != null) return (null, errorCuil);
+
+        var cliente = clienteId.HasValue
+            ? await _db.Clientes.AsNoTracking().FirstOrDefaultAsync(c => c.Id == clienteId)
+            : null;
+        var transporte = await PorNombre(_db.Transportes, req.Transporte, t => t.RazonSocial);
+        var producto = await PorNombre(_db.Productos, req.Producto, x => x.Nombre);
+
+        return (new DatosInagro
+        {
+            Movimiento = dto.Movimiento,
+            PesoOrigen = pesoOrigen,
+            Tanque = Vacio(dto.Tanque),
+            Analisis = analisis,
+            Precintos = Vacio(dto.Precintos),
+            ProductoCodigo = Vacio(dto.ProductoCodigo) ?? producto?.Codigo,
+            CuilChofer = cuil,
+            ObservacionesRemito = Vacio(dto.ObservacionesRemito),
+            Planta = Vacio(configs.GetValueOrDefault(ConfigKeys.InagroPlanta)) ?? Inagro.PlantaPorDefecto,
+            ClienteCuit = cliente?.Cuit,
+            ClienteDireccion = cliente?.Direccion,
+            ClienteLocalidad = cliente?.Localidad,
+            ClienteCondicionIva = cliente?.CondicionIva,
+            TransporteCuit = transporte?.Cuit,
+            TransporteDireccion = transporte?.Direccion,
+            TransporteLocalidad = transporte?.Localidad,
+            TransporteCondicionIva = transporte?.CondicionIva
+        }, null);
+    }
+
+    private static (string? Valor, string? Error) ValidarAnalisis(string? v)
+    {
+        if (v == null) return (null, null);
+        return v.Length <= 6 && v.All(char.IsDigit) ? (v, null) : (null, "El análisis son hasta 6 números");
+    }
+
+    private static (string? Valor, string? Error) ValidarCuil(string? v)
+    {
+        if (v == null) return (null, null);
+        var digitos = Inagro.Digitos(v, int.MaxValue);
+        return digitos.Length == 11 && v.All(c => char.IsDigit(c) || c is '-' or ' ' or '.')
+            ? (digitos, null)
+            : (null, "El CUIL del chofer son 11 números");
+    }
+
+    /// <summary>El del catálogo con ese nombre exacto (sin distinguir mayúsculas), si hay uno solo.</summary>
+    private static async Task<T?> PorNombre<T>(IQueryable<T> set, string? nombre, System.Linq.Expressions.Expression<Func<T, string>> columna)
+        where T : EntidadSync
+    {
+        if (string.IsNullOrWhiteSpace(nombre)) return null;
+        var buscado = nombre.Trim().ToLower();
+        var param = columna.Parameters[0];
+        var cond = System.Linq.Expressions.Expression.Lambda<Func<T, bool>>(
+            System.Linq.Expressions.Expression.Equal(
+                System.Linq.Expressions.Expression.Call(columna.Body, typeof(string).GetMethod(nameof(string.ToLower), Type.EmptyTypes)!),
+                System.Linq.Expressions.Expression.Constant(buscado)),
+            param);
+        var encontrados = await set.AsNoTracking().Where(cond).Take(2).ToListAsync();
+        return encontrados.Count == 1 ? encontrados[0] : null;
+    }
+
     private static void Cerrar(Pesada p)
     {
         p.SalidaEn = DateTimeOffset.UtcNow;
@@ -505,21 +637,30 @@ public class PesajeService
     /// </summary>
     private async Task<string> ProximoTicket(Empresa empresa, int puesto, bool soloNumero)
     {
+        // Numeración compartida (INAGRO): un ticket no se repite en ninguna empresa.
+        var compartida = Ediciones.NumeracionCompartida(_edicion);
         while (true)
         {
-            var ticket = Tickets.Formatear(puesto, await ProximoNumero(empresa, puesto), soloNumero);
-            if (!await _db.Pesadas.IgnoreQueryFilters().AnyAsync(p => p.EmpresaId == empresa.Id && p.TicketNumero == ticket)) return ticket;
+            var ticket = Tickets.Formatear(puesto, await ProximoNumero(empresa, puesto, compartida), soloNumero);
+            var usado = await _db.Pesadas.IgnoreQueryFilters()
+                .AnyAsync(p => (compartida || p.EmpresaId == empresa.Id) && p.TicketNumero == ticket);
+            if (!usado) return ticket;
         }
     }
 
-    private async Task<int> ProximoNumero(Empresa empresa, int puesto)
+    private async Task<int> ProximoNumero(Empresa empresa, int puesto, bool compartida)
     {
-        var contador = _db.ContadoresTicket.Local.FirstOrDefault(c => c.EmpresaId == empresa.Id && c.Puesto == puesto)
-            ?? await _db.ContadoresTicket.FirstOrDefaultAsync(c => c.EmpresaId == empresa.Id && c.Puesto == puesto);
+        var clave = compartida ? ContadoresCompartidos.Empresa : empresa.Id;
+        var contador = _db.ContadoresTicket.Local.FirstOrDefault(c => c.EmpresaId == clave && c.Puesto == puesto)
+            ?? await _db.ContadoresTicket.FirstOrDefaultAsync(c => c.EmpresaId == clave && c.Puesto == puesto);
         if (contador == null)
         {
-            // El puesto 1 sigue la numeración que traía la empresa (spike / importación de la 3.x).
-            contador = new ContadorTicket { Id = Guid.NewGuid(), EmpresaId = empresa.Id, Puesto = puesto, Proximo = puesto == 1 ? Math.Max(1, empresa.ProximoTicket) : 1 };
+            // El puesto 1 sigue la numeración que traía la empresa (spike / importación de la 3.x);
+            // la compartida, la más alta de todas.
+            var traia = compartida
+                ? await _db.Empresas.IgnoreQueryFilters().Select(e => (int?)e.ProximoTicket).MaxAsync() ?? 1
+                : empresa.ProximoTicket;
+            contador = new ContadorTicket { Id = Guid.NewGuid(), EmpresaId = clave, Puesto = puesto, Proximo = puesto == 1 ? Math.Max(1, traia) : 1 };
             _db.ContadoresTicket.Add(contador);
         }
         return contador.Proximo++;
@@ -569,6 +710,14 @@ public class PesajeService
         if (_edicion == Edicion.Estandar || !WormsOutbox.EmpresaEnvia(configs, pesada.EmpresaId)) return;
         var empresa = await _db.Empresas.AsNoTracking().Where(e => e.Id == pesada.EmpresaId).Select(e => e.Nombre).FirstOrDefaultAsync() ?? "";
         foreach (var evento in eventos) WormsOutbox.Encolar(_db, configs, pesada, evento, empresa);
+    }
+
+    /// <summary>Edición Inagro: la pesada cerrada va a Centum si su empresa tiene una sociedad que vincula.</summary>
+    private async Task EncolarCentum(Dictionary<string, string> configs, Pesada pesada)
+    {
+        if (_edicion != Edicion.Inagro || pesada.Inagro == null) return;
+        var sociedad = await _db.Empresas.AsNoTracking().Where(e => e.Id == pesada.EmpresaId).Select(e => e.CodigoSociedad).FirstOrDefaultAsync();
+        CentumOutbox.Encolar(_db, configs, pesada, sociedad, _opciones.HoraLocal(pesada.EntradaEn));
     }
 
     private static bool Si(Dictionary<string, string> c, string clave, string porDefecto = "false") =>

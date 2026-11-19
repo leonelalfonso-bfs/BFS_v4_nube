@@ -14,12 +14,14 @@ public static class TiposSync
     public const string Productos = "productos";
     public const string Exportadores = "exportadores";
     public const string Taras = "taras";
+    public const string Tanques = "tanques";
+    public const string Sucursales = "sucursales";
     public const string Vehiculos = "vehiculos";
     public const string Pesadas = "pesadas";
     public const string Usuarios = "usuarios";
 
     /// <summary>De la portería a la nube.</summary>
-    public static IReadOnlyList<string> Subida { get; } = [Empresas, Clientes, Transportes, Productos, Exportadores, Taras, Vehiculos, Pesadas];
+    public static IReadOnlyList<string> Subida { get; } = [Empresas, Clientes, Transportes, Productos, Exportadores, Taras, Tanques, Sucursales, Vehiculos, Pesadas];
 
     /// <summary>
     /// De la nube a la portería: lo mismo más los usuarios, que se administran en la nube y tienen que poder
@@ -35,6 +37,8 @@ public static class TiposSync
         Productos => db.Productos.IgnoreQueryFilters(),
         Exportadores => db.Exportadores.IgnoreQueryFilters(),
         Taras => db.Taras.IgnoreQueryFilters(),
+        Tanques => db.Tanques.IgnoreQueryFilters(),
+        Sucursales => db.Sucursales.IgnoreQueryFilters(),
         Vehiculos => db.DatosVehiculos.IgnoreQueryFilters(),
         Pesadas => db.Pesadas.IgnoreQueryFilters(),
         Usuarios => db.Usuarios.IgnoreQueryFilters(),
@@ -49,6 +53,8 @@ public static class TiposSync
         Productos => typeof(Producto),
         Exportadores => typeof(Exportador),
         Taras => typeof(TaraConocida),
+        Tanques => typeof(Tanque),
+        Sucursales => typeof(Sucursal),
         Vehiculos => typeof(DatosVehiculo),
         Pesadas => typeof(Pesada),
         Usuarios => typeof(Usuario),

@@ -101,14 +101,23 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("CondicionIva")
+                        .HasColumnType("TEXT");
+
                     b.Property<long>("CreadoEn")
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("Cuit")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Direccion")
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("Eliminado")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("Localidad")
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("ModificadoEn")
                         .HasColumnType("INTEGER");
@@ -299,6 +308,9 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
 
                     b.Property<bool>("Activa")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("CodigoSociedad")
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("CreadoEn")
                         .HasColumnType("INTEGER");
@@ -722,6 +734,88 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                     b.ToTable("Productos");
                 });
 
+            modelBuilder.Entity("Bfs.Core.Entities.Sucursal", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreadoEn")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Eliminado")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ModificadoEn")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("OrigenNodoId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("SyncSeq")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ModificadoEn");
+
+                    b.HasIndex("Nombre")
+                        .IsUnique();
+
+                    b.HasIndex("SyncSeq");
+
+                    b.ToTable("Sucursales");
+                });
+
+            modelBuilder.Entity("Bfs.Core.Entities.Tanque", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreadoEn")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Eliminado")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ModificadoEn")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("OrigenNodoId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("SyncSeq")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ModificadoEn");
+
+                    b.HasIndex("Nombre")
+                        .IsUnique();
+
+                    b.HasIndex("SyncSeq");
+
+                    b.ToTable("Tanques");
+                });
+
             modelBuilder.Entity("Bfs.Core.Entities.TaraConocida", b =>
                 {
                     b.Property<Guid>("Id")
@@ -781,10 +875,16 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                     b.Property<string>("CodigoAta")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("CondicionIva")
+                        .HasColumnType("TEXT");
+
                     b.Property<long>("CreadoEn")
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("Cuit")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Direccion")
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("Eliminado")
@@ -792,6 +892,9 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
 
                     b.Property<bool>("EsAta")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("Localidad")
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("ModificadoEn")
                         .HasColumnType("INTEGER");
@@ -971,9 +1074,75 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                                 .HasForeignKey("PesadaId");
                         });
 
+                    b.OwnsOne("Bfs.Core.Entities.DatosInagro", "Inagro", b1 =>
+                        {
+                            b1.Property<Guid>("PesadaId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("Analisis")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("ClienteCondicionIva")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("ClienteCuit")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("ClienteDireccion")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("ClienteLocalidad")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("CuilChofer")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<int?>("Movimiento")
+                                .HasColumnType("INTEGER");
+
+                            b1.Property<string>("ObservacionesRemito")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<int?>("PesoOrigen")
+                                .HasColumnType("INTEGER");
+
+                            b1.Property<string>("Planta")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("Precintos")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("ProductoCodigo")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("Tanque")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("TransporteCondicionIva")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("TransporteCuit")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("TransporteDireccion")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("TransporteLocalidad")
+                                .HasColumnType("TEXT");
+
+                            b1.HasKey("PesadaId");
+
+                            b1.ToTable("Pesadas");
+
+                            b1.WithOwner()
+                                .HasForeignKey("PesadaId");
+                        });
+
                     b.Navigation("Aduana");
 
                     b.Navigation("Empresa");
+
+                    b.Navigation("Inagro");
                 });
 
             modelBuilder.Entity("Bfs.Core.Entities.Usuario", b =>

@@ -82,7 +82,19 @@ public record EntradaRequest(
     string? TipoOperacion = null,
     DatosAduanaDto? Aduana = null,
     string? TipoDocumento = null,
-    string? Nacionalidad = null);
+    string? Nacionalidad = null,
+    DatosInagroDto? Inagro = null);
+
+/// <summary>Campos de INAGRO del formulario (edición Inagro). Los datos de cliente, transporte y planta los completa el servidor.</summary>
+public record DatosInagroDto(
+    int? Movimiento,
+    int? PesoOrigen = null,
+    string? Tanque = null,
+    string? Analisis = null,
+    string? Precintos = null,
+    string? ProductoCodigo = null,
+    string? CuilChofer = null,
+    string? ObservacionesRemito = null);
 
 public record SalidaRequest(int? PesoSalida, int? TaraPallets, Guid? BalanzaId = null, string? ClaveManual = null);
 

@@ -30,6 +30,7 @@ public class Importador3x
     private readonly string _carpetaBranding;
     private readonly Dictionary<string, ConteoImportacion> _conteos = new();
     private readonly List<string> _avisos = [];
+    private string? _plantaInstalacion;
 
     public Importador3x(BfsDbContext db, PasswordHasher<Usuario> hasher, string zonaHoraria, string carpetaBranding)
     {
@@ -65,13 +66,19 @@ public class Importador3x
 
         var clientes = await Catalogo(conn, tablas, "clients", "Clientes", _db.Clientes, c => c.RazonSocial, f => new Cliente
         {
-            RazonSocial = Str(f, "razon_social") ?? "", Cuit = CuitTolerante(Str(f, "cuit"), "Cliente " + Str(f, "razon_social"))
+            RazonSocial = Str(f, "razon_social") ?? "", Cuit = CuitTolerante(Str(f, "cuit"), "Cliente " + Str(f, "razon_social")),
+            // La 3.x de INAGRO les agregó estas columnas para el remito preimpreso.
+            Direccion = Str(f, "direccion"), Localidad = Str(f, "localidad"), CondicionIva = Str(f, "condicion_iva")
         });
         await Catalogo(conn, tablas, "transports", "Transportes", _db.Transportes, t => t.RazonSocial, f => new Transporte
         {
             RazonSocial = Str(f, "razon_social") ?? "", Cuit = CuitTolerante(Str(f, "cuit"), "Transporte " + Str(f, "razon_social")),
-            EsAta = Bool(f, "es_ata"), CodigoAta = Str(f, "codigo_ata")
+            EsAta = Bool(f, "es_ata"), CodigoAta = Str(f, "codigo_ata"),
+            Direccion = Str(f, "direccion"), Localidad = Str(f, "localidad"), CondicionIva = Str(f, "condicion_iva")
         });
+        // INAGRO: tanques y sucursales (procedencia / destino).
+        await Catalogo(conn, tablas, "tanques", "Tanques", _db.Tanques, t => t.Nombre, f => new Tanque { Nombre = Str(f, "nombre") ?? "" });
+        await Catalogo(conn, tablas, "sucursales", "Sucursales", _db.Sucursales, s => s.Nombre, f => new Sucursal { Nombre = Str(f, "nombre") ?? "" });
         await Catalogo(conn, tablas, "productos", "Productos", _db.Productos, p => p.Nombre, f => new Producto
         {
             Nombre = Str(f, "nombre") ?? "", Codigo = Str(f, "codigo")
@@ -152,10 +159,17 @@ public class Importador3x
 
     private async Task Sistema(SqliteConnection conn)
     {
-        var modo = Filas(conn, "system_config").FirstOrDefault(f => Str(f, "config_key") == "operation_mode");
+        var filas = Filas(conn, "system_config").ToList();
+        var modo = filas.FirstOrDefault(f => Str(f, "config_key") == "operation_mode");
         if (modo != null && Str(modo, "config_value") == "Aduana")
         {
             await GuardarConfig(new() { [ConfigKeys.Aduana] = "true" });
+        }
+        // INAGRO: la planta de la instalación ("1: Alvear" / "2: Campana").
+        if (filas.FirstOrDefault(f => Str(f, "config_key") == "planta_instalacion") is { } planta && Str(planta, "config_value") is { } valor)
+        {
+            _plantaInstalacion = valor;
+            await GuardarConfig(new() { [ConfigKeys.InagroPlanta] = valor });
         }
     }
 
@@ -311,6 +325,12 @@ public class Importador3x
             .Select(x => (x.TicketNumero, x.EntradaEn.UtcTicks)).ToHashSet();
         int importadas = 0, omitidas = 0, conFotos = 0, sinFecha = 0, maximo = 0;
 
+        // INAGRO: cada pesada va a la empresa de su sociedad de Centum (tipo_sociedad_id), si hay una con ese código.
+        var sociedades = (await _db.Empresas.Where(e => e.CodigoSociedad != null).ToListAsync())
+            .GroupBy(e => e.CodigoSociedad!.Trim()).ToDictionary(g => g.Key, g => g.First());
+        var usadas = new HashSet<Empresa> { empresa };
+        var conInagro = false;
+
         foreach (var f in Filas(conn, "weighings"))
         {
             var ticket = Str(f, "ticket_numero") ?? Str(f, "id")!;
@@ -327,12 +347,21 @@ public class Importador3x
             }
             var pendiente = (Int(f, "salida_pendiente") ?? 0) == 1;
             var tipo = Str(f, "tipo_operacion");
+            var inagro = Inagro(f);
+            var destino = inagro != null && Int(f, "tipo_sociedad_id")?.ToString() is { } soc && sociedades.TryGetValue(soc, out var deSociedad)
+                ? deSociedad
+                : empresa;
+            usadas.Add(destino);
+            conInagro |= inagro != null;
             var p = new Pesada
             {
                 Id = Guid.NewGuid(),
-                EmpresaId = empresa.Id,
+                EmpresaId = destino.Id,
                 TicketNumero = ticket,
-                Tipo = Str(f, "tipo_movimiento")?.ToUpperInvariant() is "EGRESO" ? "EGRESO" : "INGRESO",
+                // En INAGRO tipo_movimiento es el Id de operación (1 compras, 2 ventas, 3 OT), no INGRESO/EGRESO.
+                Tipo = inagro?.Movimiento is { } mov ? MovimientosInagro.Tipo(mov)
+                    : Str(f, "tipo_movimiento")?.ToUpperInvariant() is "EGRESO" ? "EGRESO" : "INGRESO",
+                Inagro = inagro,
                 Estado = pendiente ? EstadosPesada.Entrada : EstadosPesada.Salida,
                 Modo = tipo == "Tara Conocida" ? ModosPesaje.TaraConocida : ModosPesaje.Normal,
                 TipoOperacion = tipo == "Aduana" ? TiposOperacion.Aduana : TiposOperacion.Normal,
@@ -402,18 +431,53 @@ public class Importador3x
         // Los tickets nuevos siguen después del último de la 3.x (puesto 1: 01-000038 si el último era el 37).
         if (maximo > 0)
         {
-            var contador = await _db.ContadoresTicket.FirstOrDefaultAsync(c => c.EmpresaId == empresa.Id && c.Puesto == 1);
-            if (contador == null)
+            // Las empresas que recibieron pesadas y, con datos de INAGRO, también el contador compartido.
+            var claves = usadas.Select(e => e.Id).ToList();
+            if (conInagro) claves.Add(ContadoresCompartidos.Empresa);
+            foreach (var clave in claves)
             {
-                contador = new ContadorTicket { Id = Guid.NewGuid(), EmpresaId = empresa.Id, Puesto = 1, Proximo = 1 };
-                _db.ContadoresTicket.Add(contador);
+                var contador = await _db.ContadoresTicket.FirstOrDefaultAsync(c => c.EmpresaId == clave && c.Puesto == 1);
+                if (contador == null)
+                {
+                    contador = new ContadorTicket { Id = Guid.NewGuid(), EmpresaId = clave, Puesto = 1, Proximo = 1 };
+                    _db.ContadoresTicket.Add(contador);
+                }
+                contador.Proximo = Math.Max(contador.Proximo, maximo + 1);
             }
-            contador.Proximo = Math.Max(contador.Proximo, maximo + 1);
-            empresa.ProximoTicket = Math.Max(empresa.ProximoTicket, maximo + 1);
+            foreach (var e in usadas) e.ProximoTicket = Math.Max(e.ProximoTicket, maximo + 1);
             await _db.SaveChangesAsync();
         }
         if (conFotos > 0) _avisos.Add($"{conFotos} pesadas tenían fotos: la 4.0 todavía no las importa (quedan en la carpeta de la 3.x).");
         if (sinFecha > 0) _avisos.Add($"{sinFecha} pesadas no tenían una fecha legible y quedaron con fecha 01/01/1970.");
+    }
+
+    /// <summary>
+    /// Columnas de la 3.x de INAGRO. Null si la base no las tiene (cualquier otro cliente): la pesada queda sin datos de INAGRO.
+    /// </summary>
+    private DatosInagro? Inagro(Dictionary<string, object?> f)
+    {
+        if (!f.ContainsKey("tipo_sociedad_id") && !f.ContainsKey("tanque") && !f.ContainsKey("numero_analisis")) return null;
+        var movimiento = Int(f, "tipo_movimiento") is { } m and >= 1 and <= 3 ? m : MovimientosInagro.Compras;
+        return new DatosInagro
+        {
+            Movimiento = movimiento,
+            PesoOrigen = MovimientosInagro.LlevaPesoOrigen(movimiento) ? Int(f, "peso_origen") : null,
+            Tanque = Str(f, "tanque"),
+            Analisis = Str(f, "numero_analisis"),
+            Precintos = Str(f, "precintos"),
+            ProductoCodigo = Str(f, "producto_codigo"),
+            CuilChofer = Str(f, "cuil_chofer"),
+            ObservacionesRemito = Str(f, "observaciones_remito"),
+            Planta = Str(f, "planta_instalacion") ?? _plantaInstalacion ?? Core.Inagro.PlantaPorDefecto,
+            ClienteCuit = Str(f, "client_cuit"),
+            ClienteDireccion = Str(f, "client_direccion"),
+            ClienteLocalidad = Str(f, "client_localidad"),
+            ClienteCondicionIva = Str(f, "client_condicion_iva"),
+            TransporteCuit = Str(f, "transport_cuit"),
+            TransporteDireccion = Str(f, "transport_direccion"),
+            TransporteLocalidad = Str(f, "transport_localidad"),
+            TransporteCondicionIva = Str(f, "transport_condicion_iva")
+        };
     }
 
     private async Task Vehiculos(SqliteConnection conn)

@@ -14,6 +14,29 @@ public record FilaExcel(Pesada Pesada, string Empresa, DateTime EntradaLocal, Da
 /// </summary>
 public static class PesadasExcel
 {
+    /// <summary>Edición Inagro: van después de "Remito", solo si alguna pesada del Excel tiene esos datos.</summary>
+    private static readonly (string Nombre, Func<FilaExcel, XLCellValue> Valor)[] ColumnasInagro =
+    [
+        ("Id de operación", f => T(MovimientosInagro.Ticket(f.Pesada.Inagro?.Movimiento))),
+        ("Peso de origen (kg)", f => Num(f.Pesada.Inagro?.PesoOrigen)),
+        ("Tanque", f => T(f.Pesada.Inagro?.Tanque)),
+        ("Análisis", f => T(f.Pesada.Inagro?.Analisis)),
+        ("Precintos", f => T(f.Pesada.Inagro?.Precintos)),
+        ("Código producto", f => T(f.Pesada.Inagro?.ProductoCodigo)),
+        ("CUIT cliente", f => T(f.Pesada.Inagro?.ClienteCuit)),
+        ("CUIT transporte", f => T(f.Pesada.Inagro?.TransporteCuit)),
+        ("CUIL chofer", f => T(f.Pesada.Inagro?.CuilChofer)),
+        ("Observaciones remito", f => T(f.Pesada.Inagro?.ObservacionesRemito)),
+        ("Planta", f => T(f.Pesada.Inagro?.Planta))
+    ];
+
+    private static (string Nombre, Func<FilaExcel, XLCellValue> Valor)[] ColumnasDe(IReadOnlyList<FilaExcel> filas)
+    {
+        if (!filas.Any(f => f.Pesada.Inagro != null)) return Columnas;
+        var despues = Array.FindIndex(Columnas, c => c.Nombre == "Remito") + 1;
+        return [.. Columnas[..despues], .. ColumnasInagro, .. Columnas[despues..]];
+    }
+
     private static readonly (string Nombre, Func<FilaExcel, XLCellValue> Valor)[] Columnas =
     [
         ("Ticket", f => f.Pesada.TicketNumero),
@@ -75,6 +98,8 @@ public static class PesadasExcel
     public static byte[] Generar(IReadOnlyList<FilaExcel> filas, string titulo, Func<DateTimeOffset, DateTime>? horaLocal = null)
     {
         horaLocal ??= d => d.LocalDateTime;
+        var columnas = ColumnasDe(filas);
+        int Col(string nombre) => Array.FindIndex(columnas, c => c.Nombre == nombre) + 1;
         using var wb = new XLWorkbook();
         var ws = wb.Worksheets.Add("Pesadas");
 
@@ -83,12 +108,12 @@ public static class PesadasExcel
         ws.Cell(1, 1).Style.Font.FontSize = 13;
 
         const int encabezado = 3;
-        for (var i = 0; i < Columnas.Length; i++) ws.Cell(encabezado, i + 1).Value = Columnas[i].Nombre;
+        for (var i = 0; i < columnas.Length; i++) ws.Cell(encabezado, i + 1).Value = columnas[i].Nombre;
         var fila = encabezado;
         foreach (var f in filas)
         {
             fila++;
-            for (var i = 0; i < Columnas.Length; i++) ws.Cell(fila, i + 1).Value = Columnas[i].Valor(f);
+            for (var i = 0; i < columnas.Length; i++) ws.Cell(fila, i + 1).Value = columnas[i].Valor(f);
         }
 
         var colNeto = Col("Neto (kg)");
@@ -99,13 +124,13 @@ public static class PesadasExcel
             ws.Cell(total, colNeto - 1).Style.Font.Bold = true;
             ws.Cell(total, colNeto).FormulaA1 = $"SUM({ws.Cell(encabezado + 1, colNeto).Address}:{ws.Cell(fila, colNeto).Address})";
             ws.Cell(total, colNeto).Style.Font.Bold = true;
-            ws.Range(encabezado, 1, fila, Columnas.Length).SetAutoFilter();
+            ws.Range(encabezado, 1, fila, columnas.Length).SetAutoFilter();
         }
 
-        Encabezado(ws.Range(encabezado, 1, encabezado, Columnas.Length));
+        Encabezado(ws.Range(encabezado, 1, encabezado, columnas.Length));
         ws.Column(Col("Entrada")).Style.DateFormat.Format = "dd/mm/yyyy hh:mm";
         ws.Column(Col("Salida")).Style.DateFormat.Format = "dd/mm/yyyy hh:mm";
-        foreach (var (nombre, _) in Columnas.Where(c => c.Nombre.EndsWith("(kg)")))
+        foreach (var (nombre, _) in columnas.Where(c => c.Nombre.EndsWith("(kg)")))
         {
             ws.Column(Col(nombre)).Style.NumberFormat.Format = "#,##0";
         }
@@ -154,8 +179,6 @@ public static class PesadasExcel
         header.Style.Fill.BackgroundColor = XLColor.FromHtml("#0f766e");
         header.Style.Font.FontColor = XLColor.White;
     }
-
-    private static int Col(string nombre) => Array.FindIndex(Columnas, c => c.Nombre == nombre) + 1;
 
     private static XLCellValue T(string? s) => s ?? "";
 

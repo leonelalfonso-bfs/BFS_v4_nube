@@ -9,7 +9,7 @@ public partial class App : Application
 {
     // Una sola instancia por PC: dos copias se pelearían por el puerto COM de la balanza y por el puerto web.
     // Cada edición tiene la suya (y su puerto y su carpeta de datos): se pueden instalar las dos en una PC de prueba.
-    private static readonly Mutex Instancia = new(false, Ediciones.Compilada == Edicion.Estandar ? @"Global\BFS-Pesaje-4-Estandar" : @"Global\BFS-Pesaje-4");
+    private static readonly Mutex Instancia = new(false, Ediciones.Mutex(Ediciones.Compilada));
     private WebApplication? _api;
     private bool _esDuena;
 

@@ -10,6 +10,9 @@ public class Pesada : EntidadSync
     public string Modo { get; set; } = ModosPesaje.Normal;
     public string TipoOperacion { get; set; } = TiposOperacion.Normal;
     public DatosAduana? Aduana { get; set; }
+
+    /// <summary>Solo en la edición Inagro.</summary>
+    public DatosInagro? Inagro { get; set; }
     public string PatenteChasis { get; set; } = "";
     public string? PatenteAcoplado { get; set; }
     public string? Conductor { get; set; }

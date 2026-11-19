@@ -19,12 +19,14 @@ public class SistemaService
     private readonly BfsDbContext _db;
     private readonly BfsPaths _paths;
     private readonly ConfigService _config;
+    private readonly bool _compartida;
 
-    public SistemaService(BfsDbContext db, BfsPaths paths, ConfigService config)
+    public SistemaService(BfsDbContext db, BfsPaths paths, ConfigService config, BfsOptions? opciones = null)
     {
         _db = db;
         _paths = paths;
         _config = config;
+        _compartida = Ediciones.NumeracionCompartida(opciones?.Edicion ?? Ediciones.Compilada);
     }
 
     public IReadOnlyList<Backup> Backups() =>
@@ -107,6 +109,14 @@ public class SistemaService
         var puesto = await Puesto();
         var empresas = await _db.Empresas.AsNoTracking().OrderBy(e => e.Nombre).ToListAsync();
         var contadores = await _db.ContadoresTicket.AsNoTracking().Where(c => c.Puesto == puesto).ToListAsync();
+        if (_compartida)
+        {
+            // Un solo contador para todas las empresas: una sola fila.
+            var maximoTodas = await MaximoUsado(null, puesto);
+            var traia = puesto == 1 ? Math.Max(1, empresas.Select(e => e.ProximoTicket).DefaultIfEmpty(1).Max()) : 1;
+            var proximoTodas = contadores.FirstOrDefault(c => c.EmpresaId == ContadoresCompartidos.Empresa)?.Proximo ?? traia;
+            return [new NumeracionTicket(ContadoresCompartidos.Empresa, "Todas las empresas", puesto, Math.Max(proximoTodas, maximoTodas + 1), maximoTodas)];
+        }
         var lista = new List<NumeracionTicket>();
         foreach (var e in empresas)
         {
@@ -121,10 +131,16 @@ public class SistemaService
     public async Task<string?> FijarProximoAsync(Guid empresaId, int proximo)
     {
         if (proximo < 1 || proximo > 999_999) return "El número tiene que estar entre 1 y 999999";
-        var empresa = await _db.Empresas.FirstOrDefaultAsync(e => e.Id == empresaId);
-        if (empresa == null) return "Empresa inexistente";
+        if (_compartida)
+        {
+            empresaId = ContadoresCompartidos.Empresa;
+        }
+        else if (!await _db.Empresas.AnyAsync(e => e.Id == empresaId))
+        {
+            return "Empresa inexistente";
+        }
         var puesto = await Puesto();
-        var maximo = await MaximoUsado(empresaId, puesto);
+        var maximo = await MaximoUsado(_compartida ? null : empresaId, puesto);
         if (proximo <= maximo) return $"Ya existe el ticket {Tickets.Formatear(puesto, maximo, await SoloNumero())}: el próximo tiene que ser mayor a {maximo}";
 
         var contador = await _db.ContadoresTicket.FirstOrDefaultAsync(c => c.EmpresaId == empresaId && c.Puesto == puesto);
@@ -151,12 +167,13 @@ public class SistemaService
     /// Tickets "PP-NNNNNN" de este puesto; en el puesto 1 (o con tickets "solo número") también los numéricos,
     /// importados de la 3.x o de otro sistema.
     /// </summary>
-    private async Task<int> MaximoUsado(Guid empresaId, int puesto)
+    /// <param name="empresaId">Null = en todas las empresas (numeración compartida).</param>
+    private async Task<int> MaximoUsado(Guid? empresaId, int puesto)
     {
         var soloNumero = await SoloNumero();
         var prefijo = $"{puesto:D2}-";
         var tickets = await _db.Pesadas.IgnoreQueryFilters().AsNoTracking()
-            .Where(p => p.EmpresaId == empresaId)
+            .Where(p => empresaId == null || p.EmpresaId == empresaId)
             .Select(p => p.TicketNumero)
             .ToListAsync();
         return tickets

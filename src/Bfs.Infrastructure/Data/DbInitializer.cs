@@ -22,11 +22,26 @@ public static class DbInitializer
     /// (tendría clave conocida y sería el mismo en todos los clientes). La empresa y el admin los crea el alta.
     /// </param>
     /// <param name="empresas">Cuántas empresas de ejemplo crea en una base nueva (la edición Estándar tiene una sola).</param>
-    public static async Task SeedAsync(BfsDbContext db, bool datosDePrueba, int empresas = 2)
+    /// <param name="sociedades">Edición Inagro: en vez de "Empresa 1/2", una empresa por sociedad de Centum (nombre y código).</param>
+    public static async Task SeedAsync(BfsDbContext db, bool datosDePrueba, int empresas = 2,
+        IReadOnlyList<(string Nombre, string Codigo)>? sociedades = null)
     {
         await db.Database.MigrateAsync();
 
-        if (datosDePrueba && !await db.Empresas.AnyAsync())
+        if (datosDePrueba && sociedades is { Count: > 0 } && !await db.Empresas.AnyAsync())
+        {
+            // Las dos primeras con los mismos Id que "Empresa 1/2" (los usan los tests y las instalaciones de prueba).
+            Guid[] fijos = [Guid.Parse("11111111-1111-1111-1111-111111111111"), Guid.Parse("22222222-2222-2222-2222-222222222222")];
+            for (var i = 0; i < sociedades.Count; i++)
+            {
+                var (nombre, codigo) = sociedades[i];
+                db.Empresas.Add(new Empresa
+                {
+                    Id = i < fijos.Length ? fijos[i] : Guid.NewGuid(), Nombre = nombre, CodigoSociedad = codigo, Activa = true, ProximoTicket = 1
+                });
+            }
+        }
+        else if (datosDePrueba && !await db.Empresas.AnyAsync())
         {
             db.Empresas.Add(new Empresa { Id = Guid.Parse("11111111-1111-1111-1111-111111111111"), Nombre = "Empresa 1", Activa = true, ProximoTicket = 1 });
             if (empresas > 1)

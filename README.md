@@ -39,19 +39,21 @@ En modo nube hay una base central (`bfs_central`: clientes, índice de emails, s
 
 ## Instalador (PC de portería)
 
-Hay dos ediciones, del mismo código:
+Hay tres ediciones, del mismo código:
 
 | Edición | Para quién | Qué tiene |
 |---------|-----------|-----------|
 | **Completa** | Clientes con integraciones o varias empresas (ej. Worms) | Varias empresas, API para otros sistemas (WORMS), conexión con la nube |
 | **Estándar** | El cliente que solo pesa | Una empresa, pesaje normal, tara conocida y aduana, hasta dos balanzas, todo local. Sin API ni nube |
+| **INAGRO** | INAGRO (Alvear / Campana) | La Completa más los campos de su 3.x (Id de operación, peso de origen, tanque, análisis, precintos, CUIL, observaciones del remito, planta), tanques y sucursales, sociedades como empresas con una sola numeración, envío a Centum y remito preimpreso. Ver [docs/PLAN_PARIDAD.md](docs/PLAN_PARIDAD.md), fase 10 |
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File installer\build.ps1 -Version 4.0.3
 powershell -ExecutionPolicy Bypass -File installer\build.ps1 -Version 4.0.3 -Edicion Estandar
+powershell -ExecutionPolicy Bypass -File installer\build.ps1 -Version 4.0.3 -Edicion Inagro
 ```
 
-La Completa deja `artifacts\BFS-Pesaje-4.0.3.msi`; la Estándar, `artifacts\estandar\BFS-Pesaje-Estandar-4.0.3.msi`. Son productos distintos (otro nombre, carpeta de programa, carpeta de datos `ProgramData\bfs-4-estandar` y puerto): se pueden instalar las dos en la misma PC sin mezclarse. La edición queda grabada al compilar; la configuración no puede convertir una Estándar en Completa.
+La Completa deja `artifacts\BFS-Pesaje-4.0.3.msi`; la Estándar, `artifacts\estandar\BFS-Pesaje-Estandar-4.0.3.msi`; la de INAGRO, `artifacts\inagro\BFS-Pesaje-INAGRO-4.0.3.msi`. Son productos distintos (otro nombre, carpeta de programa, carpeta de datos `ProgramData\bfs-4-estandar` / `bfs-4-inagro` y puerto 5081 / 5082): se pueden instalar juntas en la misma PC sin mezclarse. La edición queda grabada al compilar; la configuración no puede convertir una Estándar en Completa. Para probar la de INAGRO sin compilarla: `dotnet run --project src/Bfs.Api -- --Bfs:Edicion=Inagro`.
 
 Después de instalar, BFS entra con su usuario, activa la licencia (Configuración → Licencia) y, si el cliente venía de la 3.x, importa sus datos desde Sistema → Importar desde la 3.x.
 
@@ -107,4 +109,5 @@ Las bases creadas por el spike anterior (sin migraciones) se renombran a `bfs.sp
 - Pesadas con filtros y totales, tablero; Sistema: backups, restauración, espejo, numeración; importador de la 3.x; instalador MSI
 - Balanzas: varias por nodo (serie STX / Line o simuladas), modelos de la 3.x, reconexión automática, peso estable, diagnóstico de tramas
 - Licencia firmada por PC
+- Edición INAGRO: campos de Centum, tanques y sucursales, numeración compartida, envío a Centum, remito preimpreso
 - Columnas de sincronización en todas las entidades (`Version`, `ModificadoEn`, borrado lógico, nodo de origen)

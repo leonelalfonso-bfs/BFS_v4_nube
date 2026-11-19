@@ -1,3 +1,4 @@
+using Bfs.Core;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
@@ -96,17 +97,23 @@ public static class TicketPdf
             });
             col.Item().PaddingVertical(10).LineHorizontal(1);
 
+            // Edición Inagro: los mismos datos en las mismas líneas que el ticket de su 3.x.
+            var i = p.Inagro;
+            string Extra(string etiqueta, string? valor) => string.IsNullOrWhiteSpace(valor) ? "" : $"   {etiqueta}: {valor}";
             col.Item().PaddingTop(6).Column(d =>
             {
                 d.Item().Text($"Fecha Entrada: {Fecha(t.EntradaLocal)}");
                 d.Item().Text($"Fecha Salida:  {Fecha(t.SalidaLocal)}");
                 d.Item().Text($"Patente Chasis: {Texto(p.PatenteChasis)}   Patente Acoplado: {Texto(p.PatenteAcoplado)}");
-                d.Item().Text($"Chofer: {Texto(p.Conductor)} - DNI: {Texto(p.Documento)}");
-                d.Item().Text($"Cliente: {Texto(p.Cliente)} - CUIT: {Texto(t.ClienteCuit)}");
-                d.Item().Text($"Transporte: {Texto(p.Transporte)} - CUIT: {Texto(t.TransporteCuit)}");
-                d.Item().Text($"Procedencia: {Texto(p.Procedencia)}   Destino: {Texto(p.Destino)}");
-                d.Item().Text($"Producto: {Texto(p.Producto)} - Cód: {Texto(t.ProductoCodigo)}");
-                d.Item().Text($"Remito: {Texto(p.Comprobante)}");
+                d.Item().Text($"Chofer: {Texto(p.Conductor)} - DNI: {Texto(p.Documento)}{Extra("CUIL", i?.CuilChofer)}");
+                d.Item().Text($"Cliente: {Texto(p.Cliente)} - CUIT: {Texto(i?.ClienteCuit ?? t.ClienteCuit)}");
+                d.Item().Text($"Transporte: {Texto(p.Transporte)} - CUIT: {Texto(i?.TransporteCuit ?? t.TransporteCuit)}");
+                d.Item().Text($"Procedencia: {Texto(p.Procedencia)}   Destino: {Texto(p.Destino)}{Extra("Tanque", i?.Tanque)}");
+                d.Item().Text($"Producto: {Texto(p.Producto)} - Cód: {Texto(i?.ProductoCodigo ?? t.ProductoCodigo)}"
+                    + Extra("Análisis", i?.Analisis) + Extra("Precintos", i?.Precintos));
+                var operacion = MovimientosInagro.Ticket(i?.Movimiento) is { } mov ? $"Id de Operación: {mov}   " : "";
+                d.Item().Text($"{operacion}Remito: {Texto(p.Comprobante)}");
+                if (i?.PesoOrigen is { } origen) d.Item().Text($"Peso de origen: {Kg(origen)}");
                 d.Item().Text($"Observaciones: {Texto(p.Observaciones)}");
             });
 

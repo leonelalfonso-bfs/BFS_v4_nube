@@ -110,6 +110,7 @@ function num(id) {
 
 /** Edición Estándar: una empresa, pesaje normal y aduana, local. Sin API para otros sistemas ni nube. */
 function esEstandar() { return state.edicion === "Estandar"; }
+function nombreEdicion() { return esEstandar() ? " <small>Estándar</small>" : state.edicion === "Inagro" ? " <small>INAGRO</small>" : ""; }
 
 function isVendor() { return state.user?.rol === "vendor"; }
 function can(permiso) { return (state.user?.permisos || []).includes(permiso); }
@@ -310,7 +311,7 @@ function render() {
         <div class="brand">
           ${bfsLogo()}
           <div>
-            <h1>Sistema de Pesaje BFS 4.0${esEstandar() ? " <small>Estándar</small>" : ""}</h1>
+            <h1>Sistema de Pesaje BFS 4.0${nombreEdicion()}</h1>
             <p>${esc(state.user?.tenant || state.branding.clienteNombre || "Planta local")}</p>
           </div>
         </div>
@@ -543,11 +544,15 @@ async function renderPesaje() {
     api("/api/catalogos/clientes"),
     api("/api/catalogos/transportes"),
     api("/api/catalogos/productos"),
-    state.funciones.aduana ? api("/api/catalogos/exportadores") : Promise.resolve([])
+    state.funciones.aduana ? api("/api/catalogos/exportadores") : Promise.resolve([]),
+    esInagro() ? api("/api/catalogos/tanques") : Promise.resolve([]),
+    esInagro() ? api("/api/catalogos/sucursales") : Promise.resolve([])
   ];
-  const [pendientes, clientes, transportes, productos, exportadores] = await Promise.all(pedidos);
+  const [pendientes, clientes, transportes, productos, exportadores, tanques, sucursales] = await Promise.all(pedidos);
   state.pendientes = pendientes;
-  state.catalogos = { clientes, transportes, productos, exportadores };
+  state.catalogos = { clientes, transportes, productos, exportadores, tanques, sucursales };
+  const inagro = esInagro();
+  const lugar = inagro ? { list: "dl_sucursales" } : {};
   if (!modosPesaje().some(([id]) => id === state.modoPesaje)) state.modoPesaje = "normal";
   const modo = state.modoPesaje;
   const sinLicencia = state.licencia && !state.licencia.puedePesar;
@@ -558,7 +563,7 @@ async function renderPesaje() {
   const lbl = (key, porDefecto) => field(key)?.label || porDefecto;
 
   const operacion = `
-        ${f("tipo", inputField("tipo", lbl("tipo", "Tipo"), { type: "select", options: "<option>INGRESO</option><option>EGRESO</option>" }))}
+        ${inagro ? inagroOperacion() : f("tipo", inputField("tipo", lbl("tipo", "Tipo"), { type: "select", options: "<option>INGRESO</option><option>EGRESO</option>" }))}
         ${state.funciones.aduana ? `<div><label>Operación</label><select id="tipoOperacion" onchange="toggleAduana()">
           <option value="Normal">Normal</option><option value="Aduana">Aduana</option>
         </select></div>` : ""}`;
@@ -566,9 +571,10 @@ async function renderPesaje() {
         ${f("producto", inputField("producto", lbl("producto", "Producto"), { list: "dl_productos" }))}
         ${f("cliente", inputField("cliente", lbl("cliente", "Cliente"), { list: "dl_clientes" }))}
         ${f("transporte", inputField("transporte", lbl("transporte", "Transporte"), { list: "dl_transportes" }))}
-        ${f("procedencia", inputField("procedencia", lbl("procedencia", "Procedencia")))}
-        ${f("destino", inputField("destino", lbl("destino", "Destino")))}
+        ${f("procedencia", inputField("procedencia", lbl("procedencia", "Procedencia"), lugar))}
+        ${f("destino", inputField("destino", lbl("destino", "Destino"), lugar))}
         ${f("comprobante", inputField("comprobante", lbl("comprobante", "Remito")))}
+        ${inagro ? inagroCarga() : ""}
         ${f("taraPallets", inputField("taraPallets", lbl("taraPallets", "Tara pallets (kg)"), { type: "number", value: "0" }))}`;
   const vehiculo = `
         ${f("patenteChasis", inputField("patenteChasis", modo === "tara" ? "Patente / carro" : lbl("patenteChasis", "Patente chasis"), { blur: "autocompletarPatente()" }))}
@@ -577,7 +583,8 @@ async function renderPesaje() {
         ${f("conductor", inputField("conductor", lbl("conductor", "Conductor")))}
         ${f("tipoDocumento", inputField("tipoDocumento", lbl("tipoDocumento", "Tipo de documento"), { type: "select", options: `<option></option>${opciones(TIPOS_DOCUMENTO)}` }))}
         ${f("documento", inputField("documento", lbl("documento", "Documento")))}
-        ${f("nacionalidad", inputField("nacionalidad", lbl("nacionalidad", "Nacionalidad")))}`;
+        ${f("nacionalidad", inputField("nacionalidad", lbl("nacionalidad", "Nacionalidad")))}
+        ${inagro ? `<div><label>CUIL chofer</label><input id="in_cuilChofer" inputmode="numeric" maxlength="13" placeholder="11 números" /></div>` : ""}`;
 
   const datosVehiculo = `
       ${seccion("Operación", operacion)}
@@ -585,6 +592,9 @@ async function renderPesaje() {
       ${seccion("Vehículo y chofer", vehiculo)}
       ${bloqueAduana()}
       ${visible("observaciones") ? `<div style="margin-top:12px">${inputField("observaciones", lbl("observaciones", "Observaciones"), { type: "textarea" })}</div>` : ""}
+      ${inagro ? `<div style="margin-top:12px"><label>Observaciones del remito</label><textarea id="in_observacionesRemito"></textarea></div>
+      ${datalist("dl_tanques", tanques.map(t => t.nombre))}
+      ${datalist("dl_sucursales", sucursales.map(s => s.nombre))}` : ""}
       ${datalist("dl_clientes", clientes.map(c => c.razonSocial))}
       ${datalist("dl_transportes", transportes.map(t => t.razonSocial))}
       ${datalist("dl_productos", productos.map(p => p.nombre))}`;
@@ -672,7 +682,66 @@ async function renderPesaje() {
       </table>
     </div>` : ""}
   `;
+  if (inagro) prepararInagro();
   if (salida) mostrarEntrada(salida);
+}
+
+/** Id de operación (compras / ventas / OT) y peso de origen, que solo va en compras y OT. */
+function inagroOperacion() {
+  return `
+        <div><label>Id de operación *</label><select id="in_movimiento" onchange="togglePesoOrigen()">
+          <option value="">Elegir...</option><option value="1">1: Compras</option><option value="2">2: Ventas</option><option value="3">3: OT</option>
+        </select></div>
+        <div><label>Peso de origen (kg)</label><input id="in_pesoOrigen" type="number" min="0" disabled placeholder="Compras y OT" /></div>`;
+}
+
+function inagroCarga() {
+  return `
+        <div><label>Tanque</label><input id="in_tanque" list="dl_tanques" autocomplete="off" maxlength="40" /></div>
+        <div><label>Código producto</label><input id="in_productoCodigo" maxlength="10" /></div>
+        <div><label>Análisis</label><input id="in_analisis" inputmode="numeric" maxlength="6" /></div>
+        <div><label>Precintos</label><input id="in_precintos" /></div>`;
+}
+
+/** Al elegir el producto se completa su código; el remito se escribe con la máscara 00000-00000000. */
+function prepararInagro() {
+  document.getElementById("producto")?.addEventListener("change", () => {
+    const p = (state.catalogos.productos || []).find(x => x.nombre === val("producto"));
+    const cod = document.getElementById("in_productoCodigo");
+    if (p && cod) cod.value = p.codigo || "";
+  });
+  document.getElementById("comprobante")?.addEventListener("input", e => mascaraRemito(e.target));
+}
+
+function togglePesoOrigen() {
+  const lleva = ["1", "3"].includes(val("in_movimiento"));
+  const el = document.getElementById("in_pesoOrigen");
+  if (!el) return;
+  el.disabled = !lleva || state.selectedPesadaId != null;
+  if (!lleva) el.value = "";
+}
+
+/** Punto de venta de 5 y número de 8, como el campo de la 3.x. */
+function mascaraRemito(el) {
+  const d = el.value.replace(/\D/g, "").slice(0, 13);
+  const nuevo = d.length > 5 ? `${d.slice(0, 5)}-${d.slice(5)}` : d;
+  if (nuevo !== el.value) el.value = nuevo;
+}
+
+function datosInagro() {
+  if (!esInagro()) return null;
+  if (!val("in_movimiento")) throw new Error("Elegí el Id de operación");
+  const origen = val("in_pesoOrigen");
+  return {
+    movimiento: Number(val("in_movimiento")),
+    pesoOrigen: origen === "" ? null : Number(origen),
+    tanque: val("in_tanque") || null,
+    analisis: val("in_analisis") || null,
+    precintos: val("in_precintos") || null,
+    productoCodigo: val("in_productoCodigo") || null,
+    cuilChofer: val("in_cuilChofer") || null,
+    observacionesRemito: val("in_observacionesRemito") || null
+  };
 }
 
 /** Campos del formulario de pesaje y de dónde sale cada valor en una pesada. */
@@ -686,7 +755,10 @@ const CAMPOS_PANTALLA = [
   ["ad_exportadorCuit", p => p.aduana?.exportadorCuit], ["ad_ata", p => p.aduana?.ata], ["ad_ataCuit", p => p.aduana?.ataCuit],
   ["ad_destinacion", p => p.aduana?.destinacionAduanera],
   ["ad_contenedorId", p => p.aduana?.contenedorId], ["ad_contenedorTara", p => p.aduana?.contenedorTara],
-  ["ad_bultoId", p => p.aduana?.bultoId], ["ad_bultoBruto", p => p.aduana?.bultoBruto], ["ad_bultoTara", p => p.aduana?.bultoTara]
+  ["ad_bultoId", p => p.aduana?.bultoId], ["ad_bultoBruto", p => p.aduana?.bultoBruto], ["ad_bultoTara", p => p.aduana?.bultoTara],
+  ["in_movimiento", p => p.inagro?.movimiento], ["in_pesoOrigen", p => p.inagro?.pesoOrigen], ["in_tanque", p => p.inagro?.tanque],
+  ["in_productoCodigo", p => p.inagro?.productoCodigo], ["in_analisis", p => p.inagro?.analisis], ["in_precintos", p => p.inagro?.precintos],
+  ["in_cuilChofer", p => p.inagro?.cuilChofer], ["in_observacionesRemito", p => p.inagro?.observacionesRemito]
 ];
 
 /** Carga en pantalla los datos de la entrada y los deja de solo lectura (salvo la tara de pallets, que se ajusta al salir). */
@@ -698,6 +770,7 @@ function mostrarEntrada(p) {
     if (id !== "taraPallets") el.disabled = true;
   }
   toggleAduana();
+  if (esInagro()) togglePesoOrigen();
   document.querySelector(".salida-head")?.scrollIntoView({ block: "center" });
 }
 
@@ -742,14 +815,58 @@ function usaTermica() {
   return state.funciones.termica && can("pesaje.reimprimir");
 }
 
-/** Al cerrar una pesada: el ticket se abre solo y, si hay térmica, también sale por ahí. */
+/**
+ * Al cerrar una pesada: el ticket se abre solo y, si hay térmica, también sale por ahí.
+ * En INAGRO, según Configuración: el ticket, el remito preimpreso o preguntar cuál.
+ */
 function ticketAlCerrar(pesada) {
-  verTicket(pesada.id);
+  if (esInagro()) {
+    const modo = state.funciones.inagroImpresion || "preguntar";
+    if (modo === "remito") verRemito(pesada.id);
+    else if (modo === "ticket") verTicket(pesada.id);
+    else elegirImpresion(pesada);
+  } else {
+    verTicket(pesada.id);
+  }
   if (usaTermica()) imprimirTermica(pesada.id);
+}
+
+async function verRemito(id) {
+  try {
+    const { blob, nombre } = await bajarArchivo(`/api/pesadas/${id}/remito`);
+    const url = URL.createObjectURL(blob);
+    if (!window.open(url, "_blank")) guardarComo(url, nombre);
+  } catch (e) {
+    toast("No se pudo generar el remito: " + limpiarError(e), "err");
+  }
+}
+
+/** Ventana para elegir qué imprimir (INAGRO, modo "preguntar"). */
+function elegirImpresion(pesada) {
+  cerrarModal();
+  const fondo = document.createElement("div");
+  fondo.className = "modal-fondo";
+  fondo.id = "modal";
+  fondo.innerHTML = `
+    <div class="card modal">
+      <h3 style="margin-top:0">Ticket ${esc(pesada.ticketNumero)} guardado</h3>
+      <p>¿Cómo lo imprimís?</p>
+      <div class="btn-row">
+        <button class="btn-primary" onclick="cerrarModal();verTicket('${pesada.id}')">Ticket estándar</button>
+        <button class="btn-primary" onclick="cerrarModal();verRemito('${pesada.id}')">Remito preimpreso</button>
+        <button class="btn" onclick="cerrarModal()">No imprimir</button>
+      </div>
+    </div>`;
+  document.body.appendChild(fondo);
+}
+
+function cerrarModal() {
+  document.getElementById("modal")?.remove();
 }
 
 function botonesTicket(id) {
   return `<button class="btn" onclick="event.stopPropagation();verTicket('${id}')">Ticket</button>` +
+    (esInagro() ? `<button class="btn" onclick="event.stopPropagation();verRemito('${id}')">Remito</button>` : "") +
     (usaTermica() ? `<button class="btn" onclick="event.stopPropagation();imprimirTermica('${id}')">Térmica</button>` : "");
 }
 
@@ -773,7 +890,8 @@ function selectPesada(id) {
 }
 
 function collectPesaje() {
-  const missing = fields().filter(f => f.visible && f.required && !val(f.key) && f.key !== "taraPallets");
+  // En INAGRO el tipo (ingreso / egreso) sale del Id de operación: no está en el formulario.
+  const missing = fields().filter(f => f.visible && f.required && !val(f.key) && f.key !== "taraPallets" && !(esInagro() && f.key === "tipo"));
   if (missing.length) throw new Error("Completá: " + missing.map(f => f.label).join(", "));
   const m = manual();
   return {
@@ -796,7 +914,8 @@ function collectPesaje() {
     taraPallets: visible("taraPallets") ? num("taraPallets") : 0,
     pesoEntrada: m.peso,
     claveManual: m.clave,
-    ...datosAduana()
+    ...datosAduana(),
+    inagro: datosInagro()
   };
 }
 
@@ -910,22 +1029,37 @@ function pillEstado(p) {
   return `<span class="pill pill-ok">Cerrada</span>`;
 }
 
+/** Edición INAGRO: campos de su 3.x, tanques, sucursales, remito preimpreso y envío a Centum. */
+function esInagro() { return state.edicion === "Inagro" || state.funciones.inagro === true; }
+
+/** Dirección, localidad e IVA de clientes y transportes: los usa el remito preimpreso de INAGRO. */
+const DOMICILIO = [["direccion", "Dirección"], ["localidad", "Localidad"], ["condicionIva", "Condición IVA"]];
+
 const CATALOGOS = {
-  clientes: { titulo: "Clientes", campos: [["razonSocial", "Razón social"], ["cuit", "CUIT"]] },
-  transportes: { titulo: "Transportes", campos: [["razonSocial", "Razón social"], ["cuit", "CUIT"], ["esAta", "Es ATA", "check"], ["codigoAta", "Código ATA"]] },
+  clientes: { titulo: "Clientes", campos: [["razonSocial", "Razón social"], ["cuit", "CUIT"]], extra: () => esInagro() ? DOMICILIO : [] },
+  transportes: { titulo: "Transportes", campos: [["razonSocial", "Razón social"], ["cuit", "CUIT"], ["esAta", "Es ATA", "check"], ["codigoAta", "Código ATA"]], extra: () => esInagro() ? DOMICILIO : [] },
   productos: { titulo: "Productos", campos: [["nombre", "Nombre"], ["codigo", "Código"]] },
   exportadores: { titulo: "Exportadores", campos: [["razonSocial", "Razón social"], ["cuit", "CUIT"]], visible: () => state.funciones.aduana },
-  taras: { titulo: "Taras conocidas", campos: [["identificador", "Patente / carro"], ["kilogramos", "Tara (kg)", "number"], ["descripcion", "Descripción"]], visible: () => state.funciones.taraConocida }
+  taras: { titulo: "Taras conocidas", campos: [["identificador", "Patente / carro"], ["kilogramos", "Tara (kg)", "number"], ["descripcion", "Descripción"]], visible: () => state.funciones.taraConocida },
+  tanques: { titulo: "Tanques", campos: [["nombre", "Tanque / sección"]], visible: () => esInagro(), soloEdicion: true },
+  sucursales: { titulo: "Sucursales", campos: [["nombre", "Procedencia / destino"]], visible: () => esInagro(), soloEdicion: true }
 };
 
+/** Los campos del catálogo, con los extra de la edición. */
+function camposCatalogo(cat) {
+  return [...cat.campos, ...(cat.extra ? cat.extra() : [])];
+}
+
 function catalogosVisibles() {
-  return Object.entries(CATALOGOS).filter(([, c]) => !c.visible || c.visible() || isVendor());
+  // Los de una edición (INAGRO) no existen en las otras: ni BFS los ve.
+  return Object.entries(CATALOGOS).filter(([, c]) => !c.visible || c.visible() || (isVendor() && !c.soloEdicion));
 }
 
 async function renderCatalogos() {
   const tabs = catalogosVisibles();
   if (!tabs.some(([id]) => id === state.catTab)) state.catTab = tabs[0][0];
   const cat = CATALOGOS[state.catTab];
+  const campos = camposCatalogo(cat);
   const q = state.catQ || "";
   const items = await api(`/api/catalogos/${state.catTab}${q ? "?q=" + encodeURIComponent(q) : ""}`);
   state.catItems = items;
@@ -943,7 +1077,7 @@ async function renderCatalogos() {
     <div class="card">
       <h3 style="margin-top:0">${editando ? "Editar" : "Nuevo"}</h3>
       <div class="grid2">
-        ${cat.campos.map(([key, label, tipo]) => tipo === "check"
+        ${campos.map(([key, label, tipo]) => tipo === "check"
           ? `<div><label class="check"><input type="checkbox" id="cf_${key}" ${editando?.[key] ? "checked" : ""} /> ${label}</label></div>`
           : `<div><label>${label}</label><input id="cf_${key}" ${tipo ? `type="${tipo}"` : ""} value="${esc(editando?.[key] ?? "")}" /></div>`
         ).join("")}
@@ -956,14 +1090,14 @@ async function renderCatalogos() {
     <div class="card">
       <input id="catQ" placeholder="Buscar..." value="${esc(q)}" oninput="buscarCatalogo(this.value)" />
       <table style="margin-top:14px">
-        <tr>${cat.campos.map(([, label]) => `<th>${label}</th>`).join("")}${editable ? "<th></th>" : ""}</tr>
+        <tr>${campos.map(([, label]) => `<th>${label}</th>`).join("")}${editable ? "<th></th>" : ""}</tr>
         ${items.length ? items.map(item => `<tr class="${item.id === state.catEdit ? "selected" : ""}">
-          ${cat.campos.map(c => `<td>${celda(item, c)}</td>`).join("")}
+          ${campos.map(c => `<td>${celda(item, c)}</td>`).join("")}
           ${editable ? `<td><div class="btn-row" style="margin:0">
             <button class="btn" onclick="editarCatalogo('${item.id}')">Editar</button>
             <button class="btn-danger" onclick="borrarCatalogo('${item.id}')">Borrar</button>
           </div></td>` : ""}
-        </tr>`).join("") : `<tr><td colspan="${cat.campos.length + 1}">Sin datos</td></tr>`}
+        </tr>`).join("") : `<tr><td colspan="${campos.length + 1}">Sin datos</td></tr>`}
       </table>
     </div>`;
   if (q) {
@@ -993,7 +1127,7 @@ function editarCatalogo(id) {
 
 async function guardarCatalogo() {
   const body = {};
-  for (const [key, , tipo] of CATALOGOS[state.catTab].campos) {
+  for (const [key, , tipo] of camposCatalogo(CATALOGOS[state.catTab])) {
     const el = document.getElementById("cf_" + key);
     body[key] = tipo === "check" ? el.checked : tipo === "number" ? Number(el.value || 0) : el.value;
   }
@@ -1046,6 +1180,8 @@ async function renderPlanta() {
         ${campoEmp(e, "provincia", "Provincia")}
         ${campoEmp(e, "telefono", "Teléfono")}
         ${campoEmp(e, "email", "Email")}
+        ${esInagro() ? `<div><label>Sociedad Centum (1 S.A., 2 S.R.L., 3 Otros, 4 No vincula)</label>
+          <input id="em_codigoSociedad_${e.id}" value="${esc(e.codigoSociedad ?? "")}" placeholder="Vacío o 4 = no se envía a Centum" /></div>` : ""}
       </div>
       <div class="btn-row"><button class="btn-primary" onclick="guardarEmpresa('${e.id}')">Guardar empresa</button></div>
     </div>`).join("")}
@@ -1095,6 +1231,8 @@ async function guardarEmpresa(id, desdeTicket = false) {
   for (const key of ["nombre", "cuit", "direccion", "localidad", "provincia", "telefono", "email"]) {
     body[key] = val(`em_${key}_${id}`);
   }
+  // Solo existe en la pantalla de INAGRO (desde Configuración → Ticket no se manda y no se toca).
+  if (document.getElementById(`em_codigoSociedad_${id}`)) body.codigoSociedad = val(`em_codigoSociedad_${id}`);
   try {
     await api(`/api/empresas/${id}`, { method: "PUT", body: JSON.stringify(body) });
     // Con una sola empresa, su razón social es también el nombre que se ve arriba y en el ingreso.
@@ -1342,7 +1480,32 @@ async function renderConfigGeneral() {
         <div><label>Tickets solo con número (sigue la numeración del cliente; un solo puesto)</label>${yesNo("c_solonum", c.ticket_solo_numero || "false")}</div>
       </div>
       <div class="btn-row"><button class="btn-primary" onclick="saveGeneral()">Guardar general</button></div>
-    </div>`;
+    </div>
+    ${esInagro() ? `
+    <div class="card">
+      <h3 style="margin-top:0">INAGRO</h3>
+      <div class="grid2">
+        <div><label>Planta de esta instalación (va en cada pesada y a Centum)</label><select id="c_in_planta">
+          ${opciones(["1: Alvear", "2: Campana"], c.inagro_planta || "1: Alvear")}</select></div>
+        <div><label>Al cerrar una pesada imprimir</label><select id="c_in_impresion">
+          ${[["preguntar", "Preguntar cada vez"], ["ticket", "Ticket estándar"], ["remito", "Remito preimpreso"]].map(([v, t]) =>
+            `<option value="${v}" ${(c.inagro_impresion || "preguntar") === v ? "selected" : ""}>${t}</option>`).join("")}</select></div>
+        <div><label>Remito: correr a la derecha (mm, negativo = izquierda)</label><input id="c_in_ax" type="number" step="0.5" value="${esc(c.inagro_remito_ajuste_x || "0")}" /></div>
+        <div><label>Remito: correr hacia abajo (mm, negativo = arriba)</label><input id="c_in_ay" type="number" step="0.5" value="${esc(c.inagro_remito_ajuste_y || "0")}" /></div>
+      </div>
+      <div class="btn-row"><button class="btn-primary" onclick="saveInagro()">Guardar INAGRO</button></div>
+    </div>` : ""}`;
+}
+
+async function saveInagro() {
+  await saveConfig({
+    inagro_planta: val("c_in_planta"),
+    inagro_impresion: val("c_in_impresion"),
+    inagro_remito_ajuste_x: val("c_in_ax") || "0",
+    inagro_remito_ajuste_y: val("c_in_ay") || "0"
+  });
+  state.funciones = await api("/api/funciones");
+  renderConfig();
 }
 
 const PARAMS_BALANZA = ["baudios", "dataBits", "paridad", "stopBits", "protocolo", "extraccion"];
@@ -1582,8 +1745,23 @@ function renderConfigApi() {
       </div>
       <div class="btn-row"><button class="btn-primary" onclick="saveApi()">Guardar API</button></div>
     </div>
+    ${esInagro() ? `
+    <div class="card">
+      <h3 style="margin-top:0">Centum</h3>
+      <p>Cada pesada cerrada se manda una vez, con el formato de la 3.x. No se envían las empresas sin sociedad o con sociedad 4 (No vincula); la sociedad se carga en Planta.</p>
+      <div class="grid2">
+        <div><label>Envío a Centum</label>${yesNo("c_centum", c.centum_enabled)}</div>
+        <div style="grid-column:1/-1"><label>Webhook</label><input id="c_centum_ep" value="${esc(c.centum_endpoint || "")}" placeholder="https://automate.gauchocode.com/webhook/..." /></div>
+      </div>
+      <div class="btn-row"><button class="btn-primary" onclick="saveCentum()">Guardar Centum</button></div>
+    </div>` : ""}
     <div class="card" id="envios"></div>`;
   cargarEnvios();
+}
+
+async function saveCentum() {
+  await saveConfig({ centum_enabled: val("c_centum"), centum_endpoint: val("c_centum_ep").trim() });
+  renderConfig();
 }
 
 const estadoEnvio = {
@@ -1928,7 +2106,16 @@ const CORREGIBLES = [
   ["aduana.operacionId", "N° de operación", p => p.aduana?.operacionId],
   ["aduana.destinacionAduanera", "Destinación aduanera", p => p.aduana?.destinacionAduanera],
   ["aduana.contenedorId", "Contenedor", p => p.aduana?.contenedorId],
-  ["aduana.bultoId", "Bulto", p => p.aduana?.bultoId]
+  ["aduana.bultoId", "Bulto", p => p.aduana?.bultoId],
+  // Edición Inagro
+  ["inagro.movimiento", "Id de operación", p => p.inagro?.movimiento != null ? String(p.inagro.movimiento) : "", "movimiento"],
+  ["inagro.pesoOrigen", "Peso de origen (kg)", p => p.inagro?.pesoOrigen != null ? String(p.inagro.pesoOrigen) : ""],
+  ["inagro.tanque", "Tanque", p => p.inagro?.tanque, "dl_tanques"],
+  ["inagro.productoCodigo", "Código producto", p => p.inagro?.productoCodigo],
+  ["inagro.analisis", "Análisis", p => p.inagro?.analisis],
+  ["inagro.precintos", "Precintos", p => p.inagro?.precintos],
+  ["inagro.cuilChofer", "CUIL chofer", p => p.inagro?.cuilChofer],
+  ["inagro.observacionesRemito", "Observaciones del remito", p => p.inagro?.observacionesRemito]
 ];
 
 function historialCorrecciones(p) {
@@ -1944,15 +2131,21 @@ function historialCorrecciones(p) {
 async function corregirPesada(id) {
   const p = (state.reporteItems || []).find(x => x.id === id);
   if (!p) return;
-  const [clientes, transportes, productos] = await Promise.all([
-    api("/api/catalogos/clientes"), api("/api/catalogos/transportes"), api("/api/catalogos/productos")]);
-  state.catalogos = { ...state.catalogos, clientes, transportes, productos };
+  const [clientes, transportes, productos, tanques] = await Promise.all([
+    api("/api/catalogos/clientes"), api("/api/catalogos/transportes"), api("/api/catalogos/productos"),
+    p.inagro ? api("/api/catalogos/tanques") : Promise.resolve([])]);
+  state.catalogos = { ...state.catalogos, clientes, transportes, productos, tanques };
   const campos = CORREGIBLES.filter(([key]) => !key.startsWith("aduana.") || p.aduana)
-    .filter(([key]) => key.startsWith("aduana.") || visible(key));
+    .filter(([key]) => !key.startsWith("inagro.") || p.inagro)
+    // En INAGRO el tipo sale del Id de operación.
+    .filter(([key]) => !(key === "tipo" && p.inagro))
+    .filter(([key]) => key.startsWith("aduana.") || key.startsWith("inagro.") || visible(key));
   const input = ([key, label, leer, extra]) => {
     const v = leer(p) || "";
     const id = "co_" + key.replace(".", "_");
     if (extra === "tipo") return `<div><label>${label}</label><select id="${id}">${opciones(["INGRESO", "EGRESO"], v)}</select></div>`;
+    if (extra === "movimiento") return `<div><label>${label}</label><select id="${id}">${[["1", "1: Compras"], ["2", "2: Ventas"], ["3", "3: OT"]]
+      .map(([x, t]) => `<option value="${x}" ${x === v ? "selected" : ""}>${t}</option>`).join("")}</select></div>`;
     if (extra === "tipoDoc") return `<div><label>${label}</label><select id="${id}"><option></option>${opciones(TIPOS_DOCUMENTO, v)}</select></div>`;
     return `<div><label>${label}</label><input id="${id}" value="${esc(v)}" ${extra ? `list="${extra}"` : ""} autocomplete="off" /></div>`;
   };
@@ -1964,6 +2157,7 @@ async function corregirPesada(id) {
       ${datalist("dl_productos", state.catalogos.productos.map(x => x.nombre))}
       ${datalist("dl_clientes", state.catalogos.clientes.map(x => x.razonSocial))}
       ${datalist("dl_transportes", state.catalogos.transportes.map(x => x.razonSocial))}
+      ${datalist("dl_tanques", (state.catalogos.tanques || []).map(x => x.nombre))}
       <div class="grid2" style="margin-top:12px">
         <div><label>Motivo de la corrección *</label><input id="co_motivo" /></div>
         ${state.funciones.claveCorreccion ? `<div><label>Clave de corrección *</label><input id="co_clave" type="password" autocomplete="off" /></div>` : ""}

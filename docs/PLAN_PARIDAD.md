@@ -292,6 +292,20 @@ Pedido del cliente (18/11/2026) y especificación "API Balanza – Sistema WORMS
 
 > **Estado (2026-11-18):** hecha en la rama `edicion-estandar`. Mismo código que la Completa; la edición se elige al compilar (`-p:BfsEdicion=Estandar`, `installer\build.ps1 -Edicion Estandar`) y queda grabada en el programa. Una sola empresa (la base nueva arranca con una y no se pueden agregar), sin API de integraciones ni nube (los endpoints no existen y no se encola nada aunque la configuración diga lo contrario), sin las pestañas API y Nube. Pesaje normal, tara conocida, aduana y dos balanzas igual que la Completa. Instalador propio en `artifacts\estandar`, con otro UpgradeCode, carpeta de programa, carpeta de datos (`bfs-4-estandar`), puerto (5081) y nombre: convive con la Completa en la misma PC.
 
+### Fase 10 — Edición INAGRO
+
+Referencia: la 3.x de INAGRO (`C:\Programas\INAGRO\BFS 2.0`, v3.58). Decisiones del cliente (19/11/2026): edición compilada propia; las sociedades de Centum son empresas de la 4.0 pero con **una sola numeración**; DataCloud no se pasa (lo reemplaza la nube de la 4.0).
+
+> **Estado (2026-11-19):** hecha en la rama `inagro`, **salvo** la prueba con el webhook real de Centum y la de imprimir sobre el formulario preimpreso.
+> - **Edición `Inagro`** (`-p:BfsEdicion=Inagro`, `installer\build.ps1 -Edicion Inagro`): la Completa (varias empresas, outbox, nube) más lo de INAGRO. Carpeta `bfs-4-inagro`, puerto 5082, UpgradeCode propio. Desde la Completa se puede probar con `--Bfs:Edicion=Inagro`.
+> - **Sociedades = empresas**: una base nueva arranca con Inagro S.A. (1), Inagro S.R.L. (2), Otros (3) y No Vincula Centum (4). El código se edita en Planta. **Numeración compartida**: un contador por puesto para todas las empresas (`ContadorTicket` con empresa `Guid.Empty`); Sistema → Numeración muestra una sola fila.
+> - **Campos de la pesada** (`DatosInagro`, columnas `Inagro_*`): Id de operación (1 compras / 2 ventas / 3 OT, obligatorio; ventas = EGRESO, el resto INGRESO), peso de origen (solo compras y OT), tanque, análisis (hasta 6 números), precintos, código de producto (se completa del catálogo), CUIL del chofer (11 números), observaciones del remito y planta de la instalación (Configuración → General). Al pesar se guardan CUIT, dirección, localidad e IVA del cliente y del transporte, como hacía la 3.x. Se ven al retomar la salida, en el ticket (mismas líneas que la 3.x), en el Excel y se corrigen desde Pesadas → Corregir.
+> - **Catálogos**: Tanques y Sucursales (procedencia / destino); clientes y transportes con dirección, localidad y condición de IVA. Sincronizan con la nube.
+> - **Centum** (`Bfs.Integrations/Centum`): mismo JSON que `ApiServer.convertToApiFormat` de la 3.x, por el outbox (con reintentos; la 3.x lo perdía si fallaba). Se manda una vez, al cerrar la pesada (salida o tara conocida). No se mandan las empresas sin sociedad o con la 4. Configuración → API → Centum (habilitado y webhook).
+> - **Remito preimpreso**: `GET /api/pesadas/{id}/remito`, con las coordenadas de la 3.x y un corrimiento en mm (Configuración → General) por si la impresora lo tira corrido. Al cerrar una pesada: ticket, remito o preguntar (Configuración → General). Botón Remito en pendientes y en Pesadas.
+> - **Importador 3.x**: tanques, sucursales, domicilio de clientes y transportes, todos los campos de INAGRO, `tipo_movimiento` numérico, cada pesada a la empresa de su `tipo_sociedad_id`, planta de `system_config` y el contador compartido sigue al último ticket.
+> - Pendiente: imprimir un remito sobre el formulario real y ajustar el corrimiento; mandar una pesada al webhook real de Centum; al corregir una pesada ya enviada no se reenvía a Centum (la 3.x tampoco lo hacía).
+
 ---
 
 ## 5. Fuera de alcance

@@ -1,12 +1,14 @@
 # Arma el MSI de la PC de porteria.
 #   powershell -ExecutionPolicy Bypass -File installer\build.ps1 -Version 4.0.1
 #   powershell -ExecutionPolicy Bypass -File installer\build.ps1 -Version 4.0.1 -Edicion Estandar
+#   powershell -ExecutionPolicy Bypass -File installer\build.ps1 -Version 4.0.1 -Edicion Inagro
 # La Estandar (una empresa, sin API ni nube) sale en artifacts\estandar, aparte de la Completa.
+# La de INAGRO (Completa + campos de Centum, envio a Centum y remito preimpreso) sale en artifacts\inagro.
 # Requisitos: .NET 10 SDK y WiX (dotnet tool install --global wix).
 # (Sin acentos a proposito: Windows PowerShell 5.1 lee los .ps1 sin BOM como ANSI.)
 param(
     [string]$Version = "4.0.0",
-    [ValidateSet("Completa", "Estandar")]
+    [ValidateSet("Completa", "Estandar", "Inagro")]
     [string]$Edicion = "Completa"
 )
 
@@ -15,6 +17,9 @@ $raiz = Split-Path -Parent $PSScriptRoot
 if ($Edicion -eq "Estandar") {
     $salida = Join-Path $raiz "artifacts\estandar"
     $msi = Join-Path $salida "BFS-Pesaje-Estandar-$Version.msi"
+} elseif ($Edicion -eq "Inagro") {
+    $salida = Join-Path $raiz "artifacts\inagro"
+    $msi = Join-Path $salida "BFS-Pesaje-INAGRO-$Version.msi"
 } else {
     $salida = Join-Path $raiz "artifacts"
     $msi = Join-Path $salida "BFS-Pesaje-$Version.msi"

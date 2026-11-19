@@ -106,14 +106,23 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("CondicionIva")
+                        .HasColumnType("text");
+
                     b.Property<DateTimeOffset>("CreadoEn")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Cuit")
                         .HasColumnType("text");
 
+                    b.Property<string>("Direccion")
+                        .HasColumnType("text");
+
                     b.Property<bool>("Eliminado")
                         .HasColumnType("boolean");
+
+                    b.Property<string>("Localidad")
+                        .HasColumnType("text");
 
                     b.Property<DateTimeOffset>("ModificadoEn")
                         .HasColumnType("timestamp with time zone");
@@ -304,6 +313,9 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
 
                     b.Property<bool>("Activa")
                         .HasColumnType("boolean");
+
+                    b.Property<string>("CodigoSociedad")
+                        .HasColumnType("text");
 
                     b.Property<DateTimeOffset>("CreadoEn")
                         .HasColumnType("timestamp with time zone");
@@ -727,6 +739,88 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                     b.ToTable("Productos");
                 });
 
+            modelBuilder.Entity("Bfs.Core.Entities.Sucursal", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreadoEn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("Eliminado")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset>("ModificadoEn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("OrigenNodoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("SyncSeq")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ModificadoEn");
+
+                    b.HasIndex("Nombre")
+                        .IsUnique();
+
+                    b.HasIndex("SyncSeq");
+
+                    b.ToTable("Sucursales");
+                });
+
+            modelBuilder.Entity("Bfs.Core.Entities.Tanque", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreadoEn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("Eliminado")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset>("ModificadoEn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("OrigenNodoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("SyncSeq")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ModificadoEn");
+
+                    b.HasIndex("Nombre")
+                        .IsUnique();
+
+                    b.HasIndex("SyncSeq");
+
+                    b.ToTable("Tanques");
+                });
+
             modelBuilder.Entity("Bfs.Core.Entities.TaraConocida", b =>
                 {
                     b.Property<Guid>("Id")
@@ -786,10 +880,16 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                     b.Property<string>("CodigoAta")
                         .HasColumnType("text");
 
+                    b.Property<string>("CondicionIva")
+                        .HasColumnType("text");
+
                     b.Property<DateTimeOffset>("CreadoEn")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Cuit")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Direccion")
                         .HasColumnType("text");
 
                     b.Property<bool>("Eliminado")
@@ -797,6 +897,9 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
 
                     b.Property<bool>("EsAta")
                         .HasColumnType("boolean");
+
+                    b.Property<string>("Localidad")
+                        .HasColumnType("text");
 
                     b.Property<DateTimeOffset>("ModificadoEn")
                         .HasColumnType("timestamp with time zone");
@@ -976,9 +1079,75 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                                 .HasForeignKey("PesadaId");
                         });
 
+                    b.OwnsOne("Bfs.Core.Entities.DatosInagro", "Inagro", b1 =>
+                        {
+                            b1.Property<Guid>("PesadaId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("Analisis")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("ClienteCondicionIva")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("ClienteCuit")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("ClienteDireccion")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("ClienteLocalidad")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("CuilChofer")
+                                .HasColumnType("text");
+
+                            b1.Property<int?>("Movimiento")
+                                .HasColumnType("integer");
+
+                            b1.Property<string>("ObservacionesRemito")
+                                .HasColumnType("text");
+
+                            b1.Property<int?>("PesoOrigen")
+                                .HasColumnType("integer");
+
+                            b1.Property<string>("Planta")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Precintos")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("ProductoCodigo")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Tanque")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("TransporteCondicionIva")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("TransporteCuit")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("TransporteDireccion")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("TransporteLocalidad")
+                                .HasColumnType("text");
+
+                            b1.HasKey("PesadaId");
+
+                            b1.ToTable("Pesadas");
+
+                            b1.WithOwner()
+                                .HasForeignKey("PesadaId");
+                        });
+
                     b.Navigation("Aduana");
 
                     b.Navigation("Empresa");
+
+                    b.Navigation("Inagro");
                 });
 
             modelBuilder.Entity("Bfs.Core.Entities.Usuario", b =>

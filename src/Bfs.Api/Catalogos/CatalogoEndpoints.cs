@@ -27,6 +27,7 @@ public static class CatalogoEndpoints
                 if (error != null) return error;
                 e.RazonSocial = dto.RazonSocial!.Trim();
                 e.Cuit = cuit;
+                Domicilio(e, dto.Direccion, dto.Localidad, dto.CondicionIva);
                 return null;
             },
             async (db, e) => await db.Usuarios.AnyAsync(u => u.ClienteId == e.Id)
@@ -44,6 +45,9 @@ public static class CatalogoEndpoints
                 e.Cuit = cuit;
                 e.EsAta = dto.EsAta;
                 e.CodigoAta = dto.EsAta ? dto.CodigoAta!.Trim() : null;
+                if (dto.Direccion != null) e.Direccion = Limpio(dto.Direccion);
+                if (dto.Localidad != null) e.Localidad = Limpio(dto.Localidad);
+                if (dto.CondicionIva != null) e.CondicionIva = Limpio(dto.CondicionIva);
                 return null;
             });
 
@@ -78,7 +82,23 @@ public static class CatalogoEndpoints
                 e.Descripcion = string.IsNullOrWhiteSpace(dto.Descripcion) ? null : dto.Descripcion.Trim();
                 return null;
             });
+
+        // Edición Inagro: tanques (la "sección" de Centum) y sucursales (procedencia / destino, desde / hacia en una OT).
+        Map<Tanque, NombreDto>(g, "tanques", db => db.Tanques, t => t.Nombre, dto => dto.Nombre,
+            (dto, e) => { e.Nombre = dto.Nombre!.Trim(); return null; });
+        Map<Sucursal, NombreDto>(g, "sucursales", db => db.Sucursales, s => s.Nombre, dto => dto.Nombre,
+            (dto, e) => { e.Nombre = dto.Nombre!.Trim(); return null; });
     }
+
+    /// <summary>Dirección, localidad e IVA (remito de INAGRO). Lo que no viene (null) no se toca; vacío lo borra.</summary>
+    private static void Domicilio(Cliente e, string? direccion, string? localidad, string? iva)
+    {
+        if (direccion != null) e.Direccion = Limpio(direccion);
+        if (localidad != null) e.Localidad = Limpio(localidad);
+        if (iva != null) e.CondicionIva = Limpio(iva);
+    }
+
+    private static string? Limpio(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 
     /// <param name="nombre">Columna que identifica el registro: se busca, ordena y no se repite.</param>
     /// <param name="nombreDto">El nombre tal como se va a guardar (ya normalizado).</param>
@@ -168,8 +188,10 @@ public static class CatalogoEndpoints
     private sealed record ValorBuscado(string Valor);
 }
 
-public record ClienteDto(string? RazonSocial, string? Cuit);
-public record TransporteDto(string? RazonSocial, string? Cuit, bool EsAta = false, string? CodigoAta = null);
+public record ClienteDto(string? RazonSocial, string? Cuit, string? Direccion = null, string? Localidad = null, string? CondicionIva = null);
+public record TransporteDto(string? RazonSocial, string? Cuit, bool EsAta = false, string? CodigoAta = null,
+    string? Direccion = null, string? Localidad = null, string? CondicionIva = null);
+public record NombreDto(string? Nombre);
 public record ProductoDto(string? Nombre, string? Codigo);
 public record ExportadorDto(string? RazonSocial, string? Cuit);
 public record TaraDto(string? Identificador, int Kilogramos, string? Descripcion);

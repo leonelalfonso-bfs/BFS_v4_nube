@@ -19,6 +19,19 @@ public static class DocumentoEndpoints
             return Results.File(TicketPdf.Generar(datos), "application/pdf", $"ticket-{datos.Pesada.TicketNumero}.pdf");
         });
 
+        // Edición Inagro: los datos para imprimir sobre el remito preimpreso.
+        api.MapGet("/pesadas/{id:guid}/remito", async (Guid id, DocumentosService docs, ConfigService config, BfsOptions opciones, ClaimsPrincipal user) =>
+        {
+            if (opciones.Edicion != Edicion.Inagro) return Results.NotFound();
+            var datos = await docs.TicketAsync(id);
+            if (datos == null || !PuedeVer(user, datos.Pesada.ClienteId)) return Results.NotFound();
+            var c = await config.GlobalAsync();
+            float Mm(string clave) => float.TryParse(c.GetValueOrDefault(clave), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : 0;
+            return Results.File(RemitoPreimpreso.Generar(datos, Mm(ConfigKeys.InagroRemitoAjusteX), Mm(ConfigKeys.InagroRemitoAjusteY)),
+                "application/pdf", $"remito-{datos.Pesada.TicketNumero}.pdf");
+        });
+
         api.MapPost("/pesadas/{id:guid}/termica", async (Guid id, DocumentosService docs, ConfigService config, IImpresoraTermica impresora) =>
         {
             var c = await config.GlobalAsync();

@@ -45,7 +45,7 @@ public static class PlantaEndpoints
         }).RequireAuthorization(Permisos.ConfigPlanta);
 
         // Lo que necesita saber la pantalla de pesaje. Sin datos sensibles: la clave manual solo dice si existe.
-        api.MapGet("/funciones", async (ConfigService config) =>
+        api.MapGet("/funciones", async (ConfigService config, BfsOptions opciones) =>
         {
             var c = await config.GlobalAsync();
             bool Si(string k, string def = "false") => c.GetValueOrDefault(k, def) == "true";
@@ -64,7 +64,11 @@ public static class PlantaEndpoints
                 exigirEstable = Si(ConfigKeys.ExigirEstable, "true"),
                 aduanaLot = c.GetValueOrDefault(ConfigKeys.AduanaLot, ""),
                 aduanaEscenario = c.GetValueOrDefault(ConfigKeys.AduanaEscenario, ""),
-                puesto = int.TryParse(c.GetValueOrDefault(ConfigKeys.Puesto), out var puesto) ? puesto : 1
+                puesto = int.TryParse(c.GetValueOrDefault(ConfigKeys.Puesto), out var puesto) ? puesto : 1,
+                // Edición Inagro: campos de Centum, tanques, sucursales y remito preimpreso.
+                inagro = opciones.Edicion == Edicion.Inagro,
+                inagroPlanta = c.GetValueOrDefault(ConfigKeys.InagroPlanta, Inagro.PlantaPorDefecto),
+                inagroImpresion = c.GetValueOrDefault(ConfigKeys.InagroImpresion, "preguntar")
             });
         });
 
@@ -150,6 +154,8 @@ public static class PlantaEndpoints
         e.Telefono = Limpio(dto.Telefono);
         e.Email = Limpio(dto.Email);
         if (dto.Activa.HasValue) e.Activa = dto.Activa.Value;
+        // Solo la manda la pantalla de la edición Inagro; null = no se toca.
+        if (dto.CodigoSociedad != null) e.CodigoSociedad = Limpio(dto.CodigoSociedad);
         return null;
     }
 
@@ -157,7 +163,7 @@ public static class PlantaEndpoints
 }
 
 public record EmpresaDto(string? Nombre, string? Cuit, string? Direccion, string? Localidad, string? Provincia,
-    string? Telefono, string? Email, bool? Activa = null);
+    string? Telefono, string? Email, bool? Activa = null, string? CodigoSociedad = null);
 public record AduanaDto(string? Codigo, string? Lot, string? Certificado1, DateOnly? Certificado1Vence,
     string? Certificado2, DateOnly? Certificado2Vence);
 public record ClaveManualDto(string? Clave);

@@ -64,4 +64,21 @@ public static class ConfigKeys
     public const string TicketTitulo = "ticket_titulo";
     public const string TicketPie = "ticket_pie";
     public const string LogoFile = "logo_file";
+
+    // Edición Inagro.
+
+    /// <summary>Planta de esta instalación ("1: Alvear" / "2: Campana"). Va en cada pesada y a Centum.</summary>
+    public const string InagroPlanta = "inagro_planta";
+
+    /// <summary>Qué se imprime al cerrar una pesada: "preguntar", "ticket" o "remito" (remito preimpreso).</summary>
+    public const string InagroImpresion = "inagro_impresion";
+
+    /// <summary>Corrimiento del remito preimpreso en mm (positivo = a la derecha / hacia abajo), por si la impresora lo tira corrido.</summary>
+    public const string InagroRemitoAjusteX = "inagro_remito_ajuste_x";
+    public const string InagroRemitoAjusteY = "inagro_remito_ajuste_y";
+
+    public const string CentumEnabled = "centum_enabled";
+
+    /// <summary>Webhook que recibe las pesadas para Centum (en la 3.x, automate.gauchocode.com).</summary>
+    public const string CentumEndpoint = "centum_endpoint";
 }

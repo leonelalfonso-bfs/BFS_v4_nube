@@ -3,8 +3,19 @@
   publica Bfs.Desktop self-contained (no hace falta instalar .NET) y empaqueta esa carpeta.
   Edicion=Estandar arma la versión para el cliente que solo pesa: es otro producto (otro UpgradeCode,
   otra carpeta de programa y de datos), así no pisa ni se mezcla con la Completa.
+  Edicion=Inagro arma la de INAGRO (la Completa con sus campos, Centum y remito): también es otro producto.
 -->
-<?if $(var.Edicion) = "Estandar" ?>
+<?if $(var.Edicion) = "Inagro" ?>
+  <?define Nombre = "Sistema de Pesaje BFS 4.0 INAGRO" ?>
+  <?define Acceso = "Sistema de Pesaje BFS INAGRO" ?>
+  <?define UpgradeCode = "68CC9167-404A-47EB-94FC-F1D9F14210C6" ?>
+  <?define CarpetaPrograma = "BFS Pesaje 4.0 INAGRO" ?>
+  <?define CarpetaDatos = "bfs-4-inagro" ?>
+  <?define Registro = "Software\BFS\Pesaje4Inagro" ?>
+  <?define GuidDatos = "A7AF3CAC-E602-49EE-8A25-F48BCE2825D4" ?>
+  <?define GuidMenu = "B5FCC46C-74A4-457D-BFD3-FA36CC6BD516" ?>
+  <?define GuidEscritorio = "8DB2FACB-6AF0-4DF1-A9D7-4F2AF6423AD4" ?>
+<?elseif $(var.Edicion) = "Estandar" ?>
   <?define Nombre = "Sistema de Pesaje BFS 4.0 Estándar" ?>
   <?define Acceso = "Sistema de Pesaje BFS Estándar" ?>
   <?define UpgradeCode = "9A4C2E61-7B3D-4F18-A5C9-1E6D8B2F7A43" ?>

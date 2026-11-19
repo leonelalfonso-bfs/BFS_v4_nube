@@ -20,6 +20,7 @@ using Bfs.Core.Entities;
 using Bfs.Documents;
 using Bfs.Infrastructure.Data;
 using Bfs.Integrations;
+using Bfs.Integrations.Centum;
 using Bfs.Integrations.Worms;
 using Bfs.Scale;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -62,6 +63,11 @@ public static class ApiHost
 
         builder.Services.AddHttpClient(WormsDestino.Destino);
         builder.Services.AddSingleton<IDestinoIntegracion, WormsDestino>();
+        if (options.Edicion == Edicion.Inagro)
+        {
+            builder.Services.AddHttpClient(CentumDestino.Destino);
+            builder.Services.AddSingleton<IDestinoIntegracion, CentumDestino>();
+        }
         builder.Services.AddSingleton<DespachadorOutbox>();
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddScoped<TenantActual>();
@@ -103,7 +109,8 @@ public static class ApiHost
         {
             using var scope = app.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<BfsDbContext>();
-            DbInitializer.SeedAsync(db, datosDePrueba: true, empresas: options.Edicion == Edicion.Estandar ? 1 : 2).GetAwaiter().GetResult();
+            DbInitializer.SeedAsync(db, datosDePrueba: true, empresas: options.Edicion == Edicion.Estandar ? 1 : 2,
+                sociedades: options.Edicion == Edicion.Inagro ? Inagro.SociedadesIniciales : null).GetAwaiter().GetResult();
             BalanzaEndpoints.AplicarAsync(db, app.Services.GetRequiredService<IBalanzas>()).GetAwaiter().GetResult();
         }
 
@@ -147,7 +154,7 @@ public static class ApiHost
         api.MapSistemaEndpoints();
         api.MapImportacionEndpoints();
         // La Estándar no tiene API para conectar con otros sistemas ni nube.
-        if (options.Edicion == Edicion.Completa) api.MapIntegracionEndpoints();
+        if (Ediciones.TieneIntegraciones(options.Edicion)) api.MapIntegracionEndpoints();
         if (options.Modo == ModoDespliegue.Nube)
         {
             api.MapSuperadminEndpoints();
@@ -155,7 +162,7 @@ public static class ApiHost
         }
         else
         {
-            if (options.Edicion == Edicion.Completa) api.MapNubeNodoEndpoints();
+            if (Ediciones.TieneIntegraciones(options.Edicion)) api.MapNubeNodoEndpoints();
         }
 
         // Una ruta de la API que no existe es 404; cualquier otra ruta es la aplicación web.
@@ -208,7 +215,7 @@ public static class ApiHost
 
         builder.Services.AddSingleton<IImpresoraTermica, ImpresoraWindows>();
         builder.Services.AddScoped<IIndiceLogins, IndiceLoginsNodo>();
-        if (options.Edicion == Edicion.Completa)
+        if (Ediciones.TieneIntegraciones(options.Edicion))
         {
             builder.Services.AddHostedService<OutboxDispatcher>();
             builder.Services.AddHttpClient("nube");

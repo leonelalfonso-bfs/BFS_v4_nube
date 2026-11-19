@@ -51,3 +51,9 @@ public static class Tickets
     /// <summary>Con <paramref name="soloNumero"/>, "78271": para seguir la numeración que traía el cliente (un solo puesto).</summary>
     public static string Formatear(int puesto, int numero, bool soloNumero) => soloNumero ? numero.ToString() : Formatear(puesto, numero);
 }
+
+/// <summary>Numeración compartida entre empresas (edición Inagro): el contador de cada puesto se guarda con esta empresa.</summary>
+public static class ContadoresCompartidos
+{
+    public static readonly Guid Empresa = Guid.Empty;
+}
