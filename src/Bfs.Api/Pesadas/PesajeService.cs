@@ -36,10 +36,12 @@ public class PesajeService
     private readonly PasswordHasher<Usuario> _hasher;
 
     private readonly Edicion _edicion;
+    private readonly CapturasPeso _capturas;
 
     public PesajeService(BfsDbContext db, IBalanzas balanzas, ConfigService config, LicenciaService licencia, PasswordHasher<Usuario> hasher,
-        BfsOptions? opciones = null)
+        BfsOptions? opciones = null, CapturasPeso? capturas = null)
     {
+        _capturas = capturas ?? new CapturasPeso();
         _edicion = opciones?.Edicion ?? Ediciones.Compilada;
         _db = db;
         _balanzas = balanzas;
@@ -71,7 +73,7 @@ public class PesajeService
         var (pesada, error) = await NuevaPesada(req, op, configs);
         if (error != null) return error;
 
-        var peso = TomarPeso(req.PesoEntrada, req.ClaveManual, req.BalanzaId, op, configs);
+        var peso = TomarPeso(req.PesoEntrada, req.ClaveManual, req.BalanzaId, op, configs, req.CapturaId);
         if (peso.Error != null) return peso.Error;
         pesada!.PesoEntrada = peso.Kg;
         pesada.Balanza = peso.Balanza;
@@ -81,8 +83,17 @@ public class PesajeService
         await RecordarVehiculo(pesada);
         await EncolarWorms(configs, pesada, WormsEventos.Entrada);
         await _db.SaveChangesAsync();
+        UsarCaptura(req.CapturaId, req.PesoEntrada);
         return ResultadoPesaje.Ok(pesada);
     });
+
+    /// <summary>Congela el peso de la balanza para guardar la pesada después (ver <see cref="CapturasPeso"/>).</summary>
+    public async Task<(CapturaPeso? Captura, ResultadoPesaje? Error)> CapturarAsync(Guid? balanzaId, Operador op)
+    {
+        var configs = await _config.GlobalAsync();
+        var peso = TomarPeso(null, null, balanzaId, op, configs);
+        return peso.Error != null ? (null, peso.Error) : (_capturas.Guardar(peso.Kg, peso.Balanza), null);
+    }
 
     public Task<ResultadoPesaje> RegistrarSalidaAsync(Guid id, SalidaRequest req, Operador op) => ConReintento(async () =>
     {
@@ -92,7 +103,7 @@ public class PesajeService
         if (pesada.Estado == EstadosPesada.Anulada) return ResultadoPesaje.Invalida("La pesada está anulada");
 
         var configs = await _config.GlobalAsync();
-        var peso = TomarPeso(req.PesoSalida, req.ClaveManual, req.BalanzaId, op, configs);
+        var peso = TomarPeso(req.PesoSalida, req.ClaveManual, req.BalanzaId, op, configs, req.CapturaId);
         if (peso.Error != null) return peso.Error;
 
         pesada.PesoSalida = peso.Kg;
@@ -103,6 +114,7 @@ public class PesajeService
         Cerrar(pesada);
         await EncolarWorms(configs, pesada, WormsEventos.Salida);
         await _db.SaveChangesAsync();
+        UsarCaptura(req.CapturaId, req.PesoSalida);
         return ResultadoPesaje.Ok(pesada);
     });
 
@@ -140,7 +152,7 @@ public class PesajeService
             return ResultadoPesaje.Invalida($"No hay tara guardada para {pesada!.PatenteChasis}");
         }
 
-        var bruto = TomarPeso(req.Datos.PesoEntrada, req.ClaveManual, req.Datos.BalanzaId, op, configs);
+        var bruto = TomarPeso(req.Datos.PesoEntrada, req.ClaveManual, req.Datos.BalanzaId, op, configs, req.Datos.CapturaId);
         if (bruto.Error != null) return bruto.Error;
 
         pesada!.Modo = ModosPesaje.TaraConocida;
@@ -157,8 +169,15 @@ public class PesajeService
         await RecordarVehiculo(pesada);
         await EncolarWorms(configs, pesada, WormsEventos.Entrada, WormsEventos.Salida);
         await _db.SaveChangesAsync();
+        UsarCaptura(req.Datos.CapturaId, req.Datos.PesoEntrada);
         return ResultadoPesaje.Ok(pesada);
     });
+
+    /// <summary>La pesada quedó guardada con el peso capturado: esa captura ya no sirve para otra.</summary>
+    private void UsarCaptura(Guid? capturaId, int? manual)
+    {
+        if (capturaId is { } id && manual == null) _capturas.Usar(id);
+    }
 
     /// <summary>Pesa el vehículo vacío y guarda (o actualiza) su tara para usarla después en "Tara conocida".</summary>
     public async Task<(TaraConocida? Tara, ResultadoPesaje? Error)> TomarTaraAsync(TomarTaraRequest req, Operador op)
@@ -458,14 +477,22 @@ public class PesajeService
 
     /// <summary>
     /// El peso escrito a mano necesita el permiso, que el ingreso manual esté habilitado y la clave si hay una.
-    /// El de la balanza, que esté leyendo y (si BFS lo exige) estable.
+    /// El de la balanza, que esté leyendo y (si BFS lo exige) estable. Con <paramref name="capturaId"/>, el que se capturó
+    /// antes con <see cref="CapturarAsync"/> (ya se validó al capturarlo).
     /// </summary>
-    private Peso TomarPeso(int? manual, string? clave, Guid? balanzaId, Operador op, Dictionary<string, string> configs)
+    private Peso TomarPeso(int? manual, string? clave, Guid? balanzaId, Operador op, Dictionary<string, string> configs, Guid? capturaId = null)
     {
         if (manual is { } kg)
         {
             if (ValidarManual(clave, op, configs) is { } error) return new Peso(0, null, true, error);
             return kg > 0 ? new Peso(kg, null, true, null) : new Peso(0, null, true, ResultadoPesaje.Invalida("El peso tiene que ser mayor a cero"));
+        }
+
+        if (capturaId is { } id)
+        {
+            return _capturas.Buscar(id) is { } c
+                ? new Peso(c.Kilogramos, c.Balanza, false, null)
+                : new Peso(0, null, false, ResultadoPesaje.Invalida("El peso capturado venció o ya se usó: capturalo de nuevo"));
         }
 
         var l = _balanzas.Lectura(balanzaId);

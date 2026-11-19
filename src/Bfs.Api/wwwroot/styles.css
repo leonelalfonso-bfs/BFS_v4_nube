@@ -529,3 +529,13 @@ fieldset.seccion legend {
 /* Ventanas (alta rápida, elegir impresión). */
 .modal-fondo { position: fixed; inset: 0; background: rgba(15, 23, 42, .45); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
 .modal-fondo .modal { max-width: 520px; width: 100%; }
+
+/* Capturar peso y aceptar después. */
+.captura { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 14px 0 4px; }
+.btn-capturar { font-size: 17px; padding: 12px 26px; }
+.btn-capturar small { font-weight: 400; opacity: .8; }
+.captura-ayuda { color: #64748b; font-size: 13px; }
+.captura-ok { display: flex; align-items: baseline; gap: 10px; background: #ecfdf5; border: 1px solid #10b981; border-radius: 10px; padding: 8px 16px; }
+.captura-ok span { color: #047857; font-size: 13px; font-weight: 600; }
+.captura-ok strong { font-size: 24px; color: #065f46; }
+.captura-ok small { color: #64748b; }

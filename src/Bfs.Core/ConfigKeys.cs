@@ -67,4 +67,7 @@ public static class ConfigKeys
     public const string TicketTitulo = "ticket_titulo";
     public const string TicketPie = "ticket_pie";
     public const string LogoFile = "logo_file";
+
+    /// <summary>Marca que ya se ocultó una vez el selector de tipo (ingreso / egreso) en esta base.</summary>
+    public const string TipoOcultoAplicado = "campos_tipo_oculto";
 }
