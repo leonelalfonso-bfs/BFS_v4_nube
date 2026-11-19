@@ -111,13 +111,13 @@ public class AutomatizacionTests
 
         using var admin = await api.LoginAdmin();
 
-        // Sensor de salida de la balanza 1 libre: no se captura.
+        // Sensor de salida de la balanza 1 cortado (el camión pisa esa punta): no se captura.
         (await vendor.PostAsJsonAsync("/api/automatizacion/simular/2", new { valor = false })).EnsureSuccessStatusCode();
         var bloqueada = await admin.PostAsJsonAsync("/api/pesadas/capturar", new { balanzaId = (Guid?)null });
         Assert.Equal(HttpStatusCode.BadRequest, bloqueada.StatusCode);
-        Assert.Contains("Posicionar", await bloqueada.Content.ReadAsStringAsync());
+        Assert.Contains("cortado", await bloqueada.Content.ReadAsStringAsync());
 
-        // Camión entero arriba: se captura, con la foto de la cámara.
+        // Camión entero arriba, ningún sensor cortado: se captura, con la foto de la cámara.
         (await vendor.PostAsJsonAsync("/api/automatizacion/simular/2", new { valor = true })).EnsureSuccessStatusCode();
         var captura = await (await admin.PostAsJsonAsync("/api/pesadas/capturar", new { balanzaId = (Guid?)null })).Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(1, captura.GetProperty("cantidadFotos").GetInt32());
@@ -144,9 +144,15 @@ public class AutomatizacionTests
         Assert.True(estado.GetProperty("salidas")[1].GetBoolean());
         Assert.True(estado.GetProperty("salidas")[5].GetBoolean());
 
-        // El camión se va (sensores libres): barrera cerrada, semáforo de entrada en verde.
-        await vendor.PostAsJsonAsync("/api/automatizacion/simular/1", new { valor = false });
+        // Con el camión todavía arriba (sensores en verde) la balanza no vuelve a la entrada.
+        await Task.Delay(600);
+        Assert.True((await admin.GetFromJsonAsync<JsonElement>("/api/automatizacion/estado")).GetProperty("salidas")[5].GetBoolean());
+
+        // El camión sale: corta el sensor de salida mientras pasa y después todos vuelven a verde.
         await vendor.PostAsJsonAsync("/api/automatizacion/simular/2", new { valor = false });
+        await Task.Delay(600);
+        Assert.True((await admin.GetFromJsonAsync<JsonElement>("/api/automatizacion/estado")).GetProperty("salidas")[5].GetBoolean());
+        await vendor.PostAsJsonAsync("/api/automatizacion/simular/2", new { valor = true });
         estado = await Esperar(admin, e => !e.GetProperty("salidas")[5].GetBoolean());
         Assert.True(estado.GetProperty("salidas")[0].GetBoolean());
         Assert.False(estado.GetProperty("salidas")[1].GetBoolean());
