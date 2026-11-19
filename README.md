@@ -18,8 +18,7 @@ dotnet run --project src/Bfs.Api
 
 Abrir http://127.0.0.1:5080
 
-- Vendor (BFS): `bfs@bfs.local` / `bfs-setup`
-- Admin cliente: `admin@bfs.local` / `admin`
+Usuario de una instalación nueva: **`admin` / `BFS202%`** (rol BFS: configura todo). Los usuarios del cliente los crea BFS desde Usuarios; en la portería pueden ser un nombre (`porteria1`) o un email, en la nube tienen que ser email. Si se importa una 3.x que tenía un usuario `admin`, entra como `admin-3x` con su clave.
 
 `dotnet run` arranca en entorno `Development`, sin pedir licencia. La app de escritorio y el instalador sí la piden: ver [docs/LICENCIAS.md](docs/LICENCIAS.md).
 
