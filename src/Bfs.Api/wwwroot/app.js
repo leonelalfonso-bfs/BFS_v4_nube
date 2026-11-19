@@ -349,8 +349,8 @@ function renderLogin() {
         ${bfsLogo("login-logo")}
         <h2>Ingreso</h2>
         <p style="color:var(--muted);margin-top:0">${esc(state.branding.clienteNombre || "Sistema de pesaje")} · la configuración la hace BFS.</p>
-        <label>Email</label>
-        <input id="user" type="email" autocomplete="username" />
+        <label>Usuario o email</label>
+        <input id="user" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" />
         <label style="margin-top:12px">Contraseña</label>
         <input id="pass" type="password" autocomplete="current-password" />
         <p class="error" id="err"></p>

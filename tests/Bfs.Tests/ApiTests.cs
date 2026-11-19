@@ -20,7 +20,7 @@ public class ApiTests
         Assert.Equal("Nodo", health.GetProperty("modo").GetString());
         Assert.Equal(HttpStatusCode.Unauthorized, (await anon.GetAsync("/api/pesadas")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized,
-            (await anon.PostAsJsonAsync("/api/auth/login", new { email = DbInitializer.SeedAdminEmail, password = "mal" })).StatusCode);
+            (await anon.PostAsJsonAsync("/api/auth/login", new { email = TestApi.AdminEmail, password = "mal" })).StatusCode);
 
         // El email no distingue mayúsculas ni espacios.
         using var http = await api.Login("  ADMIN@bfs.local ", TestApi.ClaveSeed);
@@ -36,7 +36,7 @@ public class ApiTests
         var pesada = await entrada.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("01-000001", pesada.GetProperty("ticketNumero").GetString());
         Assert.Equal("AB123CD", pesada.GetProperty("patenteChasis").GetString());
-        Assert.Equal(DbInitializer.SeedAdminEmail, pesada.GetProperty("operador").GetString());
+        Assert.Equal(TestApi.AdminEmail, pesada.GetProperty("operador").GetString());
         Assert.Equal(1, pesada.GetProperty("version").GetInt64());
         var id = pesada.GetProperty("id").GetGuid();
 
@@ -61,7 +61,7 @@ public class ApiTests
     {
         await using var api = await TestApi.Iniciar();
         using var http = api.Cliente();
-        var res = await http.PostAsJsonAsync("/api/auth/login", new { email = DbInitializer.SeedAdminEmail, password = TestApi.ClaveSeed });
+        var res = await http.PostAsJsonAsync("/api/auth/login", new { email = TestApi.AdminEmail, password = TestApi.ClaveSeed });
         var body = await res.Content.ReadFromJsonAsync<JsonElement>();
         var permisos = body.GetProperty("permisos").EnumerateArray().Select(p => p.GetString()).ToList();
         Assert.Contains("usuarios.gestionar", permisos);
@@ -119,7 +119,10 @@ public class ApiTests
         await using var api = await TestApi.Iniciar();
         using var admin = await api.LoginAdmin();
 
-        Assert.Equal(HttpStatusCode.BadRequest, (await CrearUsuario(admin, "sin-arroba", "operador")).StatusCode);
+        // En la portería sirve un nombre de usuario ("porteria1"); lo que no es ni email ni nombre, no.
+        Assert.Equal(HttpStatusCode.BadRequest, (await CrearUsuario(admin, "con espacios", "operador")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await CrearUsuario(admin, "a@b", "operador")).StatusCode);
+        (await CrearUsuario(admin, "Porteria1", "operador")).EnsureSuccessStatusCode();
         Assert.Equal(HttpStatusCode.BadRequest, (await CrearUsuario(admin, "a@b.com", "operador", clave: "123")).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await CrearUsuario(admin, "c@agro.com", "cliente")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await CrearUsuario(admin, "v@bfs.com", "vendor")).StatusCode);

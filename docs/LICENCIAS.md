@@ -30,7 +30,7 @@ Cada licencia queda anotada en `%USERPROFILE%\.bfs\licencias-emitidas.csv` (se a
 
 ## Emitir una licencia (por consola)
 
-1. En la PC del cliente: entrar como `bfs@bfs.local` → **Configuración → Licencia** y anotar el **ID de máquina** (`MAC-XXXXXXXXXXXX`). Sin licencia también aparece en la pantalla de Pesaje.
+1. En la PC del cliente: entrar como `admin` (usuario de BFS) → **Configuración → Licencia** y anotar el **ID de máquina** (`MAC-XXXXXXXXXXXX`). Sin licencia también aparece en la pantalla de Pesaje.
 2. En tu PC:
 
    ```powershell

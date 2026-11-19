@@ -44,7 +44,7 @@ public class PesajeTests
         await Prohibido(admin.PostAsJsonAsync("/api/pesadas/entrada", Entrada(clave: "0000")), "Clave");
 
         var ok = await Json(admin.PostAsJsonAsync("/api/pesadas/entrada", Entrada(clave: "4321")));
-        Assert.Equal(DbInitializer.SeedAdminEmail, ok.GetProperty("entradaManualPor").GetString());
+        Assert.Equal(TestApi.AdminEmail, ok.GetProperty("entradaManualPor").GetString());
         Assert.Equal(JsonValueKind.Null, ok.GetProperty("balanza").ValueKind);
 
         await api.Configurar(new() { ["ingreso_manual"] = "false" });
@@ -138,7 +138,7 @@ public class PesajeTests
         var anulada = await Json(admin.PostAsJsonAsync($"/api/pesadas/{a}/anular", new { motivo = "Camión equivocado" }));
         Assert.Equal("ANULADA", anulada.GetProperty("estado").GetString());
         Assert.Equal("Camión equivocado", anulada.GetProperty("motivoAnulacion").GetString());
-        Assert.Equal(DbInitializer.SeedAdminEmail, anulada.GetProperty("anuladaPor").GetString());
+        Assert.Equal(TestApi.AdminEmail, anulada.GetProperty("anuladaPor").GetString());
 
         var pendientes = await admin.GetFromJsonAsync<JsonElement>("/api/pesadas/pendientes");
         Assert.Equal(["BB222BB"], pendientes.EnumerateArray().Select(p => p.GetProperty("patenteChasis").GetString()));

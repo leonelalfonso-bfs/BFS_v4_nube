@@ -106,7 +106,7 @@ Al arrancar, la API pone al día la base central y la de cada cliente (migracion
 
 1. Panel → **Nuevo cliente** (nombre, código, email y clave del administrador).
 2. **Porterías** → nombre → **Crear y generar código**. El código se ve una sola vez y vale 7 días.
-3. En la PC de portería (instalada con el MSI de la versión actual): entrar como `bfs@bfs.local` → Configuración → **Nube** → dirección `https://pesaje.EJEMPLO.com.ar` y el código → **Conectar**.
+3. En la PC de portería (instalada con el MSI de la versión actual): entrar como `admin` (usuario de BFS) → Configuración → **Nube** → dirección `https://pesaje.EJEMPLO.com.ar` y el código → **Conectar**.
 4. Si la portería venía de la 3.x, importar primero (Sistema → Importar) y después conectar: todo lo importado sube a la nube.
 
 ## Consumo

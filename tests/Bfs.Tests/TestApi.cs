@@ -10,7 +10,9 @@ namespace Bfs.Tests;
 /// <summary>La API real en modo Nodo, con carpeta de datos temporal y puerto libre.</summary>
 public sealed class TestApi : IAsyncDisposable
 {
-    public const string ClaveSeed = "admin";
+    /// <summary>Admin del cliente que crea cada test (una instalación nueva solo trae el usuario de BFS).</summary>
+    public const string AdminEmail = "admin@bfs.local";
+    public const string ClaveSeed = "admin123";
     public static readonly Guid Empresa1 = Guid.Parse("11111111-1111-1111-1111-111111111111");
 
     private readonly TempDir _tmp;
@@ -38,6 +40,11 @@ public sealed class TestApi : IAsyncDisposable
         await app.StartAsync();
         var api = new TestApi(tmp, app);
         if (!exigirEstable) await api.Configurar(new() { ["exigir_estable"] = "false" });
+        using (var vendor = await api.LoginVendor())
+        {
+            (await vendor.PostAsJsonAsync("/api/usuarios", new { email = AdminEmail, password = ClaveSeed, nombre = "Administrador", rol = "admin" }))
+                .EnsureSuccessStatusCode();
+        }
         return api;
     }
 
@@ -60,8 +67,8 @@ public sealed class TestApi : IAsyncDisposable
         return http;
     }
 
-    public Task<HttpClient> LoginAdmin() => Login(DbInitializer.SeedAdminEmail, ClaveSeed);
-    public Task<HttpClient> LoginVendor() => Login(DbInitializer.SeedVendorEmail, "bfs-setup");
+    public Task<HttpClient> LoginAdmin() => Login(AdminEmail, ClaveSeed);
+    public Task<HttpClient> LoginVendor() => Login(DbInitializer.SeedVendorEmail, DbInitializer.SeedVendorClave);
 
     public async ValueTask DisposeAsync()
     {

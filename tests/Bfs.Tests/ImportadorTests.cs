@@ -47,6 +47,9 @@ public class ImportadorTests : IAsyncLifetime
         Assert.Equal(new ConteoImportacion(4, 0), r.Conteos["Pesadas"]);
         Assert.Equal(new ConteoImportacion(2, 0), r.Conteos["Clientes"]);
         Assert.Equal(new ConteoImportacion(3, 0), r.Conteos["Usuarios"]);
+        // El "admin" de la 3.x no pisa ni se pierde contra el usuario de BFS: queda como admin-3x, con su clave.
+        Assert.True(await _db.Usuarios.AnyAsync(u => u.Email == "admin-3x" && u.Rol == Roles.Admin));
+        Assert.Contains(r.Avisos, a => a.Contains("admin-3x"));
 
         var empresa = await _db.Empresas.SingleAsync(e => e.Id == TestApi.Empresa1);
         Assert.Equal("Acopio Sur SA", empresa.Nombre);

@@ -83,7 +83,7 @@ public class SyncTests : IAsyncLifetime
 
     private async Task<HttpClient> Conectar()
     {
-        var bfs = await Login(UrlNodo, DbInitializer.SeedVendorEmail, "bfs-setup");
+        var bfs = await Login(UrlNodo, DbInitializer.SeedVendorEmail, DbInitializer.SeedVendorClave);
         // Como lo tipearía una persona: minúsculas y con espacios en vez de guiones.
         await Json(bfs.PostAsJsonAsync("/api/nube/activar", new { url = UrlNube, codigo = $" {_codigo.Replace('-', ' ').ToLowerInvariant()} " }));
         return bfs;
@@ -129,7 +129,7 @@ public class SyncTests : IAsyncLifetime
 
         // Los usuarios de prueba de la portería no suben a la nube.
         Assert.Equal(HttpStatusCode.Unauthorized,
-            (await Cliente(UrlNube).PostAsJsonAsync("/api/auth/login", new { email = DbInitializer.SeedVendorEmail, password = "bfs-setup" })).StatusCode);
+            (await Cliente(UrlNube).PostAsJsonAsync("/api/auth/login", new { email = DbInitializer.SeedVendorEmail, password = DbInitializer.SeedVendorClave })).StatusCode);
     }
 
     [Fact]

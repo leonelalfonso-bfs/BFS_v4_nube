@@ -43,10 +43,15 @@ public static class UsuarioEndpoints
             return Results.Ok(list);
         });
 
-        usuarios.MapPost("", async (NuevoUsuario dto, BfsDbContext db, PasswordHasher<Usuario> hasher, ClaimsPrincipal user, Nube.IIndiceLogins indice) =>
+        usuarios.MapPost("", async (NuevoUsuario dto, BfsDbContext db, PasswordHasher<Usuario> hasher, ClaimsPrincipal user, Nube.IIndiceLogins indice, BfsOptions opciones) =>
         {
             var email = Usuario.NormalizarEmail(dto.Email);
-            if (!EmailValido(email)) return Results.BadRequest("Email inválido");
+            // En la portería alcanza con un nombre de usuario ("porteria1", como en la 3.x).
+            // En la nube tiene que ser un email: con él se sabe de qué cliente es al iniciar sesión.
+            if (opciones.Modo == ModoDespliegue.Nube ? !EmailValido(email) : !EmailValido(email) && !NombreUsuarioValido(email))
+            {
+                return Results.BadRequest(opciones.Modo == ModoDespliegue.Nube ? "Email inválido" : "Usuario inválido: un email o un nombre de 3 a 40 letras, números, punto, guion o guion bajo");
+            }
             if ((dto.Password ?? "").Length < LargoMinimoClave) return Results.BadRequest($"La contraseña debe tener al menos {LargoMinimoClave} caracteres");
             if (!Permisos.RolesAsignables(user.Rol()).Contains(dto.Rol)) return Results.Forbid();
             var errorCliente = await ValidarCliente(db, dto.Rol, dto.ClienteId);
@@ -112,6 +117,9 @@ public static class UsuarioEndpoints
             return Results.Ok(new { entity.Id, entity.Email, entity.Nombre, entity.Rol, entity.EmpresaId, entity.ClienteId, entity.Activo });
         });
     }
+
+    private static bool NombreUsuarioValido(string usuario) =>
+        System.Text.RegularExpressions.Regex.IsMatch(usuario, "^[a-z0-9][a-z0-9._-]{2,39}$");
 
     private static bool EmailValido(string email) =>
         MailAddress.TryCreate(email, out var parsed) && parsed.Address == email && parsed.Host.Contains('.');
