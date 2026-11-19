@@ -39,8 +39,9 @@ public static class Permisos
         UsuariosGestionar, EmpresasGestionar, ConfigBfs, ConfigPlanta, LicenciaGestionar, SistemaGestionar
     ];
 
-    private static readonly string[] Operador = [PesajeOperar, PesajeReimprimir, PesadasVer, CatalogosVer];
-    private static readonly string[] Supervisor = [.. Operador, PesajePesoManual, PesajeAnular, PesajeCorregir, CatalogosEditar];
+    // El operador carga los catálogos (desde Pesaje o desde Catálogos). Borrar puede pedir la clave de borrado (Planta).
+    private static readonly string[] Operador = [PesajeOperar, PesajeReimprimir, PesadasVer, CatalogosVer, CatalogosEditar];
+    private static readonly string[] Supervisor = [.. Operador, PesajePesoManual, PesajeAnular, PesajeCorregir];
     private static readonly string[] Admin = [.. Supervisor, UsuariosGestionar, ConfigPlanta, SistemaGestionar];
 
     private static readonly IReadOnlyDictionary<string, string[]> PorRol = new Dictionary<string, string[]>

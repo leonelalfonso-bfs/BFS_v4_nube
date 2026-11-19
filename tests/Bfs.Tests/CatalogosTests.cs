@@ -100,17 +100,32 @@ public class CatalogosTests
     }
 
     [Fact]
-    public async Task Operador_ve_catalogos_pero_no_los_edita()
+    public async Task Operador_carga_los_catalogos_y_borrar_puede_pedir_clave()
     {
         await using var api = await TestApi.Iniciar();
         using var admin = await api.LoginAdmin();
-        var id = (await Ok(admin.PostAsJsonAsync("/api/catalogos/productos", new { nombre = "Maiz" }))).GetProperty("id").GetGuid();
         (await admin.PostAsJsonAsync("/api/usuarios", new { email = "op@planta.com", password = "clave123", nombre = "Op", rol = "operador" })).EnsureSuccessStatusCode();
         using var op = await api.Login("op@planta.com", "clave123");
 
-        Assert.Equal(1, (await op.GetFromJsonAsync<JsonElement>("/api/catalogos/productos")).GetArrayLength());
-        Assert.Equal(HttpStatusCode.Forbidden, (await op.PutAsJsonAsync($"/api/catalogos/productos/{id}", new { nombre = "X" })).StatusCode);
+        // El operador da de alta (desde Pesaje o Catálogos) y corrige.
+        var id = (await Ok(op.PostAsJsonAsync("/api/catalogos/productos", new { nombre = "Maiz" }))).GetProperty("id").GetGuid();
+        await Ok(op.PutAsJsonAsync($"/api/catalogos/productos/{id}", new { nombre = "Maíz", codigo = "M1" }));
+        var otro = (await Ok(op.PostAsJsonAsync("/api/catalogos/productos", new { nombre = "Soja" }))).GetProperty("id").GetGuid();
+
+        // Sin clave de borrado configurada, borra.
+        Assert.Equal(HttpStatusCode.NoContent, (await op.DeleteAsync($"/api/catalogos/productos/{otro}")).StatusCode);
+
+        // Con clave: sin ella o con otra no borra; con la correcta sí.
+        (await admin.PutAsJsonAsync("/api/planta/clave-borrado", new { clave = "borrar1" })).EnsureSuccessStatusCode();
+        Assert.True((await op.GetFromJsonAsync<JsonElement>("/api/funciones")).GetProperty("claveBorrado").GetBoolean());
         Assert.Equal(HttpStatusCode.Forbidden, (await op.DeleteAsync($"/api/catalogos/productos/{id}")).StatusCode);
+        using var mal = new HttpRequestMessage(HttpMethod.Delete, $"/api/catalogos/productos/{id}") { Headers = { { "X-Clave-Borrado", "otra" } } };
+        Assert.Equal(HttpStatusCode.Forbidden, (await op.SendAsync(mal)).StatusCode);
+        using var bien = new HttpRequestMessage(HttpMethod.Delete, $"/api/catalogos/productos/{id}") { Headers = { { "X-Clave-Borrado", "borrar1" } } };
+        Assert.Equal(HttpStatusCode.NoContent, (await op.SendAsync(bien)).StatusCode);
+
+        // La clave la configura la planta (admin), no el operador.
+        Assert.Equal(HttpStatusCode.Forbidden, (await op.PutAsJsonAsync("/api/planta/clave-borrado", new { clave = "" })).StatusCode);
     }
 
     private static async Task<JsonElement> Ok(Task<HttpResponseMessage> request)

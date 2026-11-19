@@ -419,7 +419,8 @@ function inputField(id, label, opts = {}) {
     return `<div><label>${esc(label)}${req}</label><select id="${id}">${opts.options}</select></div>`;
   }
   if (opts.list) {
-    return `<div><label>${esc(label)}${req}</label><input id="${id}" list="${opts.list}" autocomplete="off" /></div>`;
+    const input = `<input id="${id}" list="${opts.list}" autocomplete="off" />`;
+    return `<div><label>${esc(label)}${req}</label>${opts.alta ? conAlta(input, opts.alta, id) : input}</div>`;
   }
   if (opts.blur) {
     return `<div><label>${esc(label)}${req}</label><input id="${id}" onblur="${opts.blur}" autocomplete="off" /></div>`;
@@ -432,6 +433,94 @@ function inputField(id, label, opts = {}) {
 
 function datalist(id, items) {
   return `<datalist id="${id}">${items.map(x => `<option value="${esc(x)}"></option>`).join("")}</datalist>`;
+}
+
+/**
+ * Alta rápida desde Pesaje: de qué catálogo sale cada campo, con qué lista se autocompleta y qué columna es el nombre.
+ * <extra> son valores fijos del alta (un ATA se da de alta como transporte marcado ATA).
+ */
+const ALTA_RAPIDA = {
+  clientes: { lista: "dl_clientes", nombre: "razonSocial" },
+  transportes: { lista: "dl_transportes", nombre: "razonSocial" },
+  productos: { lista: "dl_productos", nombre: "nombre" },
+  exportadores: { lista: "dl_exportadores", nombre: "razonSocial", cuit: "ad_exportadorCuit" },
+  atas: { catalogo: "transportes", lista: "dl_atas", nombre: "razonSocial", extra: { esAta: true }, cuit: "ad_ataCuit" }
+};
+
+/** El campo con un botón + al lado para dar de alta en el catálogo sin salir de la pantalla. */
+function conAlta(input, tipo, campoId) {
+  if (!can("catalogos.editar")) return input;
+  return `<div class="con-alta">${input}<button type="button" class="btn btn-alta" title="Agregar al catálogo"
+    onclick="altaRapida('${tipo}', '${campoId}')">+</button></div>`;
+}
+
+function camposAlta(tipo) {
+  const a = ALTA_RAPIDA[tipo];
+  const campos = CATALOGOS[a.catalogo || tipo].campos;
+  // El ATA ya va marcado: no se pregunta.
+  return campos.filter(([key]) => !(a.extra && key in a.extra));
+}
+
+/** Ventana de alta: el nombre arranca con lo que el operador ya escribió en el campo. */
+function altaRapida(tipo, campoId) {
+  const a = ALTA_RAPIDA[tipo];
+  const titulo = tipo === "atas" ? "ATA" : CATALOGOS[a.catalogo || tipo].titulo;
+  cerrarModal();
+  const fondo = document.createElement("div");
+  fondo.className = "modal-fondo";
+  fondo.id = "modal";
+  fondo.innerHTML = `
+    <div class="card modal">
+      <h3 style="margin-top:0">Agregar a ${esc(titulo)}</h3>
+      <div class="grid2">
+        ${camposAlta(tipo).map(([key, label, t]) => t === "check"
+          ? `<div><label class="check"><input type="checkbox" id="ar_${key}" /> ${label}</label></div>`
+          : `<div><label>${label}</label><input id="ar_${key}" ${t ? `type="${t}"` : ""} autocomplete="off"
+              value="${key === a.nombre ? esc(val(campoId)) : ""}" /></div>`).join("")}
+      </div>
+      <p class="error" id="ar_err"></p>
+      <div class="btn-row">
+        <button class="btn-primary" onclick="guardarAltaRapida('${tipo}', '${campoId}')">Agregar</button>
+        <button class="btn" onclick="cerrarModal()">Cancelar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(fondo);
+  fondo.addEventListener("keydown", e => {
+    if (e.key === "Enter") guardarAltaRapida(tipo, campoId);
+    if (e.key === "Escape") cerrarModal();
+  });
+  document.getElementById("ar_" + a.nombre)?.focus();
+}
+
+async function guardarAltaRapida(tipo, campoId) {
+  const a = ALTA_RAPIDA[tipo];
+  const catalogo = a.catalogo || tipo;
+  const body = { ...(a.extra || {}) };
+  for (const [key, , t] of camposAlta(tipo)) {
+    const el = document.getElementById("ar_" + key);
+    body[key] = t === "check" ? el.checked : t === "number" ? Number(el.value || 0) : el.value;
+  }
+  try {
+    const nuevo = await api(`/api/catalogos/${catalogo}`, { method: "POST", body: JSON.stringify(body) });
+    state.catalogos[catalogo] = [...(state.catalogos[catalogo] || []), nuevo];
+    // La lista del campo ya incluye el nuevo, y el campo queda completo.
+    const lista = document.getElementById(a.lista);
+    if (lista) lista.insertAdjacentHTML("beforeend", `<option value="${esc(nuevo[a.nombre])}"></option>`);
+    const campo = document.getElementById(campoId);
+    if (campo) {
+      campo.value = nuevo[a.nombre];
+      campo.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    if (a.cuit && nuevo.cuit && document.getElementById(a.cuit)) document.getElementById(a.cuit).value = nuevo.cuit;
+    cerrarModal();
+    toast(`Agregado: ${nuevo[a.nombre]}`);
+  } catch (e) {
+    document.getElementById("ar_err").textContent = limpiarError(e);
+  }
+}
+
+function cerrarModal() {
+  document.getElementById("modal")?.remove();
 }
 
 const ESCENARIOS_ADUANA = ["Ingresa con Contenedor", "Carga Contenedor Lleno"];
@@ -485,10 +574,10 @@ function bloqueAduana() {
             : `<div><label>Escenario *</label><select id="ad_escenario"><option value="">Elegir...</option>${opciones(ESCENARIOS_ADUANA)}</select></div>`}
           <div><label>N° de operación</label><input id="ad_operacionId" /></div>
           <div><label>LOT</label><input value="${esc(state.funciones.aduanaLot || "")}" disabled title="Sale de Planta → Aduana" /></div>
-          <div><label>Exportador / importador</label><input id="ad_exportador" list="dl_exportadores" autocomplete="off" onchange="completarCuit('ad_exportador', 'ad_exportadorCuit', state.catalogos.exportadores)" /></div>
+          <div><label>Exportador / importador</label>${conAlta(`<input id="ad_exportador" list="dl_exportadores" autocomplete="off" onchange="completarCuit('ad_exportador', 'ad_exportadorCuit', state.catalogos.exportadores)" />`, "exportadores", "ad_exportador")}</div>
           <div><label>CUIT</label><input id="ad_exportadorCuit" /></div>
           <div><label>Destinación aduanera</label><input id="ad_destinacion" /></div>
-          <div><label>Agente de transporte (ATA)</label><input id="ad_ata" list="dl_atas" autocomplete="off" onchange="completarCuit('ad_ata', 'ad_ataCuit', state.catalogos.transportes)" /></div>
+          <div><label>Agente de transporte (ATA)</label>${conAlta(`<input id="ad_ata" list="dl_atas" autocomplete="off" onchange="completarCuit('ad_ata', 'ad_ataCuit', state.catalogos.transportes)" />`, "atas", "ad_ata")}</div>
           <div><label>CUIT ATA</label><input id="ad_ataCuit" /></div>
           <div></div>
           <div><label>Contenedor N°</label><input id="ad_contenedorId" /></div>
@@ -563,9 +652,9 @@ async function renderPesaje() {
           <option value="Normal">Normal</option><option value="Aduana">Aduana</option>
         </select></div>` : ""}`;
   const carga = `
-        ${f("producto", inputField("producto", lbl("producto", "Producto"), { list: "dl_productos" }))}
-        ${f("cliente", inputField("cliente", lbl("cliente", "Cliente"), { list: "dl_clientes" }))}
-        ${f("transporte", inputField("transporte", lbl("transporte", "Transporte"), { list: "dl_transportes" }))}
+        ${f("producto", inputField("producto", lbl("producto", "Producto"), { list: "dl_productos", alta: "productos" }))}
+        ${f("cliente", inputField("cliente", lbl("cliente", "Cliente"), { list: "dl_clientes", alta: "clientes" }))}
+        ${f("transporte", inputField("transporte", lbl("transporte", "Transporte"), { list: "dl_transportes", alta: "transportes" }))}
         ${f("procedencia", inputField("procedencia", lbl("procedencia", "Procedencia")))}
         ${f("destino", inputField("destino", lbl("destino", "Destino")))}
         ${f("comprobante", inputField("comprobante", lbl("comprobante", "Remito")))}
@@ -697,6 +786,8 @@ function mostrarEntrada(p) {
     el.value = leer(p) ?? "";
     if (id !== "taraPallets") el.disabled = true;
   }
+  // En la salida los datos son los de la entrada: no se cambian ni se agregan.
+  document.querySelectorAll(".btn-alta").forEach(b => b.disabled = true);
   toggleAduana();
   document.querySelector(".salida-head")?.scrollIntoView({ block: "center" });
 }
@@ -1010,8 +1101,14 @@ async function guardarCatalogo() {
 
 async function borrarCatalogo(id) {
   if (!confirm("¿Borrar este registro?")) return;
+  // Si la planta puso una clave de borrado, se pide acá.
+  let clave = null;
+  if (state.funciones.claveBorrado) {
+    clave = prompt("Clave de borrado");
+    if (clave == null) return;
+  }
   try {
-    await api(`/api/catalogos/${state.catTab}/${id}`, { method: "DELETE" });
+    await api(`/api/catalogos/${state.catTab}/${id}`, { method: "DELETE", headers: clave ? { "X-Clave-Borrado": clave } : {} });
     toast("Borrado");
     if (state.catEdit === id) state.catEdit = null;
     renderCatalogos();
@@ -1075,7 +1172,25 @@ async function renderPlanta() {
         ${state.funciones.claveCorreccion ? "Hay una clave configurada." : "Sin clave: alcanza con el permiso de supervisor."} Dejala vacía para quitarla.</p>
       <div class="grid2"><div><label>Nueva clave</label><input id="cc_clave" type="password" autocomplete="new-password" /></div></div>
       <div class="btn-row"><button class="btn-primary" onclick="guardarClaveCorreccion()">Guardar clave</button></div>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Clave para borrar de los catálogos</h3>
+      <p>Los operadores cargan y corrigen clientes, productos, transportes, etc. (también con el + de Pesaje). Con una clave, para borrar un registro hay que escribirla.
+        ${state.funciones.claveBorrado ? "Hay una clave configurada." : "Sin clave: cualquiera que cargue catálogos puede borrar."} Dejala vacía para quitarla.</p>
+      <div class="grid2"><div><label>Nueva clave</label><input id="cb_clave" type="password" autocomplete="new-password" /></div></div>
+      <div class="btn-row"><button class="btn-primary" onclick="guardarClaveBorrado()">Guardar clave</button></div>
     </div>`;
+}
+
+async function guardarClaveBorrado() {
+  try {
+    const r = await api("/api/planta/clave-borrado", { method: "PUT", body: JSON.stringify({ clave: val("cb_clave") }) });
+    state.funciones.claveBorrado = r.claveBorrado;
+    toast(r.claveBorrado ? "Clave guardada" : "Clave quitada");
+    renderPlanta();
+  } catch (e) {
+    toast(limpiarError(e), "err");
+  }
 }
 
 async function guardarClaveCorreccion() {
