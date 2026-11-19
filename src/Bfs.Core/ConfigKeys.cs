@@ -68,6 +68,9 @@ public static class ConfigKeys
     public const string TicketPie = "ticket_pie";
     public const string LogoFile = "logo_file";
 
+    /// <summary>Automatización (placa Modbus, semáforos, barreras, sensores y cámaras): <see cref="ConfigAutomatizacion"/> en JSON.</summary>
+    public const string AutomatizacionJson = "automatizacion_json";
+
     /// <summary>Marca que ya se ocultó una vez el selector de tipo (ingreso / egreso) en esta base.</summary>
     public const string TipoOcultoAplicado = "campos_tipo_oculto";
 }

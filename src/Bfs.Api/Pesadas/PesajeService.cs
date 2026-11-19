@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Bfs.Api.Automatizacion;
 using Bfs.Api.Config;
 using Bfs.Api.Licencias;
 using Bfs.Core;
@@ -37,10 +38,12 @@ public class PesajeService
 
     private readonly Edicion _edicion;
     private readonly CapturasPeso _capturas;
+    private readonly AutomatizacionPesaje? _auto;
 
     public PesajeService(BfsDbContext db, IBalanzas balanzas, ConfigService config, LicenciaService licencia, PasswordHasher<Usuario> hasher,
-        BfsOptions? opciones = null, CapturasPeso? capturas = null)
+        BfsOptions? opciones = null, CapturasPeso? capturas = null, AutomatizacionPesaje? automatizacion = null)
     {
+        _auto = automatizacion;
         _capturas = capturas ?? new CapturasPeso();
         _edicion = opciones?.Edicion ?? Ediciones.Compilada;
         _db = db;
@@ -78,22 +81,42 @@ public class PesajeService
         pesada!.PesoEntrada = peso.Kg;
         pesada.Balanza = peso.Balanza;
         pesada.EntradaManualPor = peso.Manual ? op.Email : null;
+        await AgregarFotos(pesada, LadosBalanza.Entrada, req.CapturaId, req.PesoEntrada);
 
         _db.Pesadas.Add(pesada);
         await RecordarVehiculo(pesada);
         await EncolarWorms(configs, pesada, WormsEventos.Entrada);
         await _db.SaveChangesAsync();
         UsarCaptura(req.CapturaId, req.PesoEntrada);
+        await Aceptada(req.BalanzaId);
         return ResultadoPesaje.Ok(pesada);
     });
 
-    /// <summary>Congela el peso de la balanza para guardar la pesada después (ver <see cref="CapturasPeso"/>).</summary>
+    /// <summary>
+    /// Congela el peso de la balanza para guardar la pesada después (ver <see cref="CapturasPeso"/>).
+    /// Con automatización, en el mismo momento saca las fotos (el camión todavía está arriba).
+    /// </summary>
     public async Task<(CapturaPeso? Captura, ResultadoPesaje? Error)> CapturarAsync(Guid? balanzaId, Operador op)
     {
         var configs = await _config.GlobalAsync();
         var peso = TomarPeso(null, null, balanzaId, op, configs);
-        return peso.Error != null ? (null, peso.Error) : (_capturas.Guardar(peso.Kg, peso.Balanza), null);
+        if (peso.Error != null) return (null, peso.Error);
+        var fotos = _auto != null ? await _auto.FotosAsync() : [];
+        return (_capturas.Guardar(peso.Kg, peso.Balanza, fotos), null);
     }
+
+    /// <summary>
+    /// Fotos de la entrada o la salida: las de la captura si se capturó; si no (peso manual o leído al aceptar), se sacan ahora.
+    /// </summary>
+    private async Task AgregarFotos(Pesada pesada, string momento, Guid? capturaId, int? manual)
+    {
+        if (_auto == null) return;
+        var fotos = capturaId is { } id && manual == null && _capturas.Buscar(id) is { } c ? c.Fotos : await _auto.FotosAsync();
+        _auto.Agregar(pesada, momento, fotos);
+    }
+
+    /// <summary>Secuencia automática (si está activada): semáforo y barrera de salida de esa balanza.</summary>
+    private Task Aceptada(Guid? balanzaId) => _auto?.AceptadaAsync(balanzaId) ?? Task.CompletedTask;
 
     public Task<ResultadoPesaje> RegistrarSalidaAsync(Guid id, SalidaRequest req, Operador op) => ConReintento(async () =>
     {
@@ -112,9 +135,11 @@ public class PesajeService
         pesada.OperadorSalida = op.Email;
         pesada.TaraPallets = req.TaraPallets ?? pesada.TaraPallets;
         Cerrar(pesada);
+        await AgregarFotos(pesada, LadosBalanza.Salida, req.CapturaId, req.PesoSalida);
         await EncolarWorms(configs, pesada, WormsEventos.Salida);
         await _db.SaveChangesAsync();
         UsarCaptura(req.CapturaId, req.PesoSalida);
+        await Aceptada(req.BalanzaId);
         return ResultadoPesaje.Ok(pesada);
     });
 
@@ -164,12 +189,14 @@ public class PesajeService
         pesada.SalidaManualPor = taraManual ? op.Email : null;
         pesada.OperadorSalida = op.Email;
         Cerrar(pesada);
+        await AgregarFotos(pesada, LadosBalanza.Entrada, req.Datos.CapturaId, req.Datos.PesoEntrada);
 
         _db.Pesadas.Add(pesada);
         await RecordarVehiculo(pesada);
         await EncolarWorms(configs, pesada, WormsEventos.Entrada, WormsEventos.Salida);
         await _db.SaveChangesAsync();
         UsarCaptura(req.Datos.CapturaId, req.Datos.PesoEntrada);
+        await Aceptada(req.Datos.BalanzaId);
         return ResultadoPesaje.Ok(pesada);
     });
 
@@ -494,6 +521,9 @@ public class PesajeService
                 ? new Peso(c.Kilogramos, c.Balanza, false, null)
                 : new Peso(0, null, false, ResultadoPesaje.Invalida("El peso capturado venció o ya se usó: capturalo de nuevo"));
         }
+
+        // Automatización: con sensores instalados, solo con el camión entero sobre la balanza (como la 3.x).
+        if (_auto?.Bloqueo(balanzaId) is { } bloqueo) return new Peso(0, null, false, ResultadoPesaje.Invalida(bloqueo));
 
         var l = _balanzas.Lectura(balanzaId);
         var errorLectura = l.Estado switch

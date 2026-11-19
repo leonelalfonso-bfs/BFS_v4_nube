@@ -50,6 +50,9 @@ public class Pesada : EntidadSync
 
     /// <summary>Correcciones de datos hechas después de abrir el ticket (lista de <see cref="CorreccionPesada"/>). Los pesos no se corrigen.</summary>
     public string CorreccionesJson { get; set; } = "[]";
+
+    /// <summary>Fotos de las cámaras (lista de <see cref="Bfs.Core.FotoPesada"/>). Los archivos quedan en el puesto que pesó.</summary>
+    public string FotosJson { get; set; } = "[]";
 }
 
 public record CambioCampo(string Campo, string? Antes, string? Despues);
