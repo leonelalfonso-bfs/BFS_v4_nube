@@ -539,3 +539,31 @@ fieldset.seccion legend {
 .captura-ok span { color: #047857; font-size: 13px; font-weight: 600; }
 .captura-ok strong { font-size: 24px; color: #065f46; }
 .captura-ok small { color: #64748b; }
+
+/* Listas de catálogos (como las del sistema de gestión). */
+.combo-input {
+  padding-right: 34px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235b6d82' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 15l5 5 5-5M7 9l5-5 5 5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+.combo-panel {
+  display: none; flex-direction: column; position: fixed; z-index: 60; max-height: 380px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden;
+}
+.combo-lista { overflow-y: auto; padding: 6px; flex: 1; }
+.combo-item { display: flex; align-items: center; gap: 12px; padding: 7px 10px; border-radius: 9px; cursor: pointer; border: 1px solid transparent; }
+.combo-item:hover { background: var(--panel); }
+.combo-item.activo { background: var(--panel); border-color: var(--line); }
+.combo-avatar {
+  flex: none; width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center;
+  background: #eef2f7; border: 1px solid var(--line); color: var(--muted); font-size: 12px; font-weight: 700;
+}
+.combo-texto { display: flex; flex-direction: column; min-width: 0; }
+.combo-texto strong { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.combo-texto small { color: var(--muted); font-size: 12px; }
+.combo-vacio { padding: 12px; color: var(--muted); font-size: 13px; }
+.combo-crear { padding: 11px 16px; border-top: 1px solid var(--line); color: var(--teal-2); font-weight: 600; cursor: pointer; }
+.combo-crear:hover { background: var(--panel); }
+.combo-pie { display: flex; gap: 16px; padding: 8px 14px; border-top: 1px solid var(--line); background: var(--panel); color: var(--muted); font-size: 12px; }
+.combo-pie kbd { font-family: inherit; font-size: 11px; border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; background: var(--card); margin-right: 4px; }

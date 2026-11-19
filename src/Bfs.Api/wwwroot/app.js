@@ -2613,4 +2613,188 @@ async function codigoNodo(tenantId, nombre, nodoId) {
   }
 }
 
+/* ---------- Listas de catálogos (en lugar del desplegable del navegador) ----------
+ * Cualquier campo con list="dl_..." de un catálogo se convierte solo: se escribe en el campo y abajo aparece
+ * la lista filtrada, con iniciales, nombre y un detalle (CUIT, IVA, código), ↑↓ / Enter / Esc y, al pie,
+ * "Crear ... nuevo" (el alta rápida). Se sigue pudiendo dejar un texto que no está en el catálogo. */
+
+const COMBOS = {
+  dl_clientes: { tipo: "clientes", singular: "cliente", items: () => (state.catalogos.clientes || []).map(c => item(c.razonSocial, c.cuit, c.condicionIva)) },
+  dl_transportes: { tipo: "transportes", singular: "transporte", items: () => (state.catalogos.transportes || []).map(t => item(t.razonSocial, t.cuit, t.esAta ? `ATA ${t.codigoAta || ""}` : "")) },
+  dl_atas: { tipo: "atas", singular: "ATA", items: () => (state.catalogos.transportes || []).filter(t => t.esAta).map(t => item(t.razonSocial, t.cuit, t.codigoAta)) },
+  dl_productos: { tipo: "productos", singular: "producto", items: () => (state.catalogos.productos || []).map(p => item(p.nombre, p.codigo ? `Código ${p.codigo}` : "")) },
+  dl_exportadores: { tipo: "exportadores", singular: "exportador", items: () => (state.catalogos.exportadores || []).map(x => item(x.razonSocial, x.cuit)) },
+  dl_tanques: { tipo: "tanques", singular: "tanque", items: () => (state.catalogos.tanques || []).map(t => item(t.nombre)) },
+  dl_sucursales: { tipo: "sucursales", singular: "sucursal", items: () => (state.catalogos.sucursales || []).map(s => item(s.nombre)) }
+};
+
+const COMBO_MAX = 80;
+const combo = { input: null, lista: [], activo: 0 };
+
+function item(nombre, ...detalle) {
+  return { nombre: nombre || "", detalle: detalle.filter(Boolean).join(" · ") };
+}
+
+function normalizar(s) {
+  return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
+function iniciales(nombre) {
+  const palabras = String(nombre).replace(/[^\p{L}\p{N} ]/gu, " ").trim().split(/\s+/).filter(Boolean);
+  return ((palabras[0]?.[0] || "") + (palabras[1]?.[0] || palabras[0]?.[1] || "")).toUpperCase();
+}
+
+/** Los ítems del catálogo; si no está cargado en pantalla, los del datalist que armó la pantalla. */
+function itemsCombo(input) {
+  const def = COMBOS[input.dataset.combo];
+  const desdeCatalogo = def.items();
+  if (desdeCatalogo.length) return desdeCatalogo;
+  return [...(document.getElementById(input.dataset.combo)?.options || [])].map(o => item(o.value));
+}
+
+function filtrarCombo(input) {
+  const q = normalizar(input.value).trim();
+  const todos = itemsCombo(input);
+  if (!q) return todos;
+  const coincide = todos.filter(i => normalizar(i.nombre + " " + i.detalle).includes(q));
+  // Primero los que empiezan con lo escrito.
+  return coincide.sort((a, b) => (normalizar(b.nombre).startsWith(q) ? 1 : 0) - (normalizar(a.nombre).startsWith(q) ? 1 : 0));
+}
+
+function panelCombo() {
+  let p = document.getElementById("combo-panel");
+  if (!p) {
+    p = document.createElement("div");
+    p.id = "combo-panel";
+    p.className = "combo-panel";
+    // mousedown: que el campo no pierda el foco antes de elegir.
+    p.addEventListener("mousedown", e => e.preventDefault());
+    document.body.appendChild(p);
+  }
+  return p;
+}
+
+function abrirCombo(input) {
+  if (input.disabled || input.readOnly) return;
+  combo.input = input;
+  combo.lista = filtrarCombo(input);
+  combo.activo = 0;
+  pintarCombo();
+}
+
+function pintarCombo() {
+  const input = combo.input;
+  if (!input) return;
+  const def = COMBOS[input.dataset.combo];
+  const p = panelCombo();
+  const r = input.getBoundingClientRect();
+  const ancho = Math.max(r.width, 300);
+  p.style.left = Math.min(r.left, window.innerWidth - ancho - 8) + "px";
+  p.style.width = ancho + "px";
+  // Abajo del campo; si no entra, arriba.
+  const abajo = window.innerHeight - r.bottom;
+  p.style.top = abajo > 300 || abajo > r.top ? r.bottom + 4 + "px" : "";
+  p.style.bottom = abajo > 300 || abajo > r.top ? "" : window.innerHeight - r.top + 4 + "px";
+
+  const lista = combo.lista.slice(0, COMBO_MAX);
+  const crear = ALTA_RAPIDA[def.tipo] && can("catalogos.editar");
+  p.innerHTML = `
+    <div class="combo-lista">
+      ${lista.length ? lista.map((i, n) => `
+        <div class="combo-item ${n === combo.activo ? "activo" : ""}" data-n="${n}">
+          <span class="combo-avatar">${esc(iniciales(i.nombre))}</span>
+          <span class="combo-texto"><strong>${esc(i.nombre)}</strong>${i.detalle ? `<small>${esc(i.detalle)}</small>` : ""}</span>
+        </div>`).join("")
+        : `<div class="combo-vacio">${input.value.trim() ? `No hay ${esc(def.singular)}s con "${esc(input.value.trim())}"` : `Todavía no hay ${esc(def.singular)}s cargados`}</div>`}
+      ${combo.lista.length > COMBO_MAX ? `<div class="combo-vacio">${combo.lista.length - COMBO_MAX} más: seguí escribiendo para filtrar</div>` : ""}
+    </div>
+    ${crear ? `<div class="combo-crear" data-crear="1">+ Crear ${esc(def.singular)} nuevo</div>` : ""}
+    <div class="combo-pie"><span><kbd>↑↓</kbd> moverse</span><span><kbd>↵</kbd> elegir</span><span><kbd>esc</kbd> cerrar</span></div>`;
+  p.style.display = "flex";
+  p.querySelectorAll(".combo-item").forEach(el => el.addEventListener("click", () => elegirCombo(Number(el.dataset.n))));
+  p.querySelector("[data-crear]")?.addEventListener("click", () => {
+    const campo = combo.input;
+    cerrarCombo();
+    altaRapida(def.tipo, campo.id);
+  });
+  p.querySelector(".combo-item.activo")?.scrollIntoView({ block: "nearest" });
+}
+
+function elegirCombo(n) {
+  const input = combo.input;
+  const elegido = combo.lista[n];
+  if (!input || !elegido) return;
+  input.value = elegido.nombre;
+  cerrarCombo();
+  // Como si lo hubiera elegido del desplegable: completa CUIT, código de producto, etc.
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function cerrarCombo() {
+  combo.input = null;
+  const p = document.getElementById("combo-panel");
+  if (p) p.style.display = "none";
+}
+
+/** Convierte los campos con list="dl_..." de catálogos en cuanto aparecen en pantalla. */
+function convertirCombos(raiz) {
+  raiz.querySelectorAll?.("input[list]").forEach(input => {
+    const lista = input.getAttribute("list");
+    if (!COMBOS[lista]) return;
+    input.dataset.combo = lista;
+    input.removeAttribute("list");
+    input.setAttribute("autocomplete", "off");
+    input.classList.add("combo-input");
+  });
+}
+
+new MutationObserver(cambios => {
+  for (const c of cambios) c.addedNodes.forEach(n => n.nodeType === 1 && convertirCombos(n.parentNode || n));
+}).observe(document.body, { childList: true, subtree: true });
+
+document.addEventListener("focusin", e => {
+  if (e.target.classList?.contains("combo-input")) abrirCombo(e.target);
+});
+document.addEventListener("click", e => {
+  if (e.target.classList?.contains("combo-input") && combo.input !== e.target) abrirCombo(e.target);
+});
+document.addEventListener("input", e => {
+  if (!e.target.classList?.contains("combo-input")) return;
+  combo.input = e.target;
+  combo.lista = filtrarCombo(e.target);
+  combo.activo = 0;
+  pintarCombo();
+});
+document.addEventListener("focusout", e => {
+  if (e.target === combo.input) cerrarCombo();
+});
+document.addEventListener("keydown", e => {
+  if (!combo.input || e.target !== combo.input) return;
+  const total = Math.min(combo.lista.length, COMBO_MAX);
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault();
+    if (!total) return;
+    combo.activo = (combo.activo + (e.key === "ArrowDown" ? 1 : total - 1)) % total;
+    pintarCombo();
+  } else if (e.key === "Enter") {
+    if (total) {
+      e.preventDefault();
+      elegirCombo(combo.activo);
+    } else {
+      cerrarCombo();
+    }
+  } else if (e.key === "Escape") {
+    e.preventDefault();
+    e.stopPropagation();
+    cerrarCombo();
+  } else if (e.key === "Tab") {
+    cerrarCombo();
+  }
+});
+// Al mover la página la lista quedaría despegada del campo: se cierra (la propia lista sí se puede scrollear).
+window.addEventListener("scroll", e => {
+  if (combo.input && !document.getElementById("combo-panel")?.contains(e.target)) cerrarCombo();
+}, true);
+window.addEventListener("resize", cerrarCombo);
+
 start();
