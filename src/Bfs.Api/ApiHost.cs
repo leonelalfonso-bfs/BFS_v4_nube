@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text;
+using Bfs.Api.Automatizacion;
 using Bfs.Api.Auth;
 using Bfs.Api.Branding;
 using Bfs.Api.Catalogos;
@@ -154,6 +155,7 @@ public static class ApiHost
         api.MapReporteEndpoints();
         api.MapSistemaEndpoints();
         api.MapImportacionEndpoints();
+        if (options.Modo == ModoDespliegue.Nodo) api.MapAutomatizacionEndpoints();
         // La Estándar no tiene API para conectar con otros sistemas ni nube.
         if (Ediciones.TieneIntegraciones(options.Edicion)) api.MapIntegracionEndpoints();
         if (options.Modo == ModoDespliegue.Nube)
@@ -224,6 +226,12 @@ public static class ApiHost
             builder.Services.AddHostedService(sp => sp.GetRequiredService<SincronizadorNodo>());
         }
         builder.Services.AddHostedService<RespaldoAutomatico>();
+        // Automatización (placa Modbus y cámaras): solo en la portería. Apagada, el servicio solo mira la configuración cada 5 s.
+        builder.Services.AddSingleton<AutomatizacionService>();
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<AutomatizacionService>());
+        builder.Services.AddSingleton<CamarasService>();
+        builder.Services.AddSingleton<FotosPesadas>();
+        builder.Services.AddScoped<AutomatizacionPesaje>();
         builder.Services.AddSingleton<IPuertoSerieFactory, PuertoSerieFactory>();
         builder.Services.AddSingleton<IBalanzas>(sp => new BalanzaManager(
             sp.GetRequiredService<IPuertoSerieFactory>(), sp.GetRequiredService<ILogger<BalanzaManager>>()));

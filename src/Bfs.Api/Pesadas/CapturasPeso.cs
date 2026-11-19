@@ -3,7 +3,15 @@ using System.Collections.Concurrent;
 namespace Bfs.Api.Pesadas;
 
 /// <summary>Un peso tomado de la balanza en un momento, para guardar la pesada después de cargar los datos.</summary>
-public record CapturaPeso(Guid Id, int Kilogramos, string? Balanza, DateTimeOffset En);
+public record CapturaPeso(Guid Id, int Kilogramos, string? Balanza, DateTimeOffset En)
+{
+    /// <summary>Fotos de las cámaras sacadas en el momento de la captura (automatización). No van a la pantalla.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public IReadOnlyList<Automatizacion.FotoCamara> Fotos { get; init; } = [];
+
+    /// <summary>Cuántas fotos se sacaron (para mostrarlo en pantalla).</summary>
+    public int CantidadFotos => Fotos.Count;
+}
 
 /// <summary>
 /// "Capturar peso, completar los datos y aceptar": con muchos camiones, el operador congela el peso apenas el camión
@@ -17,10 +25,10 @@ public sealed class CapturasPeso(TimeProvider? reloj = null)
     private readonly TimeProvider _reloj = reloj ?? TimeProvider.System;
     private readonly ConcurrentDictionary<Guid, CapturaPeso> _capturas = new();
 
-    public CapturaPeso Guardar(int kilogramos, string? balanza)
+    public CapturaPeso Guardar(int kilogramos, string? balanza, IReadOnlyList<Automatizacion.FotoCamara>? fotos = null)
     {
         Limpiar();
-        var c = new CapturaPeso(Guid.NewGuid(), kilogramos, balanza, _reloj.GetUtcNow());
+        var c = new CapturaPeso(Guid.NewGuid(), kilogramos, balanza, _reloj.GetUtcNow()) { Fotos = fotos ?? [] };
         _capturas[c.Id] = c;
         return c;
     }

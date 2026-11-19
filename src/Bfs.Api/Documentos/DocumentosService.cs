@@ -19,9 +19,12 @@ public class DocumentosService
     private readonly BfsOptions _options;
     private readonly ReportesService _reportes;
     private readonly Nube.TenantActual _tenant;
+    private readonly Automatizacion.FotosPesadas? _fotos;
 
-    public DocumentosService(BfsDbContext db, ConfigService config, BfsPaths paths, BfsOptions options, ReportesService reportes, Nube.TenantActual tenant)
+    public DocumentosService(BfsDbContext db, ConfigService config, BfsPaths paths, BfsOptions options, ReportesService reportes, Nube.TenantActual tenant,
+        Automatizacion.FotosPesadas? fotos = null)
     {
+        _fotos = fotos;
         _tenant = tenant;
         _db = db;
         _config = config;
@@ -62,7 +65,13 @@ public class DocumentosService
             clienteCuit,
             transporteCuit,
             productoCodigo,
-            aduana);
+            aduana)
+        {
+            // Las fotos están en el puesto que pesó; en la nube (o si se borraron) el ticket sale sin ellas.
+            Fotos = _fotos == null ? [] : Automatizacion.AutomatizacionPesaje.Leer(p)
+                .Select(f => _fotos.Leer(f) is { } datos ? new FotoTicket(f.Momento, f.Camara, datos) : null)
+                .Where(f => f != null).Select(f => f!).ToList()
+        };
     }
 
     /// <summary>El Excel sale con los mismos filtros que la pantalla Pesadas.</summary>

@@ -110,4 +110,5 @@ Las bases creadas por el spike anterior (sin migraciones) se renombran a `bfs.sp
 - Balanzas: varias por nodo (serie STX / Line o simuladas), modelos de la 3.x, reconexión automática, peso estable, diagnóstico de tramas
 - Licencia firmada por PC
 - Edición INAGRO: campos de Centum, tanques y sucursales, numeración compartida, envío a Centum, remito preimpreso
+- Automatización (la habilita BFS): semáforos, barreras y sensores por Modbus TCP, secuencia automática y hasta dos cámaras IP con fotos en el ticket
 - Columnas de sincronización en todas las entidades (`Version`, `ModificadoEn`, borrado lógico, nodo de origen)

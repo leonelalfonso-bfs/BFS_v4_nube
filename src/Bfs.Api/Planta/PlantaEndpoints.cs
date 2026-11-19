@@ -69,7 +69,9 @@ public static class PlantaEndpoints
                 // Edición Inagro: campos de Centum, tanques, sucursales y remito preimpreso.
                 inagro = opciones.Edicion == Edicion.Inagro,
                 inagroPlanta = c.GetValueOrDefault(ConfigKeys.InagroPlanta, Inagro.PlantaPorDefecto),
-                inagroImpresion = c.GetValueOrDefault(ConfigKeys.InagroImpresion, "preguntar")
+                inagroImpresion = c.GetValueOrDefault(ConfigKeys.InagroImpresion, "preguntar"),
+                // Automatización (semáforos, barreras, sensores y cámaras): la pantalla de pesaje solo la muestra si está habilitada.
+                automatizacion = ConfigAutomatizacion.Parse(c.GetValueOrDefault(ConfigKeys.AutomatizacionJson)).Habilitada
             });
         });
 

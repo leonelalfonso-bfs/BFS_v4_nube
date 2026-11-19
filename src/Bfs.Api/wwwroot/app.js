@@ -415,6 +415,11 @@ async function pollPeso() {
   try {
     state.balanzas = await api("/api/balanzas/lecturas");
     pintarPeso();
+    // Automatización: solo si está habilitada y se está mirando Pesaje (si no, no se pide nada).
+    if (state.funciones.automatizacion && state.view === "pesaje" && document.getElementById("auto")) {
+      state.auto = await api("/api/automatizacion/estado");
+      pintarAutomatizacion();
+    }
   } catch {}
   setTimeout(pollPeso, 500);
 }
@@ -750,6 +755,7 @@ async function renderPesaje() {
     </div>` : ""}
     <div class="card peso-card">
       <div class="displays ${state.balanzas.length > 1 ? "dos" : ""}" id="displays">${balanzasEnPantalla().map(displayBalanza).join("")}</div>
+      ${state.funciones.automatizacion ? `<div id="auto" class="auto">${bloqueAutomatizacion()}</div><div id="camaras" class="camaras"></div>` : ""}
       ${modo !== "tomar" ? `<div class="captura" id="captura">${bloqueCaptura()}</div>` : ""}
       <div class="peso-pie">
         <div class="status-box"><span>Empresa en curso</span>${selectorEmpresa(salida?.empresaId)}</div>
@@ -1618,6 +1624,8 @@ async function renderConfig() {
     ["campos", "Campos"],
     ["ticket", "Ticket y logo"],
     ...(esEstandar() ? [] : [["api", "API"]]),
+    // La placa y las cámaras están en la portería: en la nube no hay automatización.
+    ...(state.modo === "Nube" ? [] : [["automatizacion", "Automatización"]]),
     ["licencia", "Licencia"],
     ...(state.modo === "Nube" || esEstandar() ? [] : [["nube", "Nube"]])
   ];
@@ -1635,6 +1643,7 @@ async function renderConfig() {
     campos: renderConfigCampos,
     ticket: renderConfigTicket,
     api: renderConfigApi,
+    automatizacion: renderConfigAutomatizacion,
     licencia: renderConfigLicencia,
     nube: renderConfigNube
   };
@@ -2805,6 +2814,245 @@ async function codigoNodo(tenantId, nombre, nodoId) {
   } catch (e) {
     toast(limpiarError(e), "err");
   }
+}
+
+/* ---------- Automatización: semáforos, barreras, sensores y cámaras ----------
+ * Solo aparece si BFS la habilitó (Configuración → Automatización). El estado se pide junto con el peso
+ * y las cámaras se refrescan varias veces por segundo solo mientras se está en Pesaje. */
+
+const NOMBRE_TIPO = { semaforo: "Semáforo", barrera: "Barrera", sensor: "Sensor" };
+
+function nombreBalanzaOrden(orden) {
+  return state.balanzas[orden - 1]?.nombre || `Balanza ${orden}`;
+}
+
+function bloqueAutomatizacion() {
+  const a = state.auto;
+  if (!a) return `<span class="captura-ayuda">Conectando con la placa de automatización…</span>`;
+  if (!a.habilitada) return "";
+  const ordenes = [...new Set(a.dispositivos.map(d => d.balanza))].sort();
+  const estado = a.conectada
+    ? `<span class="pill pill-ok">Placa conectada${a.simulada ? " · simulada" : ""}</span>`
+    : `<span class="pill pill-err" title="${esc(a.error || "")}">Placa sin conexión</span>`;
+  return `<div class="auto-cabecera">${estado}${a.secuenciaAutomatica ? `<span class="pill pill-info">Secuencia automática</span>` : ""}
+      ${!a.conectada && a.error ? `<small class="auto-error">${esc(a.error)}</small>` : ""}</div>
+    <div class="auto-balanzas">${ordenes.map(orden => {
+      const de = tipo => a.dispositivos.filter(d => d.balanza === orden && d.tipo === tipo);
+      const sensores = de("sensor");
+      const libres = sensores.filter(s => !s.activo);
+      return `<div class="auto-balanza">
+        <div class="auto-titulo">${esc(nombreBalanzaOrden(orden))}</div>
+        <div class="auto-fila">
+          ${de("semaforo").map(s => `<div class="semaforo" title="${esc(s.nombre)} (salida ${s.punto})">
+            <span class="luz roja ${s.activo ? "" : "on"}" onclick="cambiarSalidaAuto(${s.punto}, false)"></span>
+            <span class="luz verde ${s.activo ? "on" : ""}" onclick="cambiarSalidaAuto(${s.punto}, true)"></span>
+            <small>${esc(s.nombre)}</small></div>`).join("")}
+          ${de("barrera").map(b => `<button class="btn barrera ${b.activo ? "abierta" : ""}" onclick="cambiarSalidaAuto(${b.punto}, ${!b.activo})" title="Salida ${b.punto}">
+            ${esc(b.nombre)}<strong>${b.activo ? "Abierta" : "Cerrada"}</strong></button>`).join("")}
+          ${sensores.map(s => `<span class="sensor ${s.activo ? "on" : ""}" title="Entrada ${s.punto}"><span class="led"></span>${esc(s.nombre)}</span>`).join("")}
+        </div>
+        ${sensores.length && libres.length ? `<div class="auto-aviso">Posicionar el camión dentro de la balanza (${libres.map(s => esc(s.nombre)).join(" y ")})</div>` : ""}
+      </div>`;
+    }).join("")}</div>`;
+}
+
+function pintarAutomatizacion() {
+  const el = document.getElementById("auto");
+  if (!el) return;
+  el.innerHTML = bloqueAutomatizacion();
+  asegurarCamaras();
+}
+
+async function cambiarSalidaAuto(punto, valor) {
+  try {
+    state.auto = await api(`/api/automatizacion/salidas/${punto}`, { method: "POST", body: JSON.stringify({ valor }) });
+    pintarAutomatizacion();
+  } catch (e) {
+    toast(limpiarError(e), "err");
+  }
+}
+
+/** Una imagen por cámara; el bucle las va renovando mientras se esté en Pesaje. */
+function asegurarCamaras() {
+  const cont = document.getElementById("camaras");
+  const nombres = state.auto?.camaras || [];
+  if (!cont) return;
+  if (cont.dataset.n !== String(nombres.length)) {
+    cont.dataset.n = String(nombres.length);
+    cont.innerHTML = nombres.map((n, i) => `<div class="camara"><img id="cam_${i}" alt="" /><span>${esc(n)}</span></div>`).join("");
+  }
+  if (nombres.length && !state.camarasCorriendo) loopCamaras();
+}
+
+async function loopCamaras() {
+  state.camarasCorriendo = true;
+  try {
+    while (state.view === "pesaje" && document.getElementById("camaras") && (state.auto?.camaras || []).length && state.token) {
+      const inicio = Date.now();
+      await Promise.all(state.auto.camaras.map((_, i) => refrescarCamara(i)));
+      // Con la ventana minimizada no hace falta mirar las cámaras.
+      const pausa = document.hidden ? 2000 : Math.max(0, 250 - (Date.now() - inicio));
+      await new Promise(r => setTimeout(r, pausa));
+    }
+  } finally {
+    state.camarasCorriendo = false;
+  }
+}
+
+async function refrescarCamara(i) {
+  const img = document.getElementById("cam_" + i);
+  if (!img) return;
+  try {
+    const res = await fetch(`/api/automatizacion/camaras/${i}`, { headers: { Authorization: "Bearer " + state.token } });
+    if (!res.ok) throw new Error();
+    const url = URL.createObjectURL(await res.blob());
+    const vieja = img.src;
+    img.src = url;
+    img.parentElement.classList.remove("sin-senal");
+    if (vieja.startsWith("blob:")) setTimeout(() => URL.revokeObjectURL(vieja), 1000);
+  } catch {
+    img.parentElement.classList.add("sin-senal");
+  }
+}
+
+/* Configuración → Automatización (BFS) */
+
+async function renderConfigAutomatizacion() {
+  const c = await api("/api/automatizacion/config");
+  state.autoConfig = c;
+  const lados = ["entrada", "salida"];
+  const camaras = [0, 1].map(i => c.camaras[i] || { nombre: `Cámara ${i + 1}`, url: "", usuario: "", clave: "", habilitada: false });
+  document.getElementById("configBody").innerHTML = `
+    <div class="card">
+      <p>Semáforos, barreras y sensores por una placa Modbus TCP, y hasta dos cámaras IP. Se habilita cuando el cliente la compra;
+        apagada, el sistema no se conecta a nada.</p>
+      <div class="grid3">
+        <div><label>Automatización</label>${yesNo("au_hab", String(c.habilitada))}</div>
+        <div><label>Placa simulada (para probar sin hardware)</label>${yesNo("au_sim", String(c.simulada))}</div>
+        <div></div>
+        <div><label>IP de la placa</label><input id="au_ip" value="${esc(c.modbusIp)}" /></div>
+        <div><label>Puerto</label><input id="au_puerto" type="number" value="${c.modbusPuerto}" /></div>
+        <div><label>Unidad Modbus</label><input id="au_unidad" type="number" value="${c.modbusUnidad}" /></div>
+        <div><label>Secuencia automática (al aceptar: semáforo y barrera de salida; al salir el camión, vuelve a la entrada)</label>${yesNo("au_seq", String(c.secuenciaAutomatica))}</div>
+        <div><label>Fotos con las cámaras en cada pesada</label>${yesNo("au_fotos", String(c.capturarFotos))}</div>
+      </div>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Dispositivos</h3>
+      <p>Semáforos y barreras van en las salidas de la placa; los sensores (barreras infrarrojas), en las entradas.
+        Con sensores instalados, el peso de esa balanza solo se captura con todos cortados (el camión entero arriba).</p>
+      <table>
+        <tr><th>Tipo</th><th>Nombre</th><th>${"Entrada / salida"}</th><th>Balanza</th><th>Punta</th><th>Instalado</th></tr>
+        ${c.dispositivos.map((d, i) => `<tr>
+          <td>${NOMBRE_TIPO[d.tipo] || esc(d.tipo)}</td>
+          <td><input id="au_d_nombre_${i}" value="${esc(d.nombre)}" /></td>
+          <td><input id="au_d_punto_${i}" type="number" min="1" max="8" value="${d.punto}" style="max-width:80px" /></td>
+          <td><select id="au_d_bal_${i}">${[1, 2].map(n => `<option value="${n}" ${d.balanza === n ? "selected" : ""}>${n}</option>`).join("")}</select></td>
+          <td><select id="au_d_lado_${i}">${lados.map(l => `<option ${d.lado === l ? "selected" : ""}>${l}</option>`).join("")}</select></td>
+          <td><input type="checkbox" id="au_d_inst_${i}" style="width:auto" ${d.instalado ? "checked" : ""} /></td>
+        </tr>`).join("")}
+      </table>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Cámaras</h3>
+      <p>Dirección de la foto de la cámara. Dahua: <code>http://IP/cgi-bin/snapshot.cgi</code> · Hikvision: <code>http://IP/ISAPI/Streaming/channels/101/picture</code> · <code>sim</code> = cámara de prueba.</p>
+      ${camaras.map((cam, i) => `<div class="grid3" style="margin-bottom:10px">
+        <div><label>Nombre</label><input id="au_c_nombre_${i}" value="${esc(cam.nombre)}" /></div>
+        <div style="grid-column:span 2"><label>Dirección (URL)</label><input id="au_c_url_${i}" value="${esc(cam.url)}" placeholder="http://192.168.1.108/cgi-bin/snapshot.cgi" /></div>
+        <div><label>Usuario</label><input id="au_c_usuario_${i}" value="${esc(cam.usuario || "")}" autocomplete="off" /></div>
+        <div><label>Clave</label><input id="au_c_clave_${i}" type="password" value="${esc(cam.clave || "")}" autocomplete="new-password" /></div>
+        <div><label>Habilitada</label>${yesNo("au_c_hab_" + i, String(cam.habilitada))}</div>
+        <div class="btn-row" style="grid-column:1/-1;margin:0"><button class="btn" onclick="probarCamara(${i})">Probar cámara</button>
+          <img id="au_c_prueba_${i}" class="prueba-camara" alt="" /></div>
+      </div>`).join("")}
+    </div>
+    <div class="btn-row"><button class="btn-primary" onclick="saveAutomatizacion()">Guardar automatización</button></div>
+    <div class="card" id="autoPrueba"></div>`;
+  pruebaAutomatizacion();
+}
+
+function leerConfigAutomatizacion() {
+  const c = state.autoConfig;
+  return {
+    habilitada: val("au_hab") === "true",
+    simulada: val("au_sim") === "true",
+    modbusIp: val("au_ip").trim(),
+    modbusPuerto: num("au_puerto") || 502,
+    modbusUnidad: num("au_unidad"),
+    secuenciaAutomatica: val("au_seq") === "true",
+    capturarFotos: val("au_fotos") === "true",
+    dispositivos: c.dispositivos.map((d, i) => ({
+      ...d,
+      nombre: val(`au_d_nombre_${i}`) || d.nombre,
+      punto: num(`au_d_punto_${i}`) || d.punto,
+      balanza: Number(val(`au_d_bal_${i}`)),
+      lado: val(`au_d_lado_${i}`),
+      instalado: document.getElementById(`au_d_inst_${i}`).checked
+    })),
+    camaras: [0, 1].map(i => ({
+      nombre: val(`au_c_nombre_${i}`) || `Cámara ${i + 1}`,
+      url: val(`au_c_url_${i}`).trim(),
+      usuario: val(`au_c_usuario_${i}`) || null,
+      clave: val(`au_c_clave_${i}`) || null,
+      habilitada: val(`au_c_hab_${i}`) === "true"
+    })).filter(cam => cam.url)
+  };
+}
+
+async function saveAutomatizacion() {
+  try {
+    await api("/api/automatizacion/config", { method: "PUT", body: JSON.stringify(leerConfigAutomatizacion()) });
+    state.funciones = await api("/api/funciones");
+    toast("Automatización guardada");
+    renderConfig();
+  } catch (e) {
+    toast(limpiarError(e), "err");
+  }
+}
+
+async function probarCamara(i) {
+  const cam = leerConfigAutomatizacion().camaras.find(x => x.nombre === (val(`au_c_nombre_${i}`) || `Cámara ${i + 1}`));
+  if (!cam) return toast("Falta la dirección de la cámara", "err");
+  try {
+    const res = await fetch("/api/automatizacion/camaras/probar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + state.token },
+      body: JSON.stringify(cam)
+    });
+    if (!res.ok) throw new Error(await res.text());
+    document.getElementById(`au_c_prueba_${i}`).src = URL.createObjectURL(await res.blob());
+  } catch (e) {
+    toast(limpiarError(e), "err");
+  }
+}
+
+/** Entradas y salidas de la placa en vivo, mientras esté abierta la pestaña. Con la placa simulada, las entradas se tocan. */
+async function pruebaAutomatizacion() {
+  const el = document.getElementById("autoPrueba");
+  if (!el || state.view !== "config" || state.configTab !== "automatizacion") return;
+  try {
+    const a = await api("/api/automatizacion/estado");
+    const punto = (activo, n, accion, titulo) =>
+      `<button class="punto ${activo ? "on" : ""}" ${accion ? `onclick="${accion}(${n}, ${!activo})"` : "disabled"} title="${esc(titulo)}">${n}</button>`;
+    const nombre = (tipoSalida, n) => (a.dispositivos.find(d => (tipoSalida ? d.tipo !== "sensor" : d.tipo === "sensor") && d.punto === n)?.nombre) || "";
+    el.innerHTML = !a.habilitada
+      ? `<h3 style="margin-top:0">Prueba</h3><p>Habilitá la automatización y guardá para probar la placa.</p>`
+      : `<h3 style="margin-top:0">Prueba de la placa ${a.conectada ? `<span class="pill pill-ok">conectada</span>` : `<span class="pill pill-err">sin conexión</span>`}</h3>
+        ${a.error ? `<p class="error">${esc(a.error)}</p>` : ""}
+        <div class="auto-prueba"><span>Entradas${a.simulada ? " (tocá para simular un sensor)" : ""}</span>
+          ${a.entradas.map((v, i) => punto(v, i + 1, a.simulada ? "simularEntrada" : null, nombre(false, i + 1))).join("")}</div>
+        <div class="auto-prueba"><span>Salidas (tocá para prender / apagar)</span>
+          ${a.salidas.map((v, i) => punto(v, i + 1, "probarSalida", nombre(true, i + 1))).join("")}</div>`;
+  } catch {}
+  setTimeout(pruebaAutomatizacion, 1000);
+}
+
+async function simularEntrada(n, valor) {
+  try { await api(`/api/automatizacion/simular/${n}`, { method: "POST", body: JSON.stringify({ valor }) }); } catch (e) { toast(limpiarError(e), "err"); }
+}
+
+async function probarSalida(n, valor) {
+  try { await api(`/api/automatizacion/salidas/${n}`, { method: "POST", body: JSON.stringify({ valor }) }); } catch (e) { toast(limpiarError(e), "err"); }
 }
 
 /* ---------- Listas de catálogos (en lugar del desplegable del navegador) ----------

@@ -8,6 +8,9 @@ public record EmpresaTicket(string RazonSocial, string? Cuit, string? Direccion,
 /// <summary>Configuración de aduana de la planta (Planta → Aduana).</summary>
 public record AduanaTicket(string? Codigo, string? Lot, string? Certificado, string? CertificadoVence);
 
+/// <summary>Una foto de cámara para el ticket: momento (entrada / salida), nombre de la cámara y la imagen.</summary>
+public record FotoTicket(string Momento, string Camara, byte[] Imagen);
+
 /// <summary>
 /// Todo lo necesario para imprimir un ticket, ya resuelto (CUIT del cliente, código de producto, fechas locales).
 /// Los generadores no tocan la base: así se pueden probar solos.
@@ -25,6 +28,9 @@ public record TicketDatos(
     string? ProductoCodigo,
     AduanaTicket? Aduana)
 {
+    /// <summary>Fotos de las cámaras (automatización): si hay, la mitad de abajo de la hoja las muestra en vez del duplicado.</summary>
+    public IReadOnlyList<FotoTicket> Fotos { get; init; } = [];
+
     public bool EsTaraConocida => Pesada.Modo == Bfs.Core.ModosPesaje.TaraConocida;
     public bool EsAduana => Pesada.TipoOperacion == Bfs.Core.TiposOperacion.Aduana && Pesada.Aduana != null;
     public bool EsAnulada => Pesada.Estado == Bfs.Core.EstadosPesada.Anulada;

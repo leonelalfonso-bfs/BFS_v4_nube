@@ -594,6 +594,10 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("FotosJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
                     b.Property<DateTimeOffset>("ModificadoEn")
                         .HasColumnType("timestamp with time zone");
 

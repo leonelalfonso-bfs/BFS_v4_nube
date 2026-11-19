@@ -305,13 +305,22 @@ Referencia: la 3.x de INAGRO (`C:\Programas\INAGRO\BFS 2.0`, v3.58). Decisiones 
 > - **Remito preimpreso**: `GET /api/pesadas/{id}/remito`, con las coordenadas de la 3.x y un corrimiento en mm (Configuración → General) por si la impresora lo tira corrido. Al cerrar una pesada: ticket, remito o preguntar (Configuración → General). Botón Remito en pendientes y en Pesadas.
 > - **Importador 3.x**: tanques, sucursales, domicilio de clientes y transportes, todos los campos de INAGRO, `tipo_movimiento` numérico, cada pesada a la empresa de su `tipo_sociedad_id`, planta de `system_config` y el contador compartido sigue al último ticket.
 > - Pendiente: imprimir un remito sobre el formulario real y ajustar el corrimiento; mandar una pesada al webhook real de Centum; al corregir una pesada ya enviada no se reenvía a Centum (la 3.x tampoco lo hacía).
+### Automatización (la 3.0 "Automatización", `C:\Programas\Automatizacion`)
+
+> **Estado (2026-11-19):** hecha en la rama `automatizacion`, **salvo la prueba con una placa Modbus y cámaras reales**.
+> - **Función que habilita BFS** (Configuración → Automatización) en cualquier edición, sin otro instalador. Apagada no corre nada: el servicio solo mira la configuración cada 5 s; no abre conexiones ni pide imágenes, y la pantalla de pesaje no cambia.
+> - **Placa Modbus TCP** (cliente propio: funciones 1, 2 y 5, sin librerías): 8 entradas / 8 salidas, lectura cada 200 ms, reconexión sola. Placa simulada para probar sin hardware.
+> - **Dispositivos** (como la 3.x por defecto): semáforos en las salidas 1-4, barreras en las 5-8, sensores infrarrojos en las entradas 1-4; cada uno con nombre, balanza (1/2), punta (entrada/salida) e instalado.
+> - **Sensores**: con sensores instalados, el peso de esa balanza solo se captura con todos cortados ("Posicionar el camión dentro de la balanza"); si la placa no responde, tampoco. El peso manual no se bloquea.
+> - **Semáforos y barreras**: el operador los maneja con un clic en Pesaje; nunca dos semáforos en verde en la misma balanza. **Secuencia automática** opcional: al aceptar la pesada, semáforo y barrera de salida; cuando los sensores quedan libres (o a los 45 s sin sensores), barreras cerradas y semáforo de entrada en verde.
+> - **Cámaras** (hasta 2) por foto HTTP (snapshot Dahua / Hikvision, Basic o Digest): vista en vivo refrescada ~4 veces por segundo solo mientras se mira Pesaje; fotos al capturar el peso (o al aceptar) que quedan en `fotos/aaaa/mm` de la carpeta de datos y en la pesada (`FotosJson`). Con fotos, el ticket sale como en la 3.x: original arriba y las fotos abajo.
+> - Pendiente: probar con la placa y las cámaras del cliente; si la vista en vivo no alcanza, pasar a RTSP (ffmpeg). Las fotos no viajan a la nube (quedan en el puesto).
 
 ---
 
 ## 5. Fuera de alcance
 
-- Modbus TCP
-- Cámaras IP / OCR (solo se conservan las rutas de fotos que se importan)
+- OCR de patentes (la 3.0 Automatización tampoco lo tiene)
 - Portería en Windows 7 / 8 (sigue la 3.x)
 - Linux/Mac como puesto de balanza (el servidor de la nube sí corre en Linux)
 - Pesar desde el navegador sin nodo local (no puede leer el COM ni operar sin internet)

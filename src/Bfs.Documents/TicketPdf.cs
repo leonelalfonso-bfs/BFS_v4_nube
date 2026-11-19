@@ -49,9 +49,32 @@ public static class TicketPdf
             {
                 col.Item().Height(MediaHoja - LineaCorte / 2).Element(c => Copia(c, t, "TICKET ORIGINAL"));
                 col.Item().LineHorizontal(LineaCorte).LineColor(Colors.Grey.Medium).LineDashPattern([4f, 4f]);
-                col.Item().Height(MediaHoja - LineaCorte / 2).Element(c => Copia(c, t, "TICKET DUPLICADO"));
+                // Con fotos de las cámaras (automatización), como la 3.x: un solo ticket y abajo las fotos.
+                if (t.Fotos.Count > 0) col.Item().Height(MediaHoja - LineaCorte / 2).Element(c => Fotos(c, t));
+                else col.Item().Height(MediaHoja - LineaCorte / 2).Element(c => Copia(c, t, "TICKET DUPLICADO"));
             });
         })).GeneratePdf();
+
+    private static void Fotos(IContainer c, TicketDatos t) =>
+        c.PaddingHorizontal(36).PaddingVertical(20).Column(col =>
+        {
+            col.Item().Text($"FOTOS · TICKET {t.Pesada.TicketNumero}").Bold();
+            foreach (var momento in t.Fotos.GroupBy(f => f.Momento))
+            {
+                col.Item().PaddingTop(6).Text(momento.Key == "salida" ? "Salida" : "Entrada").SemiBold();
+                col.Item().PaddingTop(2).Height(t.Fotos.Select(f => f.Momento).Distinct().Count() > 1 ? 150 : 300).Row(r =>
+                {
+                    foreach (var f in momento)
+                    {
+                        r.RelativeItem().PaddingRight(6).Column(x =>
+                        {
+                            x.Item().Height(t.Fotos.Select(y => y.Momento).Distinct().Count() > 1 ? 136 : 286).AlignCenter().Image(f.Imagen).FitArea();
+                            x.Item().AlignCenter().Text(f.Camara).FontSize(6.5f);
+                        });
+                    }
+                });
+            }
+        });
 
     private static void Copia(IContainer c, TicketDatos t, string copia) =>
         c.PaddingHorizontal(36).PaddingVertical(24).ScaleToFit().Element(x => Normal(x, t, copia));
