@@ -212,6 +212,8 @@ function pintarPeso() {
       && lista.every((b, i) => cont.children[i].dataset.balanza === String(b.balanzaId || ""));
     if (!iguales) {
       cont.innerHTML = lista.map(displayBalanza).join("");
+      // Cambiaron las balanzas (o llegaron después de dibujar la pantalla): los botones de captura también.
+      pintarCaptura();
     } else {
       // Se cambia solo el contenido: el recuadro que se toca queda, así un toque no se pierde en medio de un repintado.
       lista.forEach((b, i) => {
@@ -241,6 +243,7 @@ function intercambiarBalanzas() {
     localStorage.setItem("bfs_balanzas_invertidas", actual ? "0" : "1");
   } catch {}
   pintarPeso();
+  pintarCaptura();
 }
 
 /** Estado de la lectura → color del display: verde estable, ámbar en movimiento, rojo sin lectura. */
@@ -865,15 +868,28 @@ function cambiarModoPesaje(modo) {
  * Capturar el peso primero y aceptar después: el operador congela el peso apenas el camión está quieto y completa
  * los datos sin apuro. La captura queda en pantalla aunque se elija otra pendiente; se descarta al aceptar o a mano.
  */
+/** Teclas de captura: F2 la balanza de la izquierda, F3 la de la derecha. */
+const TECLAS_CAPTURA = ["F2", "F3"];
+
+/** Con varias balanzas, un botón por cada una (en el orden de los displays): se elige de cuál capturar. */
+function botonesCaptura(clase, texto) {
+  const lista = balanzasEnPantalla();
+  if (lista.length <= 1) {
+    return `<button class="${clase}" onclick="capturarPeso()">${texto} <small>(F2)</small></button>`;
+  }
+  return lista.map((b, i) => `<button class="${clase}" onclick="capturarPeso('${b.balanzaId}')">${texto}: ${esc(b.nombre || "Balanza " + (i + 1))}
+    ${TECLAS_CAPTURA[i] ? `<small>(${TECLAS_CAPTURA[i]})</small>` : ""}</button>`).join("");
+}
+
 function bloqueCaptura() {
   const c = state.captura;
   if (!c) {
-    return `<button class="btn-primary btn-capturar" onclick="capturarPeso()">Capturar peso <small>(F2)</small></button>
+    return `${botonesCaptura("btn-primary btn-capturar", "Capturar peso")}
       <span class="captura-ayuda">Capturá el peso con el camión quieto y después completá los datos.</span>`;
   }
   return `<div class="captura-ok"><span>Peso capturado</span><strong>${c.kilogramos.toLocaleString("es-AR")} kg</strong>
       <small>${esc(c.balanza || "")} · ${esc(hora(c.en))}</small></div>
-    <button class="btn" onclick="capturarPeso()">Volver a capturar</button>
+    ${botonesCaptura("btn", "Volver a capturar")}
     <button class="btn" onclick="descartarCaptura()">Descartar</button>`;
 }
 
@@ -882,11 +898,13 @@ function pintarCaptura() {
   if (el) el.innerHTML = bloqueCaptura();
 }
 
-async function capturarPeso() {
+/** Con <balanzaId>, captura de esa balanza y la deja "en uso"; sin él, de la que está en uso. */
+async function capturarPeso(balanzaId) {
+  if (balanzaId && balanzaId !== balanzaActual().balanzaId) elegirBalanza(balanzaId);
   try {
     state.captura = await api("/api/pesadas/capturar", {
       method: "POST",
-      body: JSON.stringify({ balanzaId: balanzaActual().balanzaId || null })
+      body: JSON.stringify({ balanzaId: balanzaId || balanzaActual().balanzaId || null })
     });
     pintarCaptura();
     const err = document.getElementById("err");
@@ -904,7 +922,7 @@ function descartarCaptura() {
 /** Lo que va en el pedido: el peso manual si se escribió; si no, el capturado (que es obligatorio). */
 function pesoParaGuardar() {
   const m = manual();
-  if (m.peso == null && !state.captura) throw new Error("Primero capturá el peso (botón Capturar peso o F2)");
+  if (m.peso == null && !state.captura) throw new Error("Primero capturá el peso (botón Capturar peso, F2 o F3)");
   return { ...m, capturaId: m.peso == null ? state.captura.id : null };
 }
 
@@ -914,10 +932,12 @@ function revisarCaptura(e) {
 }
 
 document.addEventListener("keydown", e => {
-  if (e.key === "F2" && state.view === "pesaje" && state.modoPesaje !== "tomar" && document.getElementById("captura")) {
-    e.preventDefault();
-    capturarPeso();
-  }
+  const i = TECLAS_CAPTURA.indexOf(e.key);
+  if (i < 0 || state.view !== "pesaje" || state.modoPesaje === "tomar" || !document.getElementById("captura")) return;
+  const lista = balanzasEnPantalla();
+  if (lista.length <= 1 && i > 0) return;
+  e.preventDefault();
+  capturarPeso(lista.length > 1 ? lista[i]?.balanzaId : undefined);
 });
 
 function selectPesada(id) {
