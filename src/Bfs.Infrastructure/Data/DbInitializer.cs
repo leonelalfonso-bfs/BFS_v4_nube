@@ -7,15 +7,19 @@ namespace Bfs.Infrastructure.Data;
 
 public static class DbInitializer
 {
-    public const string SeedVendorEmail = "bfs@bfs.local";
-    public const string SeedAdminEmail = "admin@bfs.local";
+    /// <summary>
+    /// Usuario con el que BFS entra la primera vez en una instalación nueva (rol vendor: configura todo).
+    /// Los usuarios del cliente los crea BFS después, desde Usuarios. Conviene cambiar la clave en cada instalación.
+    /// </summary>
+    public const string SeedVendorEmail = "admin";
+    public const string SeedVendorClave = "BFS202%";
 
-    /// <summary>Nodo: base lista para usar, con empresas y usuarios de prueba si está vacía (se reemplazan al importar o configurar).</summary>
+    /// <summary>Nodo: base lista para usar, con la empresa de ejemplo y el usuario de BFS si está vacía.</summary>
     public static Task SeedAsync(BfsDbContext db) => SeedAsync(db, datosDePrueba: true);
 
     /// <param name="datosDePrueba">
-    /// false para un cliente de la nube: sin "Empresa 1/2" ni los usuarios bfs@/admin@bfs.local
-    /// (tendrían clave conocida y el mismo email en todos los clientes). La empresa y el admin los crea el alta.
+    /// false para un cliente de la nube: sin "Empresa 1/2" ni el usuario inicial de BFS
+    /// (tendría clave conocida y sería el mismo en todos los clientes). La empresa y el admin los crea el alta.
     /// </param>
     /// <param name="empresas">Cuántas empresas de ejemplo crea en una base nueva (la edición Estándar tiene una sola).</param>
     public static async Task SeedAsync(BfsDbContext db, bool datosDePrueba, int empresas = 2)
@@ -42,19 +46,8 @@ public static class DbInitializer
                 Nombre = "BFS",
                 Activo = true
             };
-            vendor.PasswordHash = hasher.HashPassword(vendor, "bfs-setup");
-
-            var admin = new Usuario
-            {
-                Id = Guid.NewGuid(),
-                Email = SeedAdminEmail,
-                Rol = Roles.Admin,
-                Nombre = "Administrador",
-                Activo = true
-            };
-            admin.PasswordHash = hasher.HashPassword(admin, "admin");
-
-            db.Usuarios.AddRange(vendor, admin);
+            vendor.PasswordHash = hasher.HashPassword(vendor, SeedVendorClave);
+            db.Usuarios.Add(vendor);
         }
 
         await EnsureConfig(db, ConfigKeys.ClienteNombre, "Cliente de prueba");

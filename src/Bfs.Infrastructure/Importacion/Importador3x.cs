@@ -259,6 +259,13 @@ public class Importador3x
         foreach (var f in Filas(conn, "users"))
         {
             var login = Usuario.NormalizarEmail(Str(f, "username"));
+            // "admin" es el usuario de BFS en la 4.0; el admin del cliente en la 3.x pasa como "admin-3x", con su clave.
+            if (login.Length > 0 && await _db.Usuarios.IgnoreQueryFilters().AnyAsync(u => u.Email == login && u.Rol == Roles.Vendor))
+            {
+                var renombrado = login + "-3x";
+                _avisos.Add($"El usuario {login} de la 3.x se importó como {renombrado} ({login} es el usuario de BFS en la 4.0)");
+                login = renombrado;
+            }
             if (login.Length == 0 || await _db.Usuarios.IgnoreQueryFilters().AnyAsync(u => u.Email == login))
             {
                 omitidos++;

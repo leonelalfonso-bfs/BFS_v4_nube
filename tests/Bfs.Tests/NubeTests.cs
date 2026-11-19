@@ -92,7 +92,7 @@ public class NubeTests : IAsyncLifetime
         Assert.Equal(["Acopio Sur SA"], empresas.EnumerateArray().Select(e => e.GetProperty("nombre").GetString()));
         Assert.Equal(1, (await acopio.GetFromJsonAsync<JsonElement>("/api/usuarios")).GetArrayLength());
         Assert.Equal(HttpStatusCode.Unauthorized,
-            (await Cliente().PostAsJsonAsync("/api/auth/login", new { email = DbInitializer.SeedAdminEmail, password = "admin" })).StatusCode);
+            (await Cliente().PostAsJsonAsync("/api/auth/login", new { email = DbInitializer.SeedVendorEmail, password = DbInitializer.SeedVendorClave })).StatusCode);
 
         await Pesar(acopio, "AA111AA");
         Assert.Equal(1, (await acopio.GetFromJsonAsync<JsonElement>("/api/pesadas")).GetArrayLength());

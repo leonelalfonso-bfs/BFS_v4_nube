@@ -50,7 +50,7 @@ public class DatosTests
 
         Assert.Empty(await db.Database.GetPendingMigrationsAsync());
         Assert.Equal(2, await db.Empresas.CountAsync());
-        Assert.True(await db.Usuarios.AnyAsync(u => u.Email == DbInitializer.SeedAdminEmail));
+        Assert.Equal([DbInitializer.SeedVendorEmail], await db.Usuarios.Select(u => u.Email).ToListAsync());
         Assert.All(await db.Empresas.ToListAsync(), e =>
         {
             Assert.Equal(1, e.Version);
