@@ -24,6 +24,13 @@ public static class PesadaEndpoints
         api.MapGet("/pesadas/pendientes", async (PesajeService pesaje) => Results.Ok(await pesaje.PendientesAsync()))
             .RequireAuthorization(Permisos.PesajeOperar);
 
+        // Congela el peso de la balanza; la entrada o salida se guarda después con el CapturaId.
+        api.MapPost("/pesadas/capturar", async (CapturarRequest req, PesajeService pesaje, ClaimsPrincipal user) =>
+        {
+            var (captura, error) = await pesaje.CapturarAsync(req.BalanzaId, Operador(user));
+            return error != null ? ToResult(error) : Results.Ok(captura);
+        }).RequireAuthorization(Permisos.PesajeOperar);
+
         api.MapPost("/pesadas/entrada", async (EntradaRequest req, PesajeService pesaje, ClaimsPrincipal user) =>
             ToResult(await pesaje.RegistrarEntradaAsync(req, Operador(user))))
             .RequireAuthorization(Permisos.PesajeOperar);
@@ -83,7 +90,8 @@ public record EntradaRequest(
     DatosAduanaDto? Aduana = null,
     string? TipoDocumento = null,
     string? Nacionalidad = null,
-    DatosInagroDto? Inagro = null);
+    DatosInagroDto? Inagro = null,
+    Guid? CapturaId = null);
 
 /// <summary>Campos de INAGRO del formulario (edición Inagro). Los datos de cliente, transporte y planta los completa el servidor.</summary>
 public record DatosInagroDto(
@@ -96,7 +104,10 @@ public record DatosInagroDto(
     string? CuilChofer = null,
     string? ObservacionesRemito = null);
 
-public record SalidaRequest(int? PesoSalida, int? TaraPallets, Guid? BalanzaId = null, string? ClaveManual = null);
+/// <param name="CapturaId">Peso capturado antes con /pesadas/capturar (si no viene ni peso manual, se lee la balanza ahora).</param>
+public record SalidaRequest(int? PesoSalida, int? TaraPallets, Guid? BalanzaId = null, string? ClaveManual = null, Guid? CapturaId = null);
+
+public record CapturarRequest(Guid? BalanzaId);
 
 /// <param name="Datos">Los mismos datos que una entrada; PesoEntrada es el bruto si se carga a mano.</param>
 /// <param name="TaraManual">Solo si se quiere usar otra tara que la guardada (cuenta como ingreso manual).</param>

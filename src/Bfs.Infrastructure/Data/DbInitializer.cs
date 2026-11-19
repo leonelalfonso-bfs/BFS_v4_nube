@@ -95,9 +95,34 @@ public static class DbInitializer
         await EnsureConfig(db, ConfigKeys.LogoFile, "");
 
         await db.SaveChangesAsync();
+        await OcultarTipoUnaVez(db);
 
         await SembrarModelos(db);
         if (datosDePrueba) await PasarBalanzaDelSpike(db);
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// El selector "Tipo (ingreso / egreso)" del pesaje confundía (parece entrada / salida, que la pantalla ya distingue sola).
+    /// Ahora viene oculto; a las instalaciones que lo tenían visible se lo oculta una sola vez, salvo que manden a WORMS
+    /// (lo usa). BFS lo puede volver a mostrar en Configuración → Campos.
+    /// </summary>
+    private static async Task OcultarTipoUnaVez(BfsDbContext db)
+    {
+        var hecho = await db.Configuraciones.FirstOrDefaultAsync(c => c.Clave == ConfigKeys.TipoOcultoAplicado && c.EmpresaId == null);
+        if (hecho != null) return;
+
+        var worms = await db.Configuraciones.AnyAsync(c => c.Clave == ConfigKeys.WormsEnabled && c.EmpresaId == null && c.Valor == "true");
+        var campos = await db.Configuraciones.FirstOrDefaultAsync(c => c.Clave == ConfigKeys.FieldsJson && c.EmpresaId == null);
+        if (campos != null && !worms)
+        {
+            var lista = FieldCatalog.Parse(campos.Valor)
+                .Select(f => f.Key == "tipo" ? f with { Visible = false, Required = false } : f)
+                .ToList();
+            campos.Valor = System.Text.Json.JsonSerializer.Serialize(lista,
+                new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase });
+        }
+        db.Configuraciones.Add(new Configuracion { Id = Guid.NewGuid(), Clave = ConfigKeys.TipoOcultoAplicado, Valor = "true" });
         await db.SaveChangesAsync();
     }
 

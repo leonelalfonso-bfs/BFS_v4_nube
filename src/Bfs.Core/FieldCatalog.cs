@@ -8,7 +8,8 @@ public static class FieldCatalog
 {
     public static IReadOnlyList<FieldDef> Defaults { get; } =
     [
-        new("tipo", "Tipo (ingreso/egreso)", true, true),
+        // Oculto por defecto: es el tipo de movimiento para las integraciones (WORMS), no entrada / salida.
+        new("tipo", "Tipo de movimiento (ingreso/egreso)", false, false),
         new("patenteChasis", "Patente chasis", true, true),
         new("patenteAcoplado", "Patente acoplado", true, false),
         new("conductor", "Conductor", true, false),

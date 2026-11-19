@@ -84,4 +84,7 @@ public static class ConfigKeys
 
     /// <summary>Webhook que recibe las pesadas para Centum (en la 3.x, automate.gauchocode.com).</summary>
     public const string CentumEndpoint = "centum_endpoint";
+
+    /// <summary>Marca que ya se ocultó una vez el selector de tipo (ingreso / egreso) en esta base.</summary>
+    public const string TipoOcultoAplicado = "campos_tipo_oculto";
 }

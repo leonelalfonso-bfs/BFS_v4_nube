@@ -104,7 +104,7 @@ Las bases creadas por el spike anterior (sin migraciones) se renombran a `bfs.sp
 - Usuario cliente: solo ve las pesadas de su cliente del catálogo
 - Catálogos: clientes, transportes (ATA), productos, exportadores, taras conocidas; búsqueda y CUIT validado. El operador los carga y corrige, también desde Pesaje con el botón + (alta rápida); borrar puede pedir una clave (Planta)
 - Planta: datos de empresas, aduana y clave de ingreso manual; autocompletado por patente
-- Pesaje: Normal, Tara conocida, Tomar tara, Aduana, ingreso manual con clave, anulación y tickets por puesto (`PP-NNNNNN`)
+- Pesaje: Normal, Tara conocida, Tomar tara, Aduana, ingreso manual con clave, anulación y tickets por puesto (`PP-NNNNNN`). Capturar peso (F2) y aceptar la pesada después de cargar los datos
 - Documentos: ticket PDF (normal y aduana), ticket térmico ESC/POS, Excel de pesadas
 - Pesadas con filtros y totales, tablero; Sistema: backups, restauración, espejo, numeración; importador de la 3.x; instalador MSI
 - Balanzas: varias por nodo (serie STX / Line o simuladas), modelos de la 3.x, reconexión automática, peso estable, diagnóstico de tramas

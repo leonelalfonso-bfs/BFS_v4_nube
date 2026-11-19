@@ -10,7 +10,7 @@ const ICONS = {
 };
 
 const DEFAULT_FIELDS = [
-  { key: "tipo", label: "Tipo (ingreso/egreso)", visible: true, required: true },
+  { key: "tipo", label: "Tipo de movimiento (ingreso/egreso)", visible: false, required: false },
   { key: "patenteChasis", label: "Patente chasis", visible: true, required: true },
   { key: "patenteAcoplado", label: "Patente acoplado", visible: true, required: false },
   { key: "conductor", label: "Conductor", visible: true, required: false },
@@ -51,6 +51,8 @@ const state = {
   dias: 30,
   pendientes: [],
   selectedPesadaId: null,
+  /** Peso capturado esperando que se acepte la pesada ({ id, kilogramos, balanza, en }). */
+  captura: null,
   licencia: null,
   rolesAsignables: [],
   funciones: {},
@@ -721,11 +723,11 @@ async function renderPesaje() {
       <p class="error" id="err"></p>
       <div class="btn-row">
         ${modo === "tara"
-          ? `<button class="btn-primary" onclick="guardarTaraConocida()" ${sinLicencia ? "disabled" : ""}>Pesar</button>`
+          ? `<button class="btn-primary" onclick="guardarTaraConocida()" ${sinLicencia ? "disabled" : ""}>Aceptar pesada</button>`
           : salida
-            ? `<button class="btn-primary" onclick="guardarSalida()">Capturar salida</button>
+            ? `<button class="btn-primary" onclick="guardarSalida()">Aceptar salida</button>
                <button class="btn" onclick="selectPesada('${salida.id}')">Cancelar</button>`
-            : `<button class="btn-primary" onclick="guardarEntrada()" ${sinLicencia ? "disabled" : ""}>Capturar entrada</button>`}
+            : `<button class="btn-primary" onclick="guardarEntrada()" ${sinLicencia ? "disabled" : ""}>Aceptar entrada</button>`}
       </div>
       <p id="ultimo"></p>
     </div>`;
@@ -734,7 +736,7 @@ async function renderPesaje() {
     <div class="page-head">
       <div>
         <h2>Pesaje</h2>
-        <p>${modo === "tara" ? "Un solo paso: bruto de la balanza menos la tara guardada." : modo === "tomar" ? "Guardá la tara de un vehículo o carro." : "Capturá entrada y salida. El neto descuenta tara de camión y pallets."}</p>
+        <p>${modo === "tara" ? "Capturá el bruto, completá los datos y aceptá: se descuenta la tara guardada." : modo === "tomar" ? "Guardá la tara de un vehículo o carro." : salida ? "Salida: capturá el peso y aceptá." : "Entrada: capturá el peso, completá los datos y aceptá. Para la salida, elegí el ticket en Pendientes."}</p>
       </div>
       <div id="scalePill">${pillForScale(state.scale.estado)}</div>
     </div>
@@ -745,6 +747,7 @@ async function renderPesaje() {
     </div>` : ""}
     <div class="card peso-card">
       <div class="displays ${state.balanzas.length > 1 ? "dos" : ""}" id="displays">${balanzasEnPantalla().map(displayBalanza).join("")}</div>
+      ${modo !== "tomar" ? `<div class="captura" id="captura">${bloqueCaptura()}</div>` : ""}
       <div class="peso-pie">
         <div class="status-box"><span>Empresa en curso</span>${selectorEmpresa(salida?.empresaId)}</div>
         <div class="peso-ayuda">
@@ -975,6 +978,65 @@ function cambiarModoPesaje(modo) {
   renderPesaje();
 }
 
+/**
+ * Capturar el peso primero y aceptar después: el operador congela el peso apenas el camión está quieto y completa
+ * los datos sin apuro. La captura queda en pantalla aunque se elija otra pendiente; se descarta al aceptar o a mano.
+ */
+function bloqueCaptura() {
+  const c = state.captura;
+  if (!c) {
+    return `<button class="btn-primary btn-capturar" onclick="capturarPeso()">Capturar peso <small>(F2)</small></button>
+      <span class="captura-ayuda">Capturá el peso con el camión quieto y después completá los datos.</span>`;
+  }
+  return `<div class="captura-ok"><span>Peso capturado</span><strong>${c.kilogramos.toLocaleString("es-AR")} kg</strong>
+      <small>${esc(c.balanza || "")} · ${esc(hora(c.en))}</small></div>
+    <button class="btn" onclick="capturarPeso()">Volver a capturar</button>
+    <button class="btn" onclick="descartarCaptura()">Descartar</button>`;
+}
+
+function pintarCaptura() {
+  const el = document.getElementById("captura");
+  if (el) el.innerHTML = bloqueCaptura();
+}
+
+async function capturarPeso() {
+  try {
+    state.captura = await api("/api/pesadas/capturar", {
+      method: "POST",
+      body: JSON.stringify({ balanzaId: balanzaActual().balanzaId || null })
+    });
+    pintarCaptura();
+    const err = document.getElementById("err");
+    if (err) err.textContent = "";
+  } catch (e) {
+    toast(limpiarError(e), "err");
+  }
+}
+
+function descartarCaptura() {
+  state.captura = null;
+  pintarCaptura();
+}
+
+/** Lo que va en el pedido: el peso manual si se escribió; si no, el capturado (que es obligatorio). */
+function pesoParaGuardar() {
+  const m = manual();
+  if (m.peso == null && !state.captura) throw new Error("Primero capturá el peso (botón Capturar peso o F2)");
+  return { ...m, capturaId: m.peso == null ? state.captura.id : null };
+}
+
+/** Si la captura venció (o el servidor se reinició), se borra para que se vuelva a capturar. */
+function revisarCaptura(e) {
+  if (/capturado venci/i.test(limpiarError(e))) descartarCaptura();
+}
+
+document.addEventListener("keydown", e => {
+  if (e.key === "F2" && state.view === "pesaje" && state.modoPesaje !== "tomar" && document.getElementById("captura")) {
+    e.preventDefault();
+    capturarPeso();
+  }
+});
+
 function selectPesada(id) {
   state.selectedPesadaId = state.selectedPesadaId === id ? null : id;
   renderPesaje();
@@ -984,7 +1046,7 @@ function collectPesaje() {
   // En INAGRO el tipo (ingreso / egreso) sale del Id de operación: no está en el formulario.
   const missing = fields().filter(f => f.visible && f.required && !val(f.key) && f.key !== "taraPallets" && !(esInagro() && f.key === "tipo"));
   if (missing.length) throw new Error("Completá: " + missing.map(f => f.label).join(", "));
-  const m = manual();
+  const m = pesoParaGuardar();
   return {
     empresaId: empresaEnCurso(),
     balanzaId: balanzaActual().balanzaId || null,
@@ -1005,6 +1067,7 @@ function collectPesaje() {
     taraPallets: visible("taraPallets") ? num("taraPallets") : 0,
     pesoEntrada: m.peso,
     claveManual: m.clave,
+    capturaId: m.capturaId,
     ...datosAduana(),
     inagro: datosInagro()
   };
@@ -1020,10 +1083,12 @@ async function guardarEntrada() {
   try {
     const pesada = await api("/api/pesadas/entrada", { method: "POST", body: JSON.stringify(collectPesaje()) });
     state.selectedPesadaId = null;
+    state.captura = null;
     toast(`Entrada ticket ${pesada.ticketNumero}`);
     await renderPesaje();
     document.getElementById("ultimo").textContent = `Entrada ticket ${pesada.ticketNumero} · ${pesada.pesoEntrada} kg`;
   } catch (e) {
+    revisarCaptura(e);
     mostrarError(e);
   }
 }
@@ -1034,17 +1099,19 @@ async function guardarSalida() {
     return;
   }
   try {
-    const m = manual();
+    const m = pesoParaGuardar();
     const pesada = await api(`/api/pesadas/${state.selectedPesadaId}/salida`, {
       method: "POST",
       body: JSON.stringify({
         taraPallets: visible("taraPallets") ? num("taraPallets") : null,
         balanzaId: balanzaActual().balanzaId || null,
         pesoSalida: m.peso,
-        claveManual: m.clave
+        claveManual: m.clave,
+        capturaId: m.capturaId
       })
     });
     state.selectedPesadaId = null;
+    state.captura = null;
     toast(`Ticket ${pesada.ticketNumero} cerrado · neto ${pesada.neto} kg`);
     ticketAlCerrar(pesada);
     await renderPesaje();
@@ -1052,6 +1119,7 @@ async function guardarSalida() {
       `Ticket ${pesada.ticketNumero} cerrado · neto ${pesada.neto} kg (pallets ${pesada.taraPallets})` +
       (pesada.aduana?.contenedorNeto != null ? ` · contenedor neto ${pesada.aduana.contenedorNeto} kg` : "");
   } catch (e) {
+    revisarCaptura(e);
     mostrarError(e);
   }
 }
@@ -1064,12 +1132,14 @@ async function guardarTaraConocida() {
       method: "POST",
       body: JSON.stringify({ datos, taraManual, claveManual: datos.claveManual })
     });
+    state.captura = null;
     toast(`Ticket ${pesada.ticketNumero} · neto ${pesada.neto} kg`);
     ticketAlCerrar(pesada);
     await renderPesaje();
     document.getElementById("ultimo").textContent =
       `Ticket ${pesada.ticketNumero} · bruto ${pesada.bruto} − tara ${pesada.tara} = neto ${pesada.neto} kg`;
   } catch (e) {
+    revisarCaptura(e);
     mostrarError(e);
   }
 }
