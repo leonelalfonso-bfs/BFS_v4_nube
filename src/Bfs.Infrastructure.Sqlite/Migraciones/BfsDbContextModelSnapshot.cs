@@ -577,6 +577,10 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("FotosJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<long>("ModificadoEn")
                         .HasColumnType("INTEGER");
 

@@ -65,7 +65,9 @@ public static class PlantaEndpoints
                 exigirEstable = Si(ConfigKeys.ExigirEstable, "true"),
                 aduanaLot = c.GetValueOrDefault(ConfigKeys.AduanaLot, ""),
                 aduanaEscenario = c.GetValueOrDefault(ConfigKeys.AduanaEscenario, ""),
-                puesto = int.TryParse(c.GetValueOrDefault(ConfigKeys.Puesto), out var puesto) ? puesto : 1
+                puesto = int.TryParse(c.GetValueOrDefault(ConfigKeys.Puesto), out var puesto) ? puesto : 1,
+                // Automatización (semáforos, barreras, sensores y cámaras): la pantalla de pesaje solo la muestra si está habilitada.
+                automatizacion = ConfigAutomatizacion.Parse(c.GetValueOrDefault(ConfigKeys.AutomatizacionJson)).Habilitada
             });
         });
 

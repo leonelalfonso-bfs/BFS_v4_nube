@@ -107,4 +107,5 @@ Las bases creadas por el spike anterior (sin migraciones) se renombran a `bfs.sp
 - Pesadas con filtros y totales, tablero; Sistema: backups, restauración, espejo, numeración; importador de la 3.x; instalador MSI
 - Balanzas: varias por nodo (serie STX / Line o simuladas), modelos de la 3.x, reconexión automática, peso estable, diagnóstico de tramas
 - Licencia firmada por PC
+- Automatización (la habilita BFS): semáforos, barreras y sensores por Modbus TCP, secuencia automática y hasta dos cámaras IP con fotos en el ticket
 - Columnas de sincronización en todas las entidades (`Version`, `ModificadoEn`, borrado lógico, nodo de origen)
