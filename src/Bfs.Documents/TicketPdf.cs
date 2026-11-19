@@ -13,7 +13,7 @@ public static class TicketPdf
 {
     /// <summary>Viene incluida en QuestPDF: el ticket sale igual en la PC de portería y en el servidor Linux de la nube.</summary>
     private const string Fuente = "Lato";
-    private const string Desarrollado = "Balanzas Full Service SRL - CUIT: 30-71534221-5 - Luis Braile 705, San Lorenzo, Santa Fe";
+    private const string Desarrollado = "Balanzas Full Service SRL - CUIT: 30-71534221-5 - Los Robles 4207, Ibarlucea, Santa Fe";
 
     private static readonly byte[] LogoBfs = CargarLogoBfs();
 
