@@ -69,7 +69,7 @@ public class ApiTests
     }
 
     [Fact]
-    public async Task Operador_no_carga_peso_a_mano_ni_edita_catalogos_ni_usuarios()
+    public async Task Operador_no_carga_peso_a_mano_ni_usuarios_pero_si_catalogos()
     {
         await using var api = await TestApi.Iniciar();
         using var admin = await api.LoginAdmin();
@@ -84,7 +84,7 @@ public class ApiTests
         (await op.PostAsJsonAsync("/api/pesadas/entrada", new { empresaId = Empresa1, patenteChasis = "AA111AA", taraPallets = 0 })).EnsureSuccessStatusCode();
 
         Assert.Equal(HttpStatusCode.OK, (await op.GetAsync("/api/catalogos/clientes")).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await op.PostAsJsonAsync("/api/catalogos/clientes", new { razonSocial = "X" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await op.PostAsJsonAsync("/api/catalogos/clientes", new { razonSocial = "X" })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await op.GetAsync("/api/usuarios")).StatusCode);
     }
 

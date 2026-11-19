@@ -100,7 +100,7 @@ Las bases creadas por el spike anterior (sin migraciones) se renombran a `bfs.sp
 - Outbox + mapper WORMS (se activa desde Configuración BFS)
 - Login por email; roles vendor / admin / supervisor / operador / cliente con permisos por acción (`Bfs.Core/Permisos.cs`)
 - Usuario cliente: solo ve las pesadas de su cliente del catálogo
-- Catálogos: clientes, transportes (ATA), productos, exportadores, taras conocidas; búsqueda y CUIT validado
+- Catálogos: clientes, transportes (ATA), productos, exportadores, taras conocidas; búsqueda y CUIT validado. El operador los carga y corrige, también desde Pesaje con el botón + (alta rápida); borrar puede pedir una clave (Planta)
 - Planta: datos de empresas, aduana y clave de ingreso manual; autocompletado por patente
 - Pesaje: Normal, Tara conocida, Tomar tara, Aduana, ingreso manual con clave, anulación y tickets por puesto (`PP-NNNNNN`)
 - Documentos: ticket PDF (normal y aduana), ticket térmico ESC/POS, Excel de pesadas
