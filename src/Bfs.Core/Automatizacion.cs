@@ -11,7 +11,7 @@ public static class TiposDispositivo
     /// <summary>Salida de la placa. Encendida = abierta.</summary>
     public const string Barrera = "barrera";
 
-    /// <summary>Entrada de la placa (barrera infrarroja). Activa = el camión está en esa punta de la balanza.</summary>
+    /// <summary>Entrada de la placa (barrera infrarroja en una punta de la balanza). Prendida = en verde, nadie la corta; apagada = cortada, un camión está pasando por esa punta.</summary>
     public const string Sensor = "sensor";
 
     public static bool EsSalida(string tipo) => tipo is Semaforo or Barrera;
@@ -51,8 +51,8 @@ public class ConfigAutomatizacion
     public List<DispositivoAutomatizacion> Dispositivos { get; set; } = Predeterminados();
 
     /// <summary>
-    /// Al aceptar una pesada: semáforo de salida en verde y barrera de salida abierta. Cuando los sensores de esa balanza
-    /// quedan libres (el camión salió): vuelve todo a rojo / cerrado y el semáforo de entrada a verde.
+    /// Al aceptar una pesada: semáforo de salida en verde y barrera de salida abierta. Cuando el camión sale (un sensor de esa balanza
+    /// se corta y todos vuelven a verde): barreras cerradas, semáforo de salida en rojo y el de entrada en verde.
     /// </summary>
     public bool SecuenciaAutomatica { get; set; }
 

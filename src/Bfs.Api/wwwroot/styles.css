@@ -604,3 +604,5 @@ fieldset.seccion legend {
 .punto { width: 38px; height: 38px; border-radius: 50%; border: 2px solid var(--line); background: #e2e8f0; font-weight: 700; cursor: pointer; }
 .punto.on { background: #22c55e; color: #fff; border-color: #16a34a; }
 .punto:disabled { cursor: default; }
+.sensor.cortado { color: var(--danger); font-weight: 600; }
+.sensor.cortado .led { background: #ef4444; box-shadow: 0 0 8px #ef4444; }
