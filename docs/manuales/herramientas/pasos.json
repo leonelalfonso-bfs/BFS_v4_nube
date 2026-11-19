@@ -1,0 +1,38 @@
+[
+  { "nombre": "u01-ingreso", "js": "document.getElementById('user').value='porteria1'; document.getElementById('pass').value='porteria1';", "recorte": ".login-card" },
+
+  { "nombre": "_login-jefe", "sinCaptura": true, "espera": 3000,
+    "js": "const r = await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:'jefe@losaromos.com.ar',password:'jefe2026'})}); localStorage.setItem('bfs_token',(await r.json()).token); localStorage.removeItem('bfs_balanzas_invertidas'); localStorage.removeItem('bfs_empresa'); setTimeout(()=>location.reload(),50);" },
+
+  { "nombre": "u02-pesaje", "js": "go('pesaje'); await new Promise(r=>setTimeout(r,1500)); window.scrollTo(0,0);" },
+  { "nombre": "u03-displays", "js": "window.scrollTo(0,0);", "recorte": ".peso-card" },
+  { "nombre": "u04-datos-ticket",
+    "js": "const s=(id,v)=>{const e=document.getElementById(id); if(e) e.value=v;}; s('producto','Soja'); s('cliente','Cooperativa Agrícola del Sur'); s('transporte','Transportes El Ceibo'); s('procedencia','Pergamino'); s('comprobante','R0003-00012399'); s('patenteChasis','AE555FG'); s('patenteAcoplado','AE556FG'); s('conductor','Daniel Romero'); s('tipoDocumento','DNI'); s('documento','30222111'); s('nacionalidad','Argentina'); const c=[...document.querySelectorAll('#main > .card')].find(x=>x.textContent.includes('Datos del ticket')); c.id='cap';",
+    "recorte": "#cap" },
+  { "nombre": "u05-pendientes", "js": "const c=[...document.querySelectorAll('#main > .card')].find(x=>x.textContent.includes('Pendientes de salida')); c.id='cap2';", "recorte": "#cap2" },
+  { "nombre": "u06-salida", "js": "selectPesada(state.pendientes[0].id); await new Promise(r=>setTimeout(r,1500)); const c=[...document.querySelectorAll('#main > .card')].find(x=>x.querySelector('.salida-head')); c.id='cap3';", "recorte": "#cap3" },
+  { "nombre": "u07-tara-conocida", "js": "selectPesada(state.selectedPesadaId); await new Promise(r=>setTimeout(r,800)); cambiarModoPesaje('tara'); await new Promise(r=>setTimeout(r,1200)); document.getElementById('patenteChasis').value='AE123CD'; await autocompletarPatente(); const c=[...document.querySelectorAll('#main > .card')].find(x=>x.textContent.includes('Pesar con tara conocida')); c.id='cap4';", "recorte": "#cap4" },
+  { "nombre": "u08-aduana", "js": "cambiarModoPesaje('normal'); await new Promise(r=>setTimeout(r,1200)); document.getElementById('tipoOperacion').value='Aduana'; toggleAduana(); const c=document.getElementById('aduanaBox'); c.id='aduanaBox';", "recorte": "#aduanaBox" },
+
+  { "nombre": "u09-pesadas", "js": "go('reportes'); await new Promise(r=>setTimeout(r,1500)); window.scrollTo(0,0);" },
+  { "nombre": "u10-corregir", "js": "const p = state.reporteItems.find(x=>x.patenteChasis==='AF987GH'); await corregirPesada(p.id); window.scrollTo(0,0);" },
+  { "nombre": "u11-historial", "js": "const c=[...document.querySelectorAll('#main > .card')].find(x=>x.textContent.includes('Historial')); c.id='cap5';", "recorte": "#cap5" },
+  { "nombre": "u12-tablero", "js": "go('tablero'); await new Promise(r=>setTimeout(r,1800)); window.scrollTo(0,0);" },
+  { "nombre": "u13-catalogos", "js": "state.catTab='clientes'; go('catalogos'); await new Promise(r=>setTimeout(r,1500)); window.scrollTo(0,0);" },
+  { "nombre": "u14-usuarios", "js": "go('usuarios'); await new Promise(r=>setTimeout(r,1500)); window.scrollTo(0,0);" },
+  { "nombre": "u15-planta", "js": "go('planta'); await new Promise(r=>setTimeout(r,1500)); window.scrollTo(0,0);" },
+  { "nombre": "u16-sistema", "js": "go('sistema'); await new Promise(r=>setTimeout(r,1800)); window.scrollTo(0,0);" },
+
+  { "nombre": "_login-bfs", "sinCaptura": true, "espera": 3000,
+    "js": "const r = await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:'admin',password:'BFS202%'})}); localStorage.setItem('bfs_token',(await r.json()).token); setTimeout(()=>location.reload(),50);" },
+
+  { "nombre": "t01-config-general", "js": "state.configTab='general'; go('config'); await new Promise(r=>setTimeout(r,1800)); window.scrollTo(0,0);" },
+  { "nombre": "t02-config-balanzas", "js": "goConfig('balanza'); await new Promise(r=>setTimeout(r,1800)); window.scrollTo(0,0);" },
+  { "nombre": "t03-config-campos", "js": "goConfig('campos'); await new Promise(r=>setTimeout(r,1500)); window.scrollTo(0,0);" },
+  { "nombre": "t04-config-ticket", "js": "goConfig('ticket'); await new Promise(r=>setTimeout(r,1500)); window.scrollTo(0,0);" },
+  { "nombre": "t05-config-api", "js": "goConfig('api'); await new Promise(r=>setTimeout(r,1800)); window.scrollTo(0,0);" },
+  { "nombre": "t06-config-licencia", "js": "goConfig('licencia'); await new Promise(r=>setTimeout(r,1500)); window.scrollTo(0,0);" },
+  { "nombre": "t07-config-nube", "js": "goConfig('nube'); await new Promise(r=>setTimeout(r,1500)); window.scrollTo(0,0);" },
+  { "nombre": "t08-sistema-importar", "js": "go('sistema'); await new Promise(r=>setTimeout(r,1800)); const c=[...document.querySelectorAll('#main > .card')].find(x=>x.textContent.includes('3.x')); if (c) c.id='cap6';", "recorte": "#cap6" },
+  { "nombre": "t09-usuarios-bfs", "js": "go('usuarios'); await new Promise(r=>setTimeout(r,1500)); window.scrollTo(0,0);" }
+]
