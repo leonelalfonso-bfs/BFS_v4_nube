@@ -108,7 +108,7 @@ public sealed class PlacaModbus(string ip, int puerto, byte unidad) : IPlacaES
 /// <summary>Placa en memoria para probar sin hardware: las entradas se cambian desde Configuración → Automatización.</summary>
 public sealed class PlacaSimulada : IPlacaES
 {
-    // Arranca con los sensores activos (camión bien ubicado) para que se pueda pesar sin tocar nada.
+    // Arranca con los sensores en verde (nadie los corta) para que se pueda pesar sin tocar nada.
     public bool[] Entradas { get; } = [true, true, true, true, false, false, false, false];
     public bool[] Salidas { get; } = new bool[ConfigAutomatizacion.PuntosPlaca];
     public bool Conectada { get; private set; }

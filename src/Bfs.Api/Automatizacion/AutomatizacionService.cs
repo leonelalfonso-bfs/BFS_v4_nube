@@ -45,9 +45,9 @@ public sealed class AutomatizacionService(IServiceScopeFactory scopes, ILogger<A
     private Dictionary<string, int> _ordenPorNombre = new(StringComparer.OrdinalIgnoreCase);
     private DateTimeOffset _proximaRecarga = DateTimeOffset.MinValue;
 
-    // Secuencia automática, por balanza (1 y 2): esperando que el camión se vaya, si estaba arriba y desde cuándo.
+    // Secuencia automática, por balanza (1 y 2): esperando que el camión se vaya, si ya se lo vio pasar por un sensor y desde cuándo.
     private readonly bool[] _esperaSalida = new bool[3];
-    private readonly bool[] _ocupada = new bool[3];
+    private readonly bool[] _vioCorte = new bool[3];
     private readonly DateTimeOffset[] _esperaDesde = new DateTimeOffset[3];
 
     public ConfigAutomatizacion Config => _config;
@@ -158,8 +158,9 @@ public sealed class AutomatizacionService(IServiceScopeFactory scopes, ILogger<A
         balanzaId is { } id && _ordenPorId.TryGetValue(id, out var o) ? o : 1;
 
     /// <summary>
-    /// Como la 3.x: con sensores instalados en esa balanza, el peso solo se toma con todos activos (camión entero arriba).
-    /// Devuelve el motivo por el que no se puede, o null.
+    /// Como la 3.x: los sensores van en las dos puntas de la balanza y están en verde (entrada de la placa prendida) mientras
+    /// nadie los corta. Con el camión bien ubicado, ninguno está cortado; si alguno lo está, el camión está pasando o
+    /// quedó pisando la punta, y el peso no se toma. Devuelve el motivo por el que no se puede, o null.
     /// </summary>
     public string? BloqueoCaptura(Guid? balanzaId)
     {
@@ -170,8 +171,9 @@ public sealed class AutomatizacionService(IServiceScopeFactory scopes, ILogger<A
             var sensores = _config.Instalados(TiposDispositivo.Sensor, orden).ToList();
             if (sensores.Count == 0) return null;
             if (_placa?.Conectada != true || _error != null) return "La placa de automatización no responde: no se pueden leer los sensores de la balanza";
-            var libres = sensores.Where(s => !_entradas[s.Punto - 1]).Select(s => s.Nombre).ToList();
-            return libres.Count == 0 ? null : $"Posicionar el camión dentro de la balanza ({string.Join(" y ", libres)} sin cortar)";
+            var cortados = sensores.Where(s => !_entradas[s.Punto - 1]).Select(s => s.Nombre).ToList();
+            return cortados.Count == 0 ? null
+                : $"Posicionar el camión dentro de la balanza ({string.Join(" y ", cortados)} {(cortados.Count == 1 ? "cortado" : "cortados")})";
         }
     }
 
@@ -224,11 +226,14 @@ public sealed class AutomatizacionService(IServiceScopeFactory scopes, ILogger<A
         {
             _esperaSalida[orden] = true;
             _esperaDesde[orden] = DateTimeOffset.UtcNow;
-            _ocupada[orden] = Ocupada(orden);
+            _vioCorte[orden] = false;
         }
     }
 
-    /// <summary>Cuando el camión que estaba esperando se fue (sensores libres), la balanza vuelve a esperar al próximo.</summary>
+    /// <summary>
+    /// El camión que estaba esperando ya salió: se vio un sensor cortado (pasando por la punta) y después todos
+    /// volvieron a verde. Ahí la balanza vuelve a esperar al próximo. Sin sensores, a los <see cref="SalidaSinSensores"/>.
+    /// </summary>
     private async Task SecuenciaAsync(CancellationToken ct)
     {
         if (!_config.SecuenciaAutomatica) return;
@@ -239,11 +244,11 @@ public sealed class AutomatizacionService(IServiceScopeFactory scopes, ILogger<A
             {
                 if (!_esperaSalida[orden]) continue;
                 var tieneSensores = _config.Instalados(TiposDispositivo.Sensor, orden).Any();
-                var ocupada = Ocupada(orden);
+                var cortado = AlgunoCortado(orden);
+                if (cortado) _vioCorte[orden] = true;
                 reiniciar = tieneSensores
-                    ? _ocupada[orden] && !ocupada
+                    ? _vioCorte[orden] && !cortado
                     : DateTimeOffset.UtcNow - _esperaDesde[orden] > SalidaSinSensores;
-                _ocupada[orden] = ocupada;
                 if (reiniciar) _esperaSalida[orden] = false;
             }
             if (!reiniciar) continue;
@@ -260,7 +265,8 @@ public sealed class AutomatizacionService(IServiceScopeFactory scopes, ILogger<A
         }
     }
 
-    private bool Ocupada(int orden) => _config.Instalados(TiposDispositivo.Sensor, orden).Any(s => _entradas[s.Punto - 1]);
+    /// <summary>Algún sensor de esa balanza cortado (entrada de la placa apagada): hay un camión pasando por una punta.</summary>
+    private bool AlgunoCortado(int orden) => _config.Instalados(TiposDispositivo.Sensor, orden).Any(s => !_entradas[s.Punto - 1]);
 
     /// <summary>Solo con la placa simulada: prender o apagar una entrada (como si cortaran un sensor).</summary>
     public bool SimularEntrada(int punto, bool valor)

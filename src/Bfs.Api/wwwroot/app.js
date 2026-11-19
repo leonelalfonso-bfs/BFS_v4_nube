@@ -2849,9 +2849,10 @@ function bloqueAutomatizacion() {
             <small>${esc(s.nombre)}</small></div>`).join("")}
           ${de("barrera").map(b => `<button class="btn barrera ${b.activo ? "abierta" : ""}" onclick="cambiarSalidaAuto(${b.punto}, ${!b.activo})" title="Salida ${b.punto}">
             ${esc(b.nombre)}<strong>${b.activo ? "Abierta" : "Cerrada"}</strong></button>`).join("")}
-          ${sensores.map(s => `<span class="sensor ${s.activo ? "on" : ""}" title="Entrada ${s.punto}"><span class="led"></span>${esc(s.nombre)}</span>`).join("")}
+          ${sensores.map(s => `<span class="sensor ${s.activo ? "on" : "cortado"}" title="Entrada ${s.punto}: ${s.activo ? "en verde, nadie lo corta" : "cortado"}">
+            <span class="led"></span>${esc(s.nombre)}${s.activo ? "" : " · cortado"}</span>`).join("")}
         </div>
-        ${sensores.length && libres.length ? `<div class="auto-aviso">Posicionar el camión dentro de la balanza (${libres.map(s => esc(s.nombre)).join(" y ")})</div>` : ""}
+        ${sensores.length && libres.length ? `<div class="auto-aviso">Posicionar el camión dentro de la balanza (${libres.map(s => esc(s.nombre)).join(" y ")} ${libres.length === 1 ? "cortado" : "cortados"})</div>` : ""}
       </div>`;
     }).join("")}</div>`;
 }
@@ -2933,14 +2934,14 @@ async function renderConfigAutomatizacion() {
         <div><label>IP de la placa</label><input id="au_ip" value="${esc(c.modbusIp)}" /></div>
         <div><label>Puerto</label><input id="au_puerto" type="number" value="${c.modbusPuerto}" /></div>
         <div><label>Unidad Modbus</label><input id="au_unidad" type="number" value="${c.modbusUnidad}" /></div>
-        <div><label>Secuencia automática (al aceptar: semáforo y barrera de salida; al salir el camión, vuelve a la entrada)</label>${yesNo("au_seq", String(c.secuenciaAutomatica))}</div>
+        <div><label>Secuencia automática (al aceptar: semáforo y barrera de salida; cuando el camión pasa por un sensor y todos vuelven a verde, vuelve a la entrada)</label>${yesNo("au_seq", String(c.secuenciaAutomatica))}</div>
         <div><label>Fotos con las cámaras en cada pesada</label>${yesNo("au_fotos", String(c.capturarFotos))}</div>
       </div>
     </div>
     <div class="card">
       <h3 style="margin-top:0">Dispositivos</h3>
       <p>Semáforos y barreras van en las salidas de la placa; los sensores (barreras infrarrojas), en las entradas.
-        Con sensores instalados, el peso de esa balanza solo se captura con todos cortados (el camión entero arriba).</p>
+        Los sensores van en las dos puntas de la balanza y están en verde mientras nadie los corta. Con sensores instalados, el peso de esa balanza solo se captura con todos en verde (el camión entero arriba, sin pisar las puntas).</p>
       <table>
         <tr><th>Tipo</th><th>Nombre</th><th>${"Entrada / salida"}</th><th>Balanza</th><th>Punta</th><th>Instalado</th></tr>
         ${c.dispositivos.map((d, i) => `<tr>
@@ -3039,7 +3040,7 @@ async function pruebaAutomatizacion() {
       ? `<h3 style="margin-top:0">Prueba</h3><p>Habilitá la automatización y guardá para probar la placa.</p>`
       : `<h3 style="margin-top:0">Prueba de la placa ${a.conectada ? `<span class="pill pill-ok">conectada</span>` : `<span class="pill pill-err">sin conexión</span>`}</h3>
         ${a.error ? `<p class="error">${esc(a.error)}</p>` : ""}
-        <div class="auto-prueba"><span>Entradas${a.simulada ? " (tocá para simular un sensor)" : ""}</span>
+        <div class="auto-prueba"><span>Entradas${a.simulada ? " (prendida = sensor en verde; tocá para cortarlo)" : " (prendida = sensor en verde)"}</span>
           ${a.entradas.map((v, i) => punto(v, i + 1, a.simulada ? "simularEntrada" : null, nombre(false, i + 1))).join("")}</div>
         <div class="auto-prueba"><span>Salidas (tocá para prender / apagar)</span>
           ${a.salidas.map((v, i) => punto(v, i + 1, "probarSalida", nombre(true, i + 1))).join("")}</div>`;
