@@ -133,7 +133,7 @@ public class PesajeService
         pesada.BalanzaSalida = peso.Balanza;
         pesada.SalidaManualPor = peso.Manual ? op.Email : null;
         pesada.OperadorSalida = op.Email;
-        pesada.TaraPallets = req.TaraPallets ?? pesada.TaraPallets;
+        pesada.TaraPallets = TaraPalletsHabilitada(configs) ? Math.Max(0, req.TaraPallets ?? pesada.TaraPallets) : 0;
         Cerrar(pesada);
         await AgregarFotos(pesada, LadosBalanza.Salida, req.CapturaId, req.PesoSalida);
         await EncolarWorms(configs, pesada, WormsEventos.Salida);
@@ -422,7 +422,7 @@ public class PesajeService
             Comprobante = Vacio(req.Comprobante),
             Observaciones = Vacio(req.Observaciones),
             Operador = op.Email,
-            TaraPallets = Math.Max(0, req.TaraPallets),
+            TaraPallets = TaraPalletsHabilitada(configs) ? Math.Max(0, req.TaraPallets) : 0,
             EntradaEn = DateTimeOffset.UtcNow
         }, null);
     }
@@ -541,6 +541,9 @@ public class PesajeService
             ? new Peso(l.Kilogramos, l.Nombre, false, null)
             : new Peso(0, l.Nombre, false, ResultadoPesaje.Invalida(errorLectura));
     }
+
+    /// <summary>Configuración → General → Tara pallets. Apagada, no se descuenta nada aunque llegue un valor.</summary>
+    private static bool TaraPalletsHabilitada(Dictionary<string, string> configs) => Si(configs, ConfigKeys.TaraPallets, "true");
 
     private ResultadoPesaje? ValidarManual(string? clave, Operador op, Dictionary<string, string> configs)
     {
