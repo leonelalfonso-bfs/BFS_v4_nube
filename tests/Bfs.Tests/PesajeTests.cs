@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Bfs.Core;
 using Bfs.Infrastructure.Data;
 
 namespace Bfs.Tests;
@@ -148,6 +149,27 @@ public class PesajeTests
         // Sigue en el listado general (no se borra) y el número no se reutiliza.
         Assert.Equal(2, (await admin.GetFromJsonAsync<JsonElement>("/api/pesadas")).GetArrayLength());
         Assert.Equal("01-000003", await Ticket(admin.PostAsJsonAsync("/api/pesadas/entrada", Entrada())));
+    }
+
+    [Fact]
+    public async Task Tara_pallets_apagada_no_descuenta_aunque_llegue_un_valor()
+    {
+        await using var api = await TestApi.Iniciar();
+        await api.Configurar(new() { [ConfigKeys.TaraPallets] = "false" });
+        using var admin = await api.LoginAdmin();
+
+        var entrada = await Json(admin.PostAsJsonAsync("/api/pesadas/entrada", Entrada(peso: 30000, pallets: 500)));
+        Assert.Equal(0, entrada.GetProperty("taraPallets").GetInt32());
+        var id = entrada.GetProperty("id").GetGuid();
+        var salida = await Json(admin.PostAsJsonAsync($"/api/pesadas/{id}/salida", new { pesoSalida = 12000, taraPallets = 400 }));
+        Assert.Equal(0, salida.GetProperty("taraPallets").GetInt32());
+        Assert.Equal(18000, salida.GetProperty("neto").GetInt32());
+
+        // Encendida, se descuenta como siempre.
+        await api.Configurar(new() { [ConfigKeys.TaraPallets] = "true" });
+        var otra = await Json(admin.PostAsJsonAsync("/api/pesadas/entrada", Entrada(peso: 30000, pallets: 500)));
+        var cerrada = await Json(admin.PostAsJsonAsync($"/api/pesadas/{otra.GetProperty("id").GetGuid()}/salida", new { pesoSalida = 12000 }));
+        Assert.Equal(17500, cerrada.GetProperty("neto").GetInt32());
     }
 
     private static async Task<JsonElement> Json(Task<HttpResponseMessage> request)

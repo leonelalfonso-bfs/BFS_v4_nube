@@ -147,6 +147,8 @@ function field(key) {
 }
 
 function visible(key) {
+  // La tara de pallets además depende de Configuración → General: apagada ahí, no aparece aunque Campos la muestre.
+  if (key === "taraPallets" && state.funciones?.taraPallets === false) return false;
   return field(key)?.visible !== false;
 }
 
@@ -759,7 +761,7 @@ async function renderPesaje() {
     <div class="card">
       <h3 style="margin-top:0">Pendientes de salida (${pendientes.length})</h3>
       <table>
-        <tr><th></th><th>Ticket</th><th>Empresa</th><th>Patente</th><th>Entrada</th><th>Hora</th><th>Pallets</th><th></th></tr>
+        <tr><th></th><th>Ticket</th><th>Empresa</th><th>Patente</th><th>Entrada</th><th>Hora</th>${visible("taraPallets") ? "<th>Pallets</th>" : ""}<th></th></tr>
         ${pendientes.length ? pendientes.map(p => `<tr class="${state.selectedPesadaId === p.id ? "selected" : ""}" onclick="selectPesada('${p.id}')">
           <td>${state.selectedPesadaId === p.id ? "●" : ""}</td>
           <td>${esc(p.ticketNumero)}${p.tipoOperacion === "Aduana" ? ` <span class="pill pill-info">Aduana</span>` : ""}</td>
@@ -767,7 +769,7 @@ async function renderPesaje() {
           <td>${esc(p.patenteChasis)}</td>
           <td>${p.pesoEntrada}${p.entradaManualPor ? " ✎" : ""}</td>
           <td>${esc(hora(p.entradaEn))}</td>
-          <td>${p.taraPallets}</td>
+          ${visible("taraPallets") ? `<td>${p.taraPallets}</td>` : ""}
           <td><div class="btn-row" style="margin:0">${botonesTicket(p.id)}${can("pesaje.anular") ? `<button class="btn-danger" onclick="event.stopPropagation();anularPesada('${p.id}')">Anular</button>` : ""}</div></td>
         </tr>`).join("") : `<tr><td colspan="8">No hay entradas pendientes.</td></tr>`}
       </table>
