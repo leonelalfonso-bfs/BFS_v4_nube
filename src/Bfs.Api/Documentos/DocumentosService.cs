@@ -67,6 +67,7 @@ public class DocumentosService
             productoCodigo,
             aduana)
         {
+            MarcarExcesoEjes = c.GetValueOrDefault(ConfigKeys.EjesExceso) == "ticket",
             // Las fotos están en el puesto que pesó; en la nube (o si se borraron) el ticket sale sin ellas.
             Fotos = _fotos == null ? [] : Automatizacion.AutomatizacionPesaje.Leer(p)
                 .Select(f => _fotos.Leer(f) is { } datos ? new FotoTicket(f.Momento, f.Camara, datos) : null)
