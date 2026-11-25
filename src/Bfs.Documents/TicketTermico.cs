@@ -36,7 +36,7 @@ public static class TicketTermico
         Linea(o, p.TicketNumero, ancho / 2);
         o.Write([Gs, (byte)'!', 0x00]);
         Negrita(o, false);
-        Linea(o, t.EsTaraConocida ? "TARA CONOCIDA" : t.EsAduana ? "ADUANA" : "PESAJE NORMAL", ancho);
+        Linea(o, t.EsTaraConocida ? "TARA CONOCIDA" : t.EsControlEjes ? "CONTROL POR EJES" : t.EsAduana ? "ADUANA" : "PESAJE NORMAL", ancho);
         if (t.EsAnulada) Linea(o, "*** ANULADA ***", ancho);
         else if (t.EsPendiente) Linea(o, "PENDIENTE DE SALIDA", ancho);
 
@@ -52,7 +52,17 @@ public static class TicketTermico
         if (p.Comprobante != null) Campo(o, "Remito", p.Comprobante, ancho);
         Linea(o, new string('-', ancho), ancho);
 
-        if (t.EsTaraConocida)
+        var partes = t.Partes;
+        Ejes(o, "Entrada", partes.Entrada, t.MarcarExcesoEjes, ancho);
+        Ejes(o, "Salida", partes.Salida, t.MarcarExcesoEjes, ancho);
+
+        if (t.EsControlEjes)
+        {
+            Negrita(o, true);
+            Campo(o, "PESO TOTAL", t.EsAnulada ? "-" : Kg(p.PesoEntrada), ancho);
+            Negrita(o, false);
+        }
+        else if (t.EsTaraConocida)
         {
             Campo(o, "Bruto", Kg(p.PesoEntrada), ancho);
             Campo(o, "Tara", Kg(p.PesoSalida), ancho);
@@ -63,9 +73,12 @@ public static class TicketTermico
             Campo(o, "Peso salida", Kg(p.PesoSalida) + (p.SalidaManualPor != null ? " *" : ""), ancho);
         }
         if (p.TaraPallets > 0) Campo(o, "Tara pallets", Kg(p.TaraPallets), ancho);
-        Negrita(o, true);
-        Campo(o, "NETO", t.EsAnulada ? "-" : Kg(p.Neto), ancho);
-        Negrita(o, false);
+        if (!t.EsControlEjes)
+        {
+            Negrita(o, true);
+            Campo(o, "NETO", t.EsAnulada ? "-" : Kg(p.Neto), ancho);
+            Negrita(o, false);
+        }
         if (p.Aduana?.ContenedorNeto is { } contNeto) Campo(o, "Neto contenedor", Kg(contNeto), ancho);
         if (p.EntradaManualPor != null || p.SalidaManualPor != null) Linea(o, "* peso cargado manualmente", ancho);
 
@@ -84,6 +97,23 @@ public static class TicketTermico
     private static void Negrita(Stream o, bool si) => o.Write([Esc, (byte)'E', (byte)(si ? 1 : 0)]);
 
     /// <summary>"Etiqueta ........ valor" en una línea; si no entra, el valor va abajo.</summary>
+    /// <summary>Por ejes: un renglón por grupo (y el exceso si la planta lo marca); en partes, solo cuántas.</summary>
+    private static void Ejes(Stream o, string pasada, Bfs.Core.PesoPorPartes? d, bool marcarExceso, int ancho)
+    {
+        if (d == null) return;
+        if (d.Modo == Bfs.Core.ModosCaptura.Partes)
+        {
+            Linea(o, $"{pasada}: en {d.Partes.Count} partes", ancho);
+            return;
+        }
+        foreach (var g in d.Grupos ?? [])
+        {
+            Campo(o, $"{pasada} {g.Nombre}", Kg(g.Kilogramos), ancho);
+            if (marcarExceso && g.Exceso > 0) Linea(o, $"  EXCEDE {g.Exceso} kg (limite {g.Limite})", ancho);
+        }
+        if (marcarExceso && d.ExcesoTotal > 0) Linea(o, $"  TOTAL EXCEDE {d.ExcesoTotal} kg", ancho);
+    }
+
     private static void Campo(Stream o, string etiqueta, string valor, int ancho)
     {
         etiqueta = Ascii(etiqueta);

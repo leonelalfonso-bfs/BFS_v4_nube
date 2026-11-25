@@ -15,6 +15,9 @@ public static class ModosPesaje
 
     /// <summary>Un solo paso: bruto de la balanza, tara guardada del vehículo o carro.</summary>
     public const string TaraConocida = "TaraConocida";
+
+    /// <summary>Un solo paso por ejes (control de carga): cada eje y el total, sin neto de mercadería.</summary>
+    public const string ControlEjes = "ControlEjes";
 }
 
 public static class TiposOperacion

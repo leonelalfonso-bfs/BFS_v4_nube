@@ -610,6 +610,10 @@ namespace Bfs.Infrastructure.Sqlite.Migraciones
                     b.Property<Guid?>("OrigenNodoId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("PartesJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("PatenteAcoplado")
                         .HasColumnType("TEXT");
 

@@ -300,6 +300,20 @@ textarea { min-height: 78px; resize: vertical; }
 .lcd-mov .lcd-led { animation: lcd-titila 0.9s ease-in-out infinite; }
 @keyframes lcd-titila { 50% { opacity: 0.3; } }
 
+.captura-modos { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.partes, .ejes { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.partes-tabla { width: 100%; border-collapse: collapse; font-size: 14px; }
+.partes-tabla td, .partes-tabla th { padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.partes-tabla .partes-total td { font-weight: 700; font-size: 15px; }
+.ejes-config { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ejes-config select { width: auto; }
+.ejes-armar { display: flex; flex-wrap: wrap; gap: 6px; }
+.ejes-armar .btn { padding: 6px 10px; font-size: 12px; }
+.eje { display: inline-block; min-width: 64px; margin-right: 6px; padding: 2px 8px; border-radius: 6px; background: var(--panel); text-align: right; }
+.eje-siguiente { outline: 2px solid var(--teal); }
+.ejes-exceso td { color: var(--danger); font-weight: 700; }
+.ejes-alerta { margin: 4px 0 0; padding: 10px 12px; border-radius: 10px; background: #fde8e8; color: var(--danger); font-weight: 700; }
+
 .peso-pie { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; justify-content: space-between; }
 .peso-ayuda { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; color: var(--muted); font-size: 13px; }
 

@@ -53,6 +53,12 @@ const state = {
   selectedPesadaId: null,
   /** Peso capturado esperando que se acepte la pesada ({ id, kilogramos, balanza, en }). */
   captura: null,
+  /** Cómo se toma el peso: "simple", "partes" (balanza corta) o "ejes" (balanza de ejes). */
+  capturaModo: "simple",
+  /** En partes o por ejes: lo capturado hasta ahora ({ id, kilogramos, manual, etiqueta }). */
+  partes: [],
+  /** Por ejes: los grupos del vehículo, en orden desde adelante (ids de tipo de eje). */
+  grupos: ["simple_simple", "simple_doble", "tandem_triple"],
   licencia: null,
   rolesAsignables: [],
   funciones: {},
@@ -880,16 +886,33 @@ function cambiarModoPesaje(modo) {
 const TECLAS_CAPTURA = ["F2", "F3"];
 
 /** Con varias balanzas, un botón por cada una (en el orden de los displays): se elige de cuál capturar. */
-function botonesCaptura(clase, texto) {
+function botonesCaptura(clase, texto, accion = "capturarPeso") {
   const lista = balanzasEnPantalla();
   if (lista.length <= 1) {
-    return `<button class="${clase}" onclick="capturarPeso()">${texto} <small>(F2)</small></button>`;
+    return `<button class="${clase}" onclick="${accion}()">${texto} <small>(F2)</small></button>`;
   }
-  return lista.map((b, i) => `<button class="${clase}" onclick="capturarPeso('${b.balanzaId}')">${texto}: ${esc(b.nombre || "Balanza " + (i + 1))}
+  return lista.map((b, i) => `<button class="${clase}" onclick="${accion}('${b.balanzaId}')">${texto}: ${esc(b.nombre || "Balanza " + (i + 1))}
     ${TECLAS_CAPTURA[i] ? `<small>(${TECLAS_CAPTURA[i]})</small>` : ""}</button>`).join("");
 }
 
+function modosCaptura() {
+  const modos = [["simple", "Completo"]];
+  if (state.funciones.pesajePartes) modos.push(["partes", "En partes"]);
+  if (state.funciones.pesajeEjes) modos.push(["ejes", "Por ejes"]);
+  return modos;
+}
+
 function bloqueCaptura() {
+  const modos = state.modoPesaje === "normal" ? modosCaptura() : [["simple", ""]];
+  if (!modos.some(([id]) => id === state.capturaModo)) state.capturaModo = "simple";
+  const selector = modos.length > 1 ? `<div class="captura-modos" role="group" aria-label="Cómo se pesa">${modos.map(([id, label]) =>
+    `<button type="button" class="tab ${state.capturaModo === id ? "active" : ""}" onclick="cambiarCapturaModo('${id}')">${label}</button>`).join("")}</div>` : "";
+  if (state.capturaModo === "partes") return selector + bloquePartes();
+  if (state.capturaModo === "ejes") return selector + bloqueEjes();
+  return selector + bloqueCapturaSimple();
+}
+
+function bloqueCapturaSimple() {
   const c = state.captura;
   if (!c) {
     return `${botonesCaptura("btn-primary btn-capturar", "Capturar peso")}
@@ -927,11 +950,179 @@ function descartarCaptura() {
   pintarCaptura();
 }
 
+function cambiarCapturaModo(modo) {
+  if (state.partes.length && modo !== state.capturaModo && !confirm("Se descartan las partes ya capturadas. ¿Seguir?")) return;
+  state.capturaModo = modo;
+  state.partes = [];
+  state.captura = null;
+  pintarCaptura();
+}
+
+/** Balanza corta: chasis, acoplado y, si hiciera falta, más partes. Vale la suma. */
+const NOMBRES_PARTES = ["Chasis", "Acoplado"];
+
+
+function filasPartes() {
+  return state.partes.map((p, i) => `<tr><td>${esc(p.etiqueta)}</td><td style="text-align:right">${kg(p.kilogramos)}${p.manual ? " ✎" : ""}</td></tr>`).join("");
+}
+
+function bloquePartes() {
+  const total = state.partes.reduce((s, p) => s + p.kilogramos, 0);
+  const siguiente = NOMBRES_PARTES[state.partes.length] || `Parte ${state.partes.length + 1}`;
+  return `<div class="partes">
+      <table class="partes-tabla">${filasPartes() || `<tr><td colspan="2">Todavía no se capturó ninguna parte.</td></tr>`}
+        <tr class="partes-total"><td>Total${state.partes.length < 2 ? " (faltan partes)" : ""}</td><td style="text-align:right">${kg(total)}</td></tr></table>
+      <div class="btn-row" style="margin-top:8px">
+        ${botonesCaptura("btn-primary btn-capturar", `Capturar ${siguiente.toLowerCase()}`, "capturarParte")}
+        ${state.partes.length ? `<button class="btn" onclick="deshacerParte()">Deshacer la última</button>` : ""}
+      </div>
+      <span class="captura-ayuda">Balanza corta: subí primero el chasis y capturalo, después el acoplado. El peso es la suma.</span>
+    </div>`;
+}
+
+/** Por ejes: grupos del vehículo con sus ejes, y cada grupo comparado con su límite. */
+function tipoEje(id) { return (state.funciones.tiposEje || []).find(t => t.id === id); }
+
+const CONFIGURACIONES_EJES = [
+  ["Camión 2 ejes", ["simple_simple", "simple_doble"]],
+  ["Camión 3 ejes (tándem)", ["simple_simple", "tandem_doble"]],
+  ["Semirremolque 5 ejes", ["simple_simple", "simple_doble", "tandem_triple"]],
+  ["Semirremolque 5 ejes (2 tándem)", ["simple_simple", "tandem_doble", "tandem_doble"]],
+  ["Semirremolque 6 ejes", ["simple_simple", "tandem_doble", "tandem_triple"]],
+  ["Chasis y acoplado 4 ejes", ["simple_simple", "simple_doble", "simple_doble", "simple_doble"]],
+  ["Chasis y acoplado 5 ejes", ["simple_simple", "tandem_doble", "simple_doble", "simple_doble"]]
+];
+
+/** Recorre los grupos y reparte los ejes capturados: [{ tipo, ejes: [kg|null], total, limite, exceso }]. */
+function gruposConPesos() {
+  let i = 0;
+  return state.grupos.map(id => {
+    const t = tipoEje(id) || { nombre: id, ejes: 1, limite: 0 };
+    const ejes = Array.from({ length: t.ejes }, () => state.partes[i++]?.kilogramos ?? null);
+    const total = ejes.reduce((s, k) => s + (k || 0), 0);
+    const completo = ejes.every(k => k != null);
+    return { id, nombre: t.nombre, ejes, total, limite: t.limite, exceso: completo ? Math.max(0, total - t.limite) : 0, desde: i - t.ejes };
+  });
+}
+
+function totalEjes() { return state.grupos.reduce((s, id) => s + (tipoEje(id)?.ejes || 1), 0); }
+
+function bloqueEjes() {
+  const grupos = gruposConPesos();
+  const cantidad = totalEjes();
+  const total = state.partes.reduce((s, p) => s + p.kilogramos, 0);
+  const limiteTotal = state.funciones.ejesLimiteTotal || 0;
+  const completo = state.partes.length >= cantidad;
+  const excesoTotal = completo ? Math.max(0, total - limiteTotal) : 0;
+  const excesos = grupos.filter(g => g.exceso > 0);
+  const preset = CONFIGURACIONES_EJES.findIndex(([, g]) => g.join() === state.grupos.join());
+  return `<div class="ejes">
+      <div class="ejes-config">
+        <label for="ej_config">Vehículo</label>
+        <select id="ej_config" onchange="elegirConfiguracionEjes(this.value)" ${state.partes.length ? "disabled" : ""}>
+          ${CONFIGURACIONES_EJES.map(([nombre], i) => `<option value="${i}" ${i === preset ? "selected" : ""}>${esc(nombre)}</option>`).join("")}
+          <option value="-1" ${preset < 0 ? "selected" : ""}>Otra (armada a mano)</option>
+        </select>
+        ${state.partes.length ? "" : `<span class="ejes-armar">${(state.funciones.tiposEje || []).map(t =>
+          `<button type="button" class="btn" onclick="agregarGrupoEjes('${t.id}')" title="Agregar ${esc(t.nombre)}">+ ${esc(t.nombre)}</button>`).join("")}
+          ${state.grupos.length > 1 ? `<button type="button" class="btn" onclick="quitarGrupoEjes()">Quitar el último grupo</button>` : ""}</span>`}
+      </div>
+      <table class="partes-tabla">
+        <tr><th>Grupo</th><th>Ejes</th><th style="text-align:right">Peso</th><th style="text-align:right">Límite</th><th style="text-align:right">Exceso</th></tr>
+        ${grupos.map((g, n) => `<tr class="${g.exceso ? "ejes-exceso" : ""}">
+          <td>${n + 1}. ${esc(g.nombre)}</td>
+          <td>${g.ejes.map((k, j) => `<span class="eje ${k == null && g.desde + j === state.partes.length ? "eje-siguiente" : ""}">${k == null ? "—" : k.toLocaleString("es-AR")}</span>`).join("")}</td>
+          <td style="text-align:right">${kg(g.total)}</td><td style="text-align:right">${kg(g.limite)}</td>
+          <td style="text-align:right">${g.exceso ? kg(g.exceso) : ""}</td></tr>`).join("")}
+        <tr class="partes-total ${excesoTotal ? "ejes-exceso" : ""}"><td>Total</td><td>${state.partes.length} de ${cantidad} ejes</td>
+          <td style="text-align:right">${kg(total)}</td><td style="text-align:right">${kg(limiteTotal)}</td><td style="text-align:right">${excesoTotal ? kg(excesoTotal) : ""}</td></tr>
+      </table>
+      ${excesos.length || excesoTotal ? `<p class="ejes-alerta" role="alert">Exceso de peso: ${[...excesos.map(g => `${esc(g.nombre)} +${kg(g.exceso)}`),
+        ...(excesoTotal ? [`total +${kg(excesoTotal)}`] : [])].join(" · ")}${state.funciones.ejesExceso === "ticket" ? " (se marca en el ticket)" : ""}</p>` : ""}
+      <div class="btn-row" style="margin-top:8px">
+        ${completo ? `<span class="captura-ayuda">Todos los ejes capturados.</span>` : botonesCaptura("btn-primary btn-capturar", `Capturar eje ${state.partes.length + 1}`, "capturarParte")}
+        ${state.partes.length ? `<button class="btn" onclick="deshacerParte()">Deshacer el último</button>` : ""}
+      </div>
+      <span class="captura-ayuda">Avanzá el camión y capturá cada eje cuando esté quieto sobre la balanza, desde el de adelante.</span>
+    </div>`;
+}
+
+function elegirConfiguracionEjes(i) {
+  const c = CONFIGURACIONES_EJES[Number(i)];
+  if (c) state.grupos = [...c[1]];
+  pintarCaptura();
+}
+
+function agregarGrupoEjes(id) {
+  state.grupos.push(id);
+  pintarCaptura();
+}
+
+function quitarGrupoEjes() {
+  state.grupos.pop();
+  pintarCaptura();
+}
+
+/** Una parte o un eje más: de la balanza (sin pedir el camión entero arriba) o, si se escribió, el peso a mano. */
+async function capturarParte(balanzaId) {
+  if (state.capturaModo === "ejes" && state.partes.length >= totalEjes()) return toast("Ya están todos los ejes", "err");
+  const etiqueta = state.capturaModo === "ejes"
+    ? `Eje ${state.partes.length + 1}`
+    : NOMBRES_PARTES[state.partes.length] || `Parte ${state.partes.length + 1}`;
+  const aMano = val("pm_kg");
+  if (aMano) {
+    state.partes.push({ id: null, kilogramos: Number(aMano), manual: true, etiqueta });
+    document.getElementById("pm_kg").value = "";
+    pintarCaptura();
+    return;
+  }
+  if (balanzaId && balanzaId !== balanzaActual().balanzaId) elegirBalanza(balanzaId);
+  try {
+    const c = await api("/api/pesadas/capturar", {
+      method: "POST",
+      body: JSON.stringify({ balanzaId: balanzaId || balanzaActual().balanzaId || null, parcial: true })
+    });
+    state.partes.push({ id: c.id, kilogramos: c.kilogramos, manual: false, etiqueta });
+    pintarCaptura();
+  } catch (e) {
+    toast(limpiarError(e), "err");
+  }
+}
+
+function deshacerParte() {
+  state.partes.pop();
+  pintarCaptura();
+}
+
+/** Lo que va en el pedido cuando se pesó en partes o por ejes. */
+function partesParaGuardar() {
+  if (state.capturaModo === "partes" && state.partes.length < 2) throw new Error("Capturá el chasis y el acoplado (al menos dos partes)");
+  if (state.capturaModo === "ejes" && state.partes.length < totalEjes()) throw new Error(`Faltan ejes: se capturaron ${state.partes.length} de ${totalEjes()}`);
+  let i = 0;
+  const grupoDe = [];
+  state.grupos.forEach((id, g) => { for (let k = 0; k < (tipoEje(id)?.ejes || 1); k++) grupoDe[i++] = { tipoEje: id, grupo: g }; });
+  return state.partes.map((p, n) => ({
+    capturaId: p.id,
+    kilogramos: p.manual ? p.kilogramos : null,
+    etiqueta: p.etiqueta,
+    ...(state.capturaModo === "ejes" ? grupoDe[n] : {})
+  }));
+}
+
 /** Lo que va en el pedido: el peso manual si se escribió; si no, el capturado (que es obligatorio). */
 function pesoParaGuardar() {
   const m = manual();
+  if (state.modoPesaje === "normal" && state.capturaModo !== "simple") {
+    return { peso: null, clave: m.clave, capturaId: null, modoCaptura: state.capturaModo, partes: partesParaGuardar() };
+  }
   if (m.peso == null && !state.captura) throw new Error("Primero capturá el peso (botón Capturar peso, F2 o F3)");
   return { ...m, capturaId: m.peso == null ? state.captura.id : null };
+}
+
+/** Después de guardar: se limpia lo capturado (el modo y el vehículo quedan para el próximo camión). */
+function limpiarCapturas() {
+  state.captura = null;
+  state.partes = [];
 }
 
 /** Si la captura venció (o el servidor se reinició), se borra para que se vuelva a capturar. */
@@ -945,7 +1136,9 @@ document.addEventListener("keydown", e => {
   const lista = balanzasEnPantalla();
   if (lista.length <= 1 && i > 0) return;
   e.preventDefault();
-  capturarPeso(lista.length > 1 ? lista[i]?.balanzaId : undefined);
+  const id = lista.length > 1 ? lista[i]?.balanzaId : undefined;
+  if (state.modoPesaje === "normal" && state.capturaModo !== "simple") capturarParte(id);
+  else capturarPeso(id);
 });
 
 function selectPesada(id) {
@@ -978,6 +1171,8 @@ function collectPesaje() {
     pesoEntrada: m.peso,
     claveManual: m.clave,
     capturaId: m.capturaId,
+    modoCaptura: m.modoCaptura || null,
+    partes: m.partes || null,
     ...datosAduana()
   };
 }
@@ -992,10 +1187,13 @@ async function guardarEntrada() {
   try {
     const pesada = await api("/api/pesadas/entrada", { method: "POST", body: JSON.stringify(collectPesaje()) });
     state.selectedPesadaId = null;
-    state.captura = null;
-    toast(`Entrada ticket ${pesada.ticketNumero}`);
+    limpiarCapturas();
+    // Por ejes en una sola pasada el ticket ya sale cerrado (control de carga).
+    const cerrada = pesada.estado === "SALIDA";
+    toast(cerrada ? `Ticket ${pesada.ticketNumero} · total ${kg(pesada.pesoEntrada)}` : `Entrada ticket ${pesada.ticketNumero}`);
+    if (cerrada) ticketAlCerrar(pesada);
     await renderPesaje();
-    document.getElementById("ultimo").textContent = `Entrada ticket ${pesada.ticketNumero} · ${pesada.pesoEntrada} kg`;
+    document.getElementById("ultimo").textContent = `${cerrada ? "Ticket" : "Entrada ticket"} ${pesada.ticketNumero} · ${pesada.pesoEntrada} kg`;
   } catch (e) {
     revisarCaptura(e);
     mostrarError(e);
@@ -1016,11 +1214,13 @@ async function guardarSalida() {
         balanzaId: balanzaActual().balanzaId || null,
         pesoSalida: m.peso,
         claveManual: m.clave,
-        capturaId: m.capturaId
+        capturaId: m.capturaId,
+        modoCaptura: m.modoCaptura || null,
+        partes: m.partes || null
       })
     });
     state.selectedPesadaId = null;
-    state.captura = null;
+    limpiarCapturas();
     toast(`Ticket ${pesada.ticketNumero} cerrado · neto ${pesada.neto} kg`);
     ticketAlCerrar(pesada);
     await renderPesaje();
@@ -1557,8 +1757,28 @@ async function renderConfigGeneral() {
         <div><label>Número de puesto (va en el ticket: 01-000123)</label><input id="c_puesto" type="number" min="1" max="99" value="${esc(c.puesto || "1")}" /></div>
         <div><label>Tickets solo con número (sigue la numeración del cliente; un solo puesto)</label>${yesNo("c_solonum", c.ticket_solo_numero || "false")}</div>
       </div>
+      <h3 style="margin:22px 0 4px">Balanza corta y balanza de ejes</h3>
+      <div class="grid2">
+        <div><label>Pesaje en partes (balanza corta: chasis y acoplado por separado)</label>${yesNo("c_partes", c.pesaje_partes || "false")}</div>
+        <div><label>Pesaje por ejes (control de Vialidad)</label>${yesNo("c_ejes", c.pesaje_ejes || "false")}</div>
+        <div><label>Por ejes se pesa</label><select id="c_ejes_pasadas">
+          ${opcionesValor([["dos", "En la entrada y/o la salida (hay neto)"], ["una", "En una sola pasada (control de carga, sin neto)"]], c.ejes_pasadas || "dos")}
+        </select></div>
+        <div><label>Si un eje o el total supera el límite</label><select id="c_ejes_exceso">
+          ${opcionesValor([["aviso", "Avisar en pantalla (no sale en el ticket)"], ["ticket", "Avisar y marcarlo en el ticket"]], c.ejes_exceso || "aviso")}
+        </select></div>
+      </div>
+      <p style="margin:12px 0 6px;color:var(--muted)">Límites por grupo de ejes (kg). Vienen con los valores de referencia de la Ley 24.449: verificalos con la tabla vigente de Vialidad Nacional.</p>
+      <div class="grid3">
+        ${(state.funciones.tiposEje || []).map(t => `<div><label>${esc(t.nombre)}</label><input id="c_lim_${t.id}" type="number" min="1" value="${t.limite}" /></div>`).join("")}
+        <div><label>Peso total máximo</label><input id="c_lim_total" type="number" min="1" value="${state.funciones.ejesLimiteTotal || 45000}" /></div>
+      </div>
       <div class="btn-row"><button class="btn-primary" onclick="saveGeneral()">Guardar general</button></div>
     </div>`;
+}
+
+function opcionesValor(pares, elegido) {
+  return pares.map(([v, l]) => `<option value="${v}" ${v === elegido ? "selected" : ""}>${esc(l)}</option>`).join("");
 }
 
 const PARAMS_BALANZA = ["baudios", "dataBits", "paridad", "stopBits", "protocolo", "extraccion"];
@@ -1934,7 +2154,14 @@ async function saveGeneral() {
     ingreso_manual: val("c_manual"),
     exigir_estable: val("c_estable"),
     puesto: String(Math.min(99, Math.max(1, num("c_puesto") || 1))),
-    ticket_solo_numero: val("c_solonum")
+    ticket_solo_numero: val("c_solonum"),
+    pesaje_partes: val("c_partes"),
+    pesaje_ejes: val("c_ejes"),
+    ejes_pasadas: val("c_ejes_pasadas"),
+    ejes_exceso: val("c_ejes_exceso"),
+    ejes_limites: JSON.stringify(Object.fromEntries((state.funciones.tiposEje || [])
+      .map(t => [t.id, num("c_lim_" + t.id) || t.limite]))),
+    ejes_limite_total: String(num("c_lim_total") || 45000)
   });
   state.funciones = await api("/api/funciones");
   renderConfig();

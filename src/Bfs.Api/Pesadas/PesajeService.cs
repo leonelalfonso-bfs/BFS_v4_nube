@@ -76,18 +76,32 @@ public class PesajeService
         var (pesada, error) = await NuevaPesada(req, op, configs);
         if (error != null) return error;
 
-        var peso = TomarPeso(req.PesoEntrada, req.ClaveManual, req.BalanzaId, op, configs, req.CapturaId);
+        var (peso, detalle) = TomarPesoCompuesto(req.ModoCaptura, req.Partes, req.PesoEntrada, req.ClaveManual, req.BalanzaId, op, configs, req.CapturaId);
         if (peso.Error != null) return peso.Error;
         pesada!.PesoEntrada = peso.Kg;
         pesada.Balanza = peso.Balanza;
         pesada.EntradaManualPor = peso.Manual ? op.Email : null;
-        await AgregarFotos(pesada, LadosBalanza.Entrada, req.CapturaId, req.PesoEntrada);
+        if (detalle != null) pesada.PartesJson = new PartesPesada(Entrada: detalle).Escribir();
+        var (capturaFotos, manualFotos) = CapturaDeFotos(req.Partes, req.CapturaId, req.PesoEntrada);
+        await AgregarFotos(pesada, LadosBalanza.Entrada, capturaFotos, manualFotos);
+
+        // Control de carga por ejes en una sola pasada: el ticket se cierra acá, con el total y sin neto de mercadería.
+        var unaPasada = detalle?.Modo == ModosCaptura.Ejes && configs.GetValueOrDefault(ConfigKeys.EjesPasadas) == "una";
+        if (unaPasada)
+        {
+            pesada.Modo = ModosPesaje.ControlEjes;
+            pesada.PesoSalida = 0;
+            pesada.OperadorSalida = op.Email;
+            pesada.TaraPallets = 0;
+            Cerrar(pesada);
+        }
 
         _db.Pesadas.Add(pesada);
         await RecordarVehiculo(pesada);
-        await EncolarWorms(configs, pesada, WormsEventos.Entrada);
+        if (unaPasada) await EncolarWorms(configs, pesada, WormsEventos.Entrada, WormsEventos.Salida);
+        else await EncolarWorms(configs, pesada, WormsEventos.Entrada);
         await _db.SaveChangesAsync();
-        UsarCaptura(req.CapturaId, req.PesoEntrada);
+        UsarCapturas(req.Partes, req.CapturaId, req.PesoEntrada);
         await Aceptada(req.BalanzaId);
         return ResultadoPesaje.Ok(pesada);
     });
@@ -96,10 +110,12 @@ public class PesajeService
     /// Congela el peso de la balanza para guardar la pesada después (ver <see cref="CapturasPeso"/>).
     /// Con automatización, en el mismo momento saca las fotos (el camión todavía está arriba).
     /// </summary>
-    public async Task<(CapturaPeso? Captura, ResultadoPesaje? Error)> CapturarAsync(Guid? balanzaId, Operador op)
+    /// <param name="parcial">Una parte o un eje: en una balanza corta o de ejes el camión nunca está entero arriba, así que
+    /// no se pide que los sensores de las puntas estén libres.</param>
+    public async Task<(CapturaPeso? Captura, ResultadoPesaje? Error)> CapturarAsync(Guid? balanzaId, Operador op, bool parcial = false)
     {
         var configs = await _config.GlobalAsync();
-        var peso = TomarPeso(null, null, balanzaId, op, configs);
+        var peso = TomarPeso(null, null, balanzaId, op, configs, parcial: parcial);
         if (peso.Error != null) return (null, peso.Error);
         var fotos = _auto != null ? await _auto.FotosAsync() : [];
         return (_capturas.Guardar(peso.Kg, peso.Balanza, fotos), null);
@@ -126,8 +142,9 @@ public class PesajeService
         if (pesada.Estado == EstadosPesada.Anulada) return ResultadoPesaje.Invalida("La pesada está anulada");
 
         var configs = await _config.GlobalAsync();
-        var peso = TomarPeso(req.PesoSalida, req.ClaveManual, req.BalanzaId, op, configs, req.CapturaId);
+        var (peso, detalle) = TomarPesoCompuesto(req.ModoCaptura, req.Partes, req.PesoSalida, req.ClaveManual, req.BalanzaId, op, configs, req.CapturaId);
         if (peso.Error != null) return peso.Error;
+        if (detalle != null) pesada.PartesJson = (PartesPesada.Leer(pesada.PartesJson) with { Salida = detalle }).Escribir();
 
         pesada.PesoSalida = peso.Kg;
         pesada.BalanzaSalida = peso.Balanza;
@@ -135,10 +152,11 @@ public class PesajeService
         pesada.OperadorSalida = op.Email;
         pesada.TaraPallets = TaraPalletsHabilitada(configs) ? Math.Max(0, req.TaraPallets ?? pesada.TaraPallets) : 0;
         Cerrar(pesada);
-        await AgregarFotos(pesada, LadosBalanza.Salida, req.CapturaId, req.PesoSalida);
+        var (capturaFotos, manualFotos) = CapturaDeFotos(req.Partes, req.CapturaId, req.PesoSalida);
+        await AgregarFotos(pesada, LadosBalanza.Salida, capturaFotos, manualFotos);
         await EncolarWorms(configs, pesada, WormsEventos.Salida);
         await _db.SaveChangesAsync();
-        UsarCaptura(req.CapturaId, req.PesoSalida);
+        UsarCapturas(req.Partes, req.CapturaId, req.PesoSalida);
         await Aceptada(req.BalanzaId);
         return ResultadoPesaje.Ok(pesada);
     });
@@ -507,7 +525,8 @@ public class PesajeService
     /// El de la balanza, que esté leyendo y (si BFS lo exige) estable. Con <paramref name="capturaId"/>, el que se capturó
     /// antes con <see cref="CapturarAsync"/> (ya se validó al capturarlo).
     /// </summary>
-    private Peso TomarPeso(int? manual, string? clave, Guid? balanzaId, Operador op, Dictionary<string, string> configs, Guid? capturaId = null)
+    private Peso TomarPeso(int? manual, string? clave, Guid? balanzaId, Operador op, Dictionary<string, string> configs, Guid? capturaId = null,
+        bool parcial = false)
     {
         if (manual is { } kg)
         {
@@ -523,7 +542,7 @@ public class PesajeService
         }
 
         // Automatización: con sensores instalados, solo con el camión entero sobre la balanza (como la 3.x).
-        if (_auto?.Bloqueo(balanzaId) is { } bloqueo) return new Peso(0, null, false, ResultadoPesaje.Invalida(bloqueo));
+        if (!parcial && _auto?.Bloqueo(balanzaId) is { } bloqueo) return new Peso(0, null, false, ResultadoPesaje.Invalida(bloqueo));
 
         var l = _balanzas.Lectura(balanzaId);
         var errorLectura = l.Estado switch
@@ -540,6 +559,75 @@ public class PesajeService
         return errorLectura == null
             ? new Peso(l.Kilogramos, l.Nombre, false, null)
             : new Peso(0, l.Nombre, false, ResultadoPesaje.Invalida(errorLectura));
+    }
+
+    /// <summary>
+    /// El peso de una pasada: simple (una captura o un peso a mano) o compuesto (en partes o por ejes), sumando
+    /// capturas que tomó el servidor. Por ejes, arma los grupos y los compara con los límites configurados.
+    /// </summary>
+    private (Peso Peso, PesoPorPartes? Detalle) TomarPesoCompuesto(string? modo, List<ParteRequest>? partes, int? manual, string? clave,
+        Guid? balanzaId, Operador op, Dictionary<string, string> configs, Guid? capturaId)
+    {
+        static (Peso, PesoPorPartes?) Error(string mensaje, bool prohibida = false) =>
+            (new Peso(0, null, false, prohibida ? ResultadoPesaje.Prohibida(mensaje) : ResultadoPesaje.Invalida(mensaje)), null);
+
+        if (modo is null or ModosCaptura.Simple) return (TomarPeso(manual, clave, balanzaId, op, configs, capturaId), null);
+        if (modo is not (ModosCaptura.Partes or ModosCaptura.Ejes)) return Error("Modo de pesaje inválido");
+        if (modo == ModosCaptura.Partes && !Si(configs, ConfigKeys.PesajePartes)) return Error("El pesaje en partes no está habilitado", true);
+        if (modo == ModosCaptura.Ejes && !Si(configs, ConfigKeys.PesajeEjes)) return Error("El pesaje por ejes no está habilitado", true);
+        partes ??= [];
+        if (modo == ModosCaptura.Partes && partes.Count < 2) return Error("Pesando en partes hacen falta al menos dos capturas (chasis y acoplado)");
+        if (modo == ModosCaptura.Ejes && partes.Count == 0) return Error("Capturá el peso de cada eje");
+
+        var registradas = new List<PartePeso>();
+        string? balanza = null;
+        var algunaManual = false;
+        for (var i = 0; i < partes.Count; i++)
+        {
+            var p = partes[i];
+            if (p.CapturaId == null && p.Kilogramos == null) return Error($"Falta capturar la parte {i + 1}");
+            var peso = TomarPeso(p.Kilogramos, clave, balanzaId, op, configs, p.CapturaId, parcial: true);
+            if (peso.Error != null) return (peso, null);
+            balanza ??= peso.Balanza;
+            algunaManual |= peso.Manual;
+            var etiqueta = Vacio(p.Etiqueta) ?? (modo == ModosCaptura.Ejes ? $"Eje {i + 1}" : $"Parte {i + 1}");
+            registradas.Add(new PartePeso(etiqueta, peso.Kg, peso.Manual));
+        }
+
+        List<GrupoEjes>? grupos = null;
+        int? limiteTotal = null;
+        if (modo == ModosCaptura.Ejes)
+        {
+            var limites = TiposEje.Limites(configs.GetValueOrDefault(ConfigKeys.EjesLimites));
+            grupos = [];
+            foreach (var g in partes.Select((p, i) => (p, i)).GroupBy(x => x.p.Grupo).OrderBy(g => g.Key))
+            {
+                var tipos = g.Select(x => x.p.TipoEje).Distinct().ToList();
+                if (tipos.Count != 1 || TiposEje.Buscar(tipos[0]) is not { } tipo) return Error($"Tipo de eje inválido en el grupo {g.Key + 1}");
+                if (g.Count() != tipo.Ejes) return Error($"El grupo {g.Key + 1} ({tipo.Nombre}) lleva {tipo.Ejes} ejes y se capturaron {g.Count()}");
+                grupos.Add(new GrupoEjes(tipo.Id, tipo.Nombre, g.Select(x => registradas[x.i].Kilogramos).ToList(), limites[tipo.Id]));
+            }
+            limiteTotal = int.TryParse(configs.GetValueOrDefault(ConfigKeys.EjesLimiteTotal), out var t) && t > 0 ? t : TiposEje.LimiteTotalPorDefecto;
+        }
+
+        var detalle = new PesoPorPartes(modo, registradas, grupos, limiteTotal);
+        return (new Peso(detalle.Total, balanza, algunaManual, null), detalle);
+    }
+
+    /// <summary>Las fotos de la pasada son las de la primera captura (el camión recién llegado a la balanza).</summary>
+    private static (Guid? CapturaId, int? Manual) CapturaDeFotos(List<ParteRequest>? partes, Guid? capturaId, int? manual) =>
+        partes is { Count: > 0 } ? (partes[0].CapturaId, partes[0].Kilogramos) : (capturaId, manual);
+
+    private void UsarCapturas(List<ParteRequest>? partes, Guid? capturaId, int? manual)
+    {
+        if (partes is { Count: > 0 })
+        {
+            foreach (var p in partes) UsarCaptura(p.CapturaId, p.Kilogramos);
+        }
+        else
+        {
+            UsarCaptura(capturaId, manual);
+        }
     }
 
     /// <summary>Configuración → General → Tara pallets. Apagada, no se descuenta nada aunque llegue un valor.</summary>

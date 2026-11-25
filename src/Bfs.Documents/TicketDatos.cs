@@ -31,6 +31,12 @@ public record TicketDatos(
     /// <summary>Fotos de las cámaras (automatización): si hay, la mitad de abajo de la hoja las muestra en vez del duplicado.</summary>
     public IReadOnlyList<FotoTicket> Fotos { get; init; } = [];
 
+    /// <summary>Configuración "marcar el exceso por eje en el ticket"; si no, el ticket muestra los pesos sin comparar.</summary>
+    public bool MarcarExcesoEjes { get; init; }
+
+    public Bfs.Core.PartesPesada Partes => Bfs.Core.PartesPesada.Leer(Pesada.PartesJson);
+    public bool EsControlEjes => Pesada.Modo == Bfs.Core.ModosPesaje.ControlEjes;
+
     public bool EsTaraConocida => Pesada.Modo == Bfs.Core.ModosPesaje.TaraConocida;
     public bool EsAduana => Pesada.TipoOperacion == Bfs.Core.TiposOperacion.Aduana && Pesada.Aduana != null;
     public bool EsAnulada => Pesada.Estado == Bfs.Core.EstadosPesada.Anulada;
