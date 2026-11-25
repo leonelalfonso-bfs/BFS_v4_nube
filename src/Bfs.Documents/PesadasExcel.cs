@@ -43,7 +43,7 @@ public static class PesadasExcel
         ("Empresa", f => f.Empresa),
         ("Estado", f => f.Pesada.Estado switch { EstadosPesada.Entrada => "Pendiente", EstadosPesada.Salida => "Cerrada", _ => "Anulada" }),
         ("Tipo", f => f.Pesada.Tipo),
-        ("Modo", f => f.Pesada.Modo == ModosPesaje.TaraConocida ? "Tara conocida" : "Normal"),
+        ("Modo", f => f.Pesada.Modo switch { ModosPesaje.TaraConocida => "Tara conocida", ModosPesaje.ControlEjes => "Control por ejes", _ => "Normal" }),
         ("Operación", f => f.Pesada.TipoOperacion),
         ("Entrada", f => f.EntradaLocal),
         ("Salida", f => f.SalidaLocal.HasValue ? f.SalidaLocal.Value : Blank.Value),
@@ -80,6 +80,9 @@ public static class PesadasExcel
         ("Bulto", f => T(f.Pesada.Aduana?.BultoId)),
         ("Bulto bruto (kg)", f => Num(f.Pesada.Aduana?.BultoBruto)),
         ("Bulto tara (kg)", f => Num(f.Pesada.Aduana?.BultoTara)),
+        ("Pesaje entrada", f => DetallePasada(PartesPesada.Leer(f.Pesada.PartesJson).Entrada)),
+        ("Pesaje salida", f => DetallePasada(PartesPesada.Leer(f.Pesada.PartesJson).Salida)),
+        ("Exceso por ejes (kg)", f => ExcesoEjes(PartesPesada.Leer(f.Pesada.PartesJson)) is var e and > 0 ? e : Blank.Value),
         ("Balanza entrada", f => T(f.Pesada.Balanza)),
         ("Balanza salida", f => T(f.Pesada.BalanzaSalida)),
         ("Operador", f => f.Pesada.Operador),
@@ -179,6 +182,19 @@ public static class PesadasExcel
         header.Style.Fill.BackgroundColor = XLColor.FromHtml("#0f766e");
         header.Style.Font.FontColor = XLColor.White;
     }
+
+    /// <summary>"En 2 partes" o, por ejes, cada grupo: "Tándem triple, rueda doble 8500+8600+8700=25800 (lím. 25500)".</summary>
+    private static XLCellValue DetallePasada(PesoPorPartes? d) => d switch
+    {
+        null => "",
+        { Modo: ModosCaptura.Partes } => $"En {d.Partes.Count} partes",
+        _ => string.Join(" · ", (d.Grupos ?? []).Select(g => $"{g.Nombre} {string.Join("+", g.Ejes)}={g.Kilogramos} (lím. {g.Limite})"))
+    };
+
+    /// <summary>El mayor exceso de la pesada: la suma de los grupos excedidos o el del total, el que sea mayor, por pasada.</summary>
+    private static int ExcesoEjes(PartesPesada p) =>
+        new[] { p.Entrada, p.Salida }.Where(d => d != null)
+            .Select(d => Math.Max(d!.ExcesoTotal, (d.Grupos ?? []).Sum(g => g.Exceso))).DefaultIfEmpty(0).Max();
 
     private static XLCellValue T(string? s) => s ?? "";
 

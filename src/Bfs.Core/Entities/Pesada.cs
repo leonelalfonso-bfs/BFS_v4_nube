@@ -56,6 +56,9 @@ public class Pesada : EntidadSync
 
     /// <summary>Fotos de las cámaras (lista de <see cref="Bfs.Core.FotoPesada"/>). Los archivos quedan en el puesto que pesó.</summary>
     public string FotosJson { get; set; } = "[]";
+
+    /// <summary>Entrada y/o salida pesadas en partes (balanza corta) o por ejes: el detalle (<see cref="PartesPesada"/>).</summary>
+    public string PartesJson { get; set; } = "{}";
 }
 
 public record CambioCampo(string Campo, string? Antes, string? Despues);

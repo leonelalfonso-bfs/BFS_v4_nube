@@ -27,7 +27,7 @@ public static class PesadaEndpoints
         // Congela el peso de la balanza; la entrada o salida se guarda después con el CapturaId.
         api.MapPost("/pesadas/capturar", async (CapturarRequest req, PesajeService pesaje, ClaimsPrincipal user) =>
         {
-            var (captura, error) = await pesaje.CapturarAsync(req.BalanzaId, Operador(user));
+            var (captura, error) = await pesaje.CapturarAsync(req.BalanzaId, Operador(user), req.Parcial);
             return error != null ? ToResult(error) : Results.Ok(captura);
         }).RequireAuthorization(Permisos.PesajeOperar);
 
@@ -91,7 +91,9 @@ public record EntradaRequest(
     string? TipoDocumento = null,
     string? Nacionalidad = null,
     DatosInagroDto? Inagro = null,
-    Guid? CapturaId = null);
+    Guid? CapturaId = null,
+    string? ModoCaptura = null,
+    List<ParteRequest>? Partes = null);
 
 /// <summary>Campos de INAGRO del formulario (edición Inagro). Los datos de cliente, transporte y planta los completa el servidor.</summary>
 public record DatosInagroDto(
@@ -105,9 +107,17 @@ public record DatosInagroDto(
     string? ObservacionesRemito = null);
 
 /// <param name="CapturaId">Peso capturado antes con /pesadas/capturar (si no viene ni peso manual, se lee la balanza ahora).</param>
-public record SalidaRequest(int? PesoSalida, int? TaraPallets, Guid? BalanzaId = null, string? ClaveManual = null, Guid? CapturaId = null);
+public record SalidaRequest(int? PesoSalida, int? TaraPallets, Guid? BalanzaId = null, string? ClaveManual = null, Guid? CapturaId = null,
+    string? ModoCaptura = null, List<ParteRequest>? Partes = null);
 
-public record CapturarRequest(Guid? BalanzaId);
+/// <param name="Parcial">Una parte del camión o un eje: no se exige que el camión entero esté sobre la balanza (sensores).</param>
+public record CapturarRequest(Guid? BalanzaId, bool Parcial = false);
+
+/// <summary>Una parte (balanza corta) o un eje (balanza de ejes) de una pasada.</summary>
+/// <param name="CapturaId">El peso capturado de esa parte; o <paramref name="Kilogramos"/> si se cargó a mano.</param>
+/// <param name="TipoEje">Por ejes: el tipo del grupo al que pertenece (ver <see cref="Bfs.Core.TiposEje"/>).</param>
+/// <param name="Grupo">Por ejes: número de grupo, en orden desde adelante (0 = el primero).</param>
+public record ParteRequest(Guid? CapturaId, int? Kilogramos = null, string? Etiqueta = null, string? TipoEje = null, int Grupo = 0);
 
 /// <param name="Datos">Los mismos datos que una entrada; PesoEntrada es el bruto si se carga a mano.</param>
 /// <param name="TaraManual">Solo si se quiere usar otra tara que la guardada (cuenta como ingreso manual).</param>

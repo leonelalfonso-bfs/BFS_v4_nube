@@ -627,6 +627,10 @@ namespace Bfs.Infrastructure.Postgres.Migraciones
                     b.Property<Guid?>("OrigenNodoId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("PartesJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
                     b.Property<string>("PatenteAcoplado")
                         .HasColumnType("text");
 

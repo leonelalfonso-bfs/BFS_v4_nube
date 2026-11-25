@@ -37,6 +37,24 @@ public static class ConfigKeys
     /// <summary>Escenario de aduana fijo para todas las operaciones; vacío = lo elige el operador.</summary>
     public const string AduanaEscenario = "aduana_escenario";
 
+    /// <summary>"true": en Pesaje se puede pesar en partes (balanza corta: chasis y acoplado por separado).</summary>
+    public const string PesajePartes = "pesaje_partes";
+
+    /// <summary>"true": en Pesaje se puede pesar por ejes, con control de los límites de Vialidad.</summary>
+    public const string PesajeEjes = "pesaje_ejes";
+
+    /// <summary>"dos": entrada y salida (cada una puede ir por ejes, hay neto). "una": una sola pasada por ejes (control de carga).</summary>
+    public const string EjesPasadas = "ejes_pasadas";
+
+    /// <summary>"aviso": el exceso se avisa en pantalla. "ticket": además se marca en el ticket.</summary>
+    public const string EjesExceso = "ejes_exceso";
+
+    /// <summary>Límites por tipo de grupo de ejes, JSON {tipo: kg}; lo que falte usa <see cref="TiposEje"/>.</summary>
+    public const string EjesLimites = "ejes_limites";
+
+    /// <summary>Peso total máximo del vehículo, en kg.</summary>
+    public const string EjesLimiteTotal = "ejes_limite_total";
+
     public const string AduanaCodigo = "aduana_codigo";
     public const string AduanaLot = "aduana_lot";
     public const string AduanaCertificado1 = "aduana_certificado_1";

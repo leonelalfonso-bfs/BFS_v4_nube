@@ -143,12 +143,23 @@ public static class TicketPdf
             var (l1, v1, m1, l2, v2, m2) = t.EsTaraConocida
                 ? ("Bruto:", (int?)p.PesoEntrada, p.EntradaManualPor != null, "Tara:", p.PesoSalida, p.SalidaManualPor != null)
                 : ("Entrada:", (int?)p.PesoEntrada, p.EntradaManualPor != null, "Salida:", p.PesoSalida, p.SalidaManualPor != null);
-            col.Item().PaddingTop(12).Row(r =>
+            if (t.EsControlEjes)
             {
-                r.RelativeItem().Element(x => Peso(x, l1, v1, m1));
-                r.RelativeItem().Element(x => Peso(x, l2, v2, m2));
-                r.RelativeItem().Element(x => Peso(x, "Neto:", t.EsAnulada ? null : p.Neto, false));
-            });
+                // Control de carga por ejes en una pasada: solo el peso total.
+                col.Item().PaddingTop(12).Element(x => Peso(x, "Peso total:", t.EsAnulada ? null : p.PesoEntrada, p.EntradaManualPor != null));
+            }
+            else
+            {
+                col.Item().PaddingTop(12).Row(r =>
+                {
+                    r.RelativeItem().Element(x => Peso(x, l1, v1, m1));
+                    r.RelativeItem().Element(x => Peso(x, l2, v2, m2));
+                    r.RelativeItem().Element(x => Peso(x, "Neto:", t.EsAnulada ? null : p.Neto, false));
+                });
+            }
+            var partes = t.Partes;
+            DetallePasada(col, t.EsControlEjes ? "Pesaje por ejes" : "Entrada", partes.Entrada, t.MarcarExcesoEjes);
+            DetallePasada(col, "Salida", partes.Salida, t.MarcarExcesoEjes);
             if (p.TaraPallets > 0)
             {
                 col.Item().PaddingTop(4).Text($"Tara pallets: {Kg(p.TaraPallets)}   |   Neto mercadería (sin pallets): {Kg(p.Neto)}");
@@ -165,6 +176,33 @@ public static class TicketPdf
 
             col.Item().PaddingVertical(10).LineHorizontal(1);
             col.Item().Element(PieBfs);
+        });
+    }
+
+    /// <summary>
+    /// En partes: una línea (el detalle no importa, se pesó por partes por necesidad).
+    /// Por ejes: el peso de cada grupo con su límite y, si la planta lo pidió, el exceso marcado.
+    /// </summary>
+    private static void DetallePasada(ColumnDescriptor col, string pasada, Bfs.Core.PesoPorPartes? d, bool marcarExceso)
+    {
+        if (d == null) return;
+        if (d.Modo == Bfs.Core.ModosCaptura.Partes)
+        {
+            col.Item().PaddingTop(3).Text($"{pasada}: pesada en {d.Partes.Count} partes (balanza corta).").Italic().FontSize(6.5f);
+            return;
+        }
+        if (d.Grupos is not { Count: > 0 } grupos) return;
+        col.Item().PaddingTop(5).Text(x =>
+        {
+            x.Span($"{pasada} por ejes: ").Bold();
+            for (var i = 0; i < grupos.Count; i++)
+            {
+                var g = grupos[i];
+                var exceso = marcarExceso && g.Exceso > 0 ? $" EXCEDE {g.Exceso} kg" : "";
+                x.Span($"{(i > 0 ? " · " : "")}{g.Nombre} {string.Join("+", g.Ejes)} = {Kg(g.Kilogramos)} (lím. {g.Limite}){exceso}")
+                    .FontColor(exceso.Length > 0 ? Colors.Red.Medium : Colors.Black);
+            }
+            if (marcarExceso && d.ExcesoTotal > 0) x.Span($" · TOTAL EXCEDE {d.ExcesoTotal} kg (lím. {d.LimiteTotal})").FontColor(Colors.Red.Medium);
         });
     }
 

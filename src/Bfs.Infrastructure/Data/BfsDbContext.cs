@@ -75,6 +75,7 @@ public class BfsDbContext : DbContext
             modelBuilder.Entity<Pesada>().Property(p => p.DatosExtraJson).HasColumnType("jsonb");
             modelBuilder.Entity<Pesada>().Property(p => p.CorreccionesJson).HasColumnType("jsonb");
             modelBuilder.Entity<Pesada>().Property(p => p.FotosJson).HasColumnType("jsonb");
+            modelBuilder.Entity<Pesada>().Property(p => p.PartesJson).HasColumnType("jsonb");
         }
 
         if (Database.IsSqlite())

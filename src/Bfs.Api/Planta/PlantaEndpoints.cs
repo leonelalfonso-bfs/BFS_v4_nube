@@ -65,6 +65,12 @@ public static class PlantaEndpoints
                 exigirEstable = Si(ConfigKeys.ExigirEstable, "true"),
                 aduanaLot = c.GetValueOrDefault(ConfigKeys.AduanaLot, ""),
                 aduanaEscenario = c.GetValueOrDefault(ConfigKeys.AduanaEscenario, ""),
+                pesajePartes = Si(ConfigKeys.PesajePartes),
+                pesajeEjes = Si(ConfigKeys.PesajeEjes),
+                ejesPasadas = c.GetValueOrDefault(ConfigKeys.EjesPasadas, "dos"),
+                ejesExceso = c.GetValueOrDefault(ConfigKeys.EjesExceso, "aviso"),
+                ejesLimiteTotal = int.TryParse(c.GetValueOrDefault(ConfigKeys.EjesLimiteTotal), out var lt) && lt > 0 ? lt : TiposEje.LimiteTotalPorDefecto,
+                tiposEje = TiposEje.Todos.Select(t => new { t.Id, t.Nombre, t.Ejes, limite = TiposEje.Limites(c.GetValueOrDefault(ConfigKeys.EjesLimites))[t.Id] }),
                 puesto = int.TryParse(c.GetValueOrDefault(ConfigKeys.Puesto), out var puesto) ? puesto : 1,
                 // Edición Inagro: campos de Centum, tanques, sucursales y remito preimpreso.
                 inagro = opciones.Edicion == Edicion.Inagro,
