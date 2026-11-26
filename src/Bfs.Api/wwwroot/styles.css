@@ -107,6 +107,21 @@ a { color: inherit; }
   vertical-align: middle;
 }
 
+.brand-ver {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  color: #e2ecf7;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: "Cascadia Mono", "Consolas", monospace;
+  letter-spacing: 0.03em;
+  vertical-align: middle;
+}
+
 .brand p {
   margin: 2px 0 0;
   font-size: 12px;
@@ -260,10 +275,10 @@ textarea { min-height: 78px; resize: vertical; }
 /* Módulo superior de visores fijo al scrollear y más compacto. */
 .peso-fijo {
   position: sticky;
-  top: 0;
+  top: -16px;
   z-index: 15;
   margin: 0 -22px 12px;
-  padding: 6px 22px 10px;
+  padding: 10px 22px 10px;
   background: linear-gradient(180deg, #e5edf7 92%, rgba(229, 237, 247, 0));
 }
 
@@ -572,6 +587,50 @@ fieldset.seccion legend {
 .toast.err { background: #9f1239; }
 
 .selected td { background: #ecfeff !important; }
+
+/* Tabla compacta y buscador en Pendientes de salida. */
+.pendientes-card { padding: 14px 16px; }
+.pendientes-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.pendientes-head h3 { font-size: 16px; }
+.pendientes-buscar {
+  width: min(440px, 100%);
+  padding: 7px 11px;
+  font-size: 12.5px;
+  border-radius: 9px;
+  background: var(--panel);
+}
+.tabla-scroll { overflow-x: auto; }
+.tabla-pendientes th {
+  padding: 6px 8px;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+.tabla-pendientes td {
+  padding: 5px 8px;
+  font-size: 12px;
+  line-height: 1.25;
+  vertical-align: middle;
+}
+.tabla-pendientes tr { cursor: pointer; }
+.tabla-pendientes .pend-nw { white-space: nowrap; }
+.tabla-pendientes .pend-sec { color: var(--muted); font-weight: 600; font-size: 11px; }
+.tabla-pendientes .pend-sub { color: var(--muted); font-size: 11px; margin-top: 1px; }
+.tabla-pendientes .pill-xs { padding: 1px 6px; font-size: 10px; }
+.tabla-pendientes .pend-acciones { width: 1%; white-space: nowrap; }
+.tabla-pendientes .pend-acciones .btn,
+.tabla-pendientes .pend-acciones .btn-danger {
+  padding: 4px 9px;
+  font-size: 11.5px;
+  border-radius: 7px;
+}
 
 @media (max-width: 980px) {
   .app-shell { grid-template-columns: 1fr; height: auto; min-height: 100vh; overflow: visible; }

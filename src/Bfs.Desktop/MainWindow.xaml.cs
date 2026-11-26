@@ -1,4 +1,5 @@
 ﻿using System.IO;
+using System.Reflection;
 using System.Windows;
 using Microsoft.Web.WebView2.Core;
 
@@ -12,7 +13,8 @@ public partial class MainWindow : Window
     {
         _url = url;
         InitializeComponent();
-        Title = Bfs.Core.Ediciones.Nombre(Bfs.Core.Ediciones.Compilada);
+        var ver = typeof(MainWindow).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0];
+        Title = Bfs.Core.Ediciones.Nombre(Bfs.Core.Ediciones.Compilada) + (string.IsNullOrEmpty(ver) ? "" : $" · v{ver}");
         Loaded += OnLoaded;
     }
 

@@ -50,6 +50,7 @@ const state = {
   pagina: 1,
   dias: 30,
   pendientes: [],
+  pendientesQ: "",
   proximosTickets: {},
   selectedPesadaId: null,
   /** Peso capturado esperando que se acepte la pesada ({ id, kilogramos, balanza, balanzaId, en }). */
@@ -121,6 +122,7 @@ function num(id) {
 
 /** Edición Estándar: una empresa, pesaje normal y aduana, local. Sin API para otros sistemas ni nube. */
 function esEstandar() { return state.edicion === "Estandar"; }
+function etiquetaVersion() { return state.version ? ` <span class="brand-ver">v${esc(state.version)}</span>` : ""; }
 
 function isVendor() { return state.user?.rol === "vendor"; }
 function can(permiso) { return (state.user?.permisos || []).includes(permiso); }
@@ -351,7 +353,7 @@ function render() {
         <div class="brand">
           ${bfsLogo()}
           <div>
-            <h1>Sistema de Pesaje BFS 4.0${esEstandar() ? " <small>Estándar</small>" : ""}</h1>
+            <h1>Sistema de Pesaje BFS 4.0${esEstandar() ? " <small>Estándar</small>" : ""}${etiquetaVersion()}</h1>
             <p>${esc(state.user?.tenant || state.branding.clienteNombre || "Planta local")}</p>
           </div>
         </div>
@@ -389,7 +391,7 @@ function renderLogin() {
       <form class="login-card" onsubmit="event.preventDefault();doLogin()">
         ${bfsLogo("login-logo")}
         <h2>Ingreso</h2>
-        <p style="color:var(--muted);margin-top:0">${esc(state.branding.clienteNombre || "Sistema de pesaje")} · la configuración la hace BFS.</p>
+        <p style="color:var(--muted);margin-top:0">${esc(state.branding.clienteNombre || "Sistema de pesaje")}${state.version ? ` · v${esc(state.version)}` : ""} · la configuración la hace BFS.</p>
         <label for="user">Usuario o email</label>
         <input id="user" type="text" autocomplete="username" autocapitalize="none" spellcheck="false"
           onkeydown="if(event.key==='Enter'&&!val('pass')){event.preventDefault();document.getElementById('pass')?.focus()}" />
@@ -807,24 +809,99 @@ async function renderPesaje() {
       `<button class="tab ${modo === id ? "active" : ""}" onclick="cambiarModoPesaje('${id}')">${label}</button>`).join("")}</div>` : ""}
     ${formulario}
     ${modo === "normal" ? `
-    <div class="card">
-      <h3 style="margin-top:0">Pendientes de salida (${pendientes.length})</h3>
-      <table>
-        <tr><th></th><th>Ticket</th><th>Empresa</th><th>Patente</th><th>Entrada</th><th>Hora</th>${visible("taraPallets") ? "<th>Pallets</th>" : ""}<th></th></tr>
-        ${pendientes.length ? pendientes.map(p => `<tr class="${state.selectedPesadaId === p.id ? "selected" : ""}" onclick="selectPesada('${p.id}')">
-          <td>${state.selectedPesadaId === p.id ? "●" : ""}</td>
-          <td>${esc(p.ticketNumero)}${p.tipoOperacion === "Aduana" ? ` <span class="pill pill-info">Aduana</span>` : ""}</td>
-          <td>${esc(empresaName(p.empresaId))}</td>
-          <td>${esc(p.patenteChasis)}</td>
-          <td>${p.pesoEntrada}${p.entradaManualPor ? " ✎" : ""}</td>
-          <td>${esc(hora(p.entradaEn))}</td>
-          ${visible("taraPallets") ? `<td>${p.taraPallets}</td>` : ""}
-          <td><div class="btn-row" style="margin:0">${botonesTicket(p.id)}${can("pesaje.anular") ? `<button class="btn-danger" onclick="event.stopPropagation();anularPesada('${p.id}')">Anular</button>` : ""}</div></td>
-        </tr>`).join("") : `<tr><td colspan="8">No hay entradas pendientes.</td></tr>`}
-      </table>
+    <div class="card pendientes-card">
+      <div class="pendientes-head">
+        <h3 style="margin:0" id="pendientesTitulo">${tituloPendientes()}</h3>
+        <input id="pendQ" class="pendientes-buscar" type="search" autocomplete="off"
+          placeholder="Buscar por patente, ticket, cliente, producto, chofer, transporte, remito..."
+          value="${esc(state.pendientesQ || "")}" oninput="filtrarPendientes(this.value)"
+          onkeydown="if(event.key==='Escape'&&this.value){event.preventDefault();filtrarPendientes('');this.value=''}" />
+      </div>
+      <div class="tabla-scroll" id="pendientesTabla">${tablaPendientesHtml()}</div>
     </div>` : ""}
   `;
   if (salida) mostrarEntrada(salida);
+}
+
+function textoBusquedaPendiente(p) {
+  const a = p.aduana || {};
+  return normalizar([
+    p.ticketNumero, empresaName(p.empresaId), p.patenteChasis, p.patenteAcoplado,
+    p.conductor, p.documento, p.tipoDocumento, p.nacionalidad,
+    p.cliente, p.transporte, p.producto, p.procedencia, p.destino, p.comprobante, p.observaciones,
+    p.pesoEntrada, hora(p.entradaEn), p.tipo, p.tipoOperacion,
+    a.contenedorId, a.exportador, a.exportadorCuit, a.ata, a.ataCuit, a.operacionId, a.destinacionAduanera, a.bultoId
+  ].filter(v => v != null && v !== "").join(" "));
+}
+
+function pendientesFiltradas() {
+  const palabras = normalizar(state.pendientesQ || "").trim().split(/\s+/).filter(Boolean);
+  if (!palabras.length) return state.pendientes;
+  return state.pendientes.filter(p => {
+    const txt = textoBusquedaPendiente(p);
+    return palabras.every(w => txt.includes(w));
+  });
+}
+
+function tituloPendientes() {
+  const total = state.pendientes.length;
+  const filtradas = pendientesFiltradas().length;
+  return state.pendientesQ?.trim()
+    ? `Pendientes de salida (${filtradas} de ${total})`
+    : `Pendientes de salida (${total})`;
+}
+
+function filtrarPendientes(q) {
+  state.pendientesQ = q;
+  const t = document.getElementById("pendientesTitulo");
+  if (t) t.textContent = tituloPendientes();
+  const cont = document.getElementById("pendientesTabla");
+  if (cont) cont.innerHTML = tablaPendientesHtml();
+}
+
+function tablaPendientesHtml() {
+  const lista = pendientesFiltradas();
+  const mostrarPallets = visible("taraPallets");
+  const variasEmpresas = state.empresas.filter(e => e.activa !== false).length > 1;
+  return `<table class="tabla-pendientes">
+    <tr>
+      <th>Ticket</th><th>Patente / Chofer</th><th>Cliente</th><th>Producto</th>
+      <th>Transporte / Detalle</th><th>Entrada</th><th></th>
+    </tr>
+    ${lista.length ? lista.map(p => {
+      const sel = state.selectedPesadaId === p.id;
+      const detalle = [
+        p.comprobante ? `Rem. ${p.comprobante}` : "",
+        p.aduana?.contenedorId ? `Cont. ${p.aduana.contenedorId}` : "",
+        [p.procedencia, p.destino].filter(Boolean).join(" → ")
+      ].filter(Boolean).join(" · ");
+      const subEntrada = [
+        hora(p.entradaEn),
+        mostrarPallets && p.taraPallets ? `Pal. ${p.taraPallets} kg` : ""
+      ].filter(Boolean).join(" · ");
+      return `<tr class="${sel ? "selected" : ""}" onclick="selectPesada('${p.id}')">
+        <td class="pend-nw">
+          <strong>${sel ? "● " : ""}${esc(p.ticketNumero)}</strong>${p.tipoOperacion === "Aduana" ? ` <span class="pill pill-info pill-xs">Aduana</span>` : ""}
+          ${variasEmpresas ? `<div class="pend-sub">${esc(empresaName(p.empresaId))}</div>` : ""}
+        </td>
+        <td>
+          <strong>${esc(p.patenteChasis)}</strong>${p.patenteAcoplado ? ` <span class="pend-sec">· ${esc(p.patenteAcoplado)}</span>` : ""}
+          ${p.conductor ? `<div class="pend-sub">${esc(p.conductor)}</div>` : ""}
+        </td>
+        <td>${esc(p.cliente || "-")}</td>
+        <td>${esc(p.producto || "-")}</td>
+        <td>
+          ${p.transporte ? `<div>${esc(p.transporte)}</div>` : ""}
+          ${detalle ? `<div class="pend-sub">${esc(detalle)}</div>` : (!p.transporte ? "-" : "")}
+        </td>
+        <td class="pend-nw">
+          <strong>${p.pesoEntrada.toLocaleString("es-AR")}</strong> kg${p.entradaManualPor ? " ✎" : ""}
+          ${subEntrada ? `<div class="pend-sub">${esc(subEntrada)}</div>` : ""}
+        </td>
+        <td class="pend-acciones"><div class="btn-row" style="margin:0;gap:6px;flex-wrap:nowrap">${botonesTicket(p.id)}${can("pesaje.anular") ? `<button class="btn-danger" onclick="event.stopPropagation();anularPesada('${p.id}')">Anular</button>` : ""}</div></td>
+      </tr>`;
+    }).join("") : `<tr><td colspan="7">${state.pendientes.length ? "Ninguna pendiente coincide con la búsqueda." : "No hay entradas pendientes."}</td></tr>`}
+  </table>`;
 }
 
 /** Campos del formulario de pesaje y de dónde sale cada valor en una pesada. */
@@ -2732,7 +2809,7 @@ async function renderSuperadmin() {
   document.getElementById("app").innerHTML = `
     <div class="app-shell" style="grid-template-columns:1fr">
       <header class="topbar">
-        <div class="brand">${bfsLogo()}<div><h1>BFS Nube · Clientes</h1><p>Panel de superadmin</p></div></div>
+        <div class="brand">${bfsLogo()}<div><h1>BFS Nube · Clientes${etiquetaVersion()}</h1><p>Panel de superadmin</p></div></div>
         <div class="userchip"><div><strong>${esc(state.user.email)}</strong><span>superadmin</span></div>
           <button class="btn-ghost" onclick="logout()">Salir</button></div>
       </header>
