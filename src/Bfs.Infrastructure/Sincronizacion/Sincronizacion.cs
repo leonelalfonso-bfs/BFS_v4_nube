@@ -106,7 +106,11 @@ public static class AplicadorSync
                     else
                     {
                         db.Entry(actual).CurrentValues.SetValues(entrante);
-                        if (actual is Pesada pesada) pesada.Aduana = ((Pesada)entrante).Aduana;
+                        if (actual is Pesada pesada && entrante is Pesada pesadaEntrante)
+                        {
+                            pesada.Aduana = pesadaEntrante.Aduana;
+                            pesada.Inagro = pesadaEntrante.Inagro;
+                        }
                     }
                     await db.SaveChangesAsync();
                     aplicados++;
@@ -154,6 +158,8 @@ public static class AplicadorSync
         Producto x => x.Nombre,
         Exportador x => x.RazonSocial,
         TaraConocida x => x.Identificador,
+        Tanque x => x.Nombre,
+        Sucursal x => x.Nombre,
         DatosVehiculo x => x.PatenteChasis,
         Usuario x => x.Email,
         _ => e.Id.ToString()

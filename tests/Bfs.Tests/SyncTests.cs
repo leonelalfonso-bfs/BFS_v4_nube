@@ -288,4 +288,75 @@ public class AplicadorSyncTests : IAsyncLifetime
         Assert.Single(r.Conflictos);
         Assert.Equal(1, await _db.Productos.CountAsync());
     }
+
+    [Fact]
+    public async Task Actualizar_pesada_sincroniza_datos_de_aduana_e_inagro()
+    {
+        var empresa = new Empresa { Nombre = "Inagro S.A.", CodigoSociedad = "1" };
+        _db.Empresas.Add(empresa);
+        await _db.SaveChangesAsync();
+
+        var id = Guid.NewGuid();
+        var t0 = new DateTimeOffset(2026, 11, 20, 10, 0, 0, TimeSpan.Zero);
+        var entrada = new Pesada
+        {
+            Id = id,
+            EmpresaId = empresa.Id,
+            TicketNumero = "01-000001",
+            Estado = EstadosPesada.Entrada,
+            PatenteChasis = "NWZ336",
+            PesoEntrada = 43800,
+            EntradaEn = t0,
+            ModificadoEn = t0,
+            Version = 1,
+            Aduana = new DatosAduana { Escenario = EscenariosAduana.IngresaConContenedor, ContenedorId = "MSCU1234567", ContenedorTara = 3800 },
+            Inagro = new DatosInagro { Movimiento = MovimientosInagro.Compras, PesoOrigen = 28460, Tanque = "TK 12", Analisis = "70863" }
+        };
+
+        var r1 = await AplicadorSync.AplicarAsync(_db, TiposSync.Pesadas, [JsonSerializer.SerializeToElement(entrada, AplicadorSync.Json)], esNube: true);
+        Assert.Equal(1, r1.Aplicados);
+
+        var actualizada = new Pesada
+        {
+            Id = id,
+            EmpresaId = empresa.Id,
+            TicketNumero = "01-000001",
+            Estado = EstadosPesada.Salida,
+            PatenteChasis = "NWZ336",
+            PesoEntrada = 43800,
+            PesoSalida = 15340,
+            Bruto = 43800,
+            Tara = 15340,
+            Neto = 28460,
+            EntradaEn = t0,
+            SalidaEn = t0.AddHours(1),
+            ModificadoEn = t0.AddHours(1),
+            Version = 2,
+            Aduana = new DatosAduana { Escenario = EscenariosAduana.IngresaConContenedor, ContenedorId = "MSCU1234567", ContenedorTara = 3800, ContenedorBruto = 32260, ContenedorNeto = 28460 },
+            Inagro = new DatosInagro
+            {
+                Movimiento = MovimientosInagro.Compras,
+                PesoOrigen = 28460,
+                Tanque = "TK 306",
+                Analisis = "70864",
+                Precintos = "P-99",
+                ObservacionesRemito = "Corregido en salida"
+            }
+        };
+
+        var r2 = await AplicadorSync.AplicarAsync(_db, TiposSync.Pesadas, [JsonSerializer.SerializeToElement(actualizada, AplicadorSync.Json)], esNube: true);
+        Assert.Equal(1, r2.Aplicados);
+        Assert.Empty(r2.Conflictos);
+
+        var guardada = await _db.Pesadas.AsNoTracking().SingleAsync(p => p.Id == id);
+        Assert.Equal(EstadosPesada.Salida, guardada.Estado);
+        Assert.Equal(28460, guardada.Neto);
+        Assert.NotNull(guardada.Aduana);
+        Assert.Equal(28460, guardada.Aduana.ContenedorNeto);
+        Assert.NotNull(guardada.Inagro);
+        Assert.Equal("TK 306", guardada.Inagro.Tanque);
+        Assert.Equal("70864", guardada.Inagro.Analisis);
+        Assert.Equal("P-99", guardada.Inagro.Precintos);
+        Assert.Equal("Corregido en salida", guardada.Inagro.ObservacionesRemito);
+    }
 }

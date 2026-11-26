@@ -46,10 +46,10 @@ public static class RemitoPreimpreso
                 void En(float x, float y, string? texto)
                 {
                     if (string.IsNullOrWhiteSpace(texto)) return;
-                    l.Layer().TranslateX(x + dx).TranslateY(Arriba(y) + dy).Text(texto);
+                    l.Layer().OffsetX(x + dx).OffsetY(Arriba(y) + dy).Text(texto);
                 }
                 void Derecha(float x, float y, string texto) =>
-                    l.Layer().TranslateX(x - 150 + dx).TranslateY(Arriba(y) + dy).Width(150).AlignRight().Text(texto);
+                    l.Layer().OffsetX(x - 150 + dx).OffsetY(Arriba(y) + dy).Width(150).AlignRight().Text(texto);
 
                 En(443, 737, Fecha(t.EntradaLocal));
 
@@ -61,7 +61,7 @@ public static class RemitoPreimpreso
                 En(403, 567, i.ClienteCuit ?? t.ClienteCuit);
 
                 // Producto y, 3 cm a la derecha, el número de ticket
-                l.Layer().TranslateX(200 + dx).TranslateY(Arriba(518) + dy).Row(r =>
+                l.Layer().OffsetX(200 + dx).OffsetY(Arriba(518) + dy).Row(r =>
                 {
                     r.AutoItem().Text(Texto(p.Producto));
                     r.ConstantItem(85);
@@ -94,13 +94,13 @@ public static class RemitoPreimpreso
                     + (p.Observaciones ?? "");
                 if (general.Trim().Length > 0)
                 {
-                    l.Layer().TranslateX(25 + dx).TranslateY(AltoA4 - 175 + dy).Width(540).Text(general).FontSize(11);
+                    l.Layer().OffsetX(25 + dx).OffsetY(AltoA4 - 175 + dy).Width(540).Text(general).FontSize(11);
                 }
 
                 // Observaciones del remito: recuadro a la derecha, bajo el ticket
                 if (!string.IsNullOrWhiteSpace(i.ObservacionesRemito))
                 {
-                    l.Layer().TranslateX(426 + dx).TranslateY(AltoA4 - 540 + dy).Width(150)
+                    l.Layer().OffsetX(426 + dx).OffsetY(AltoA4 - 540 + dy).Width(150)
                         .Border(0.5f).Padding(3).Text(i.ObservacionesRemito).FontSize(7);
                 }
             });
