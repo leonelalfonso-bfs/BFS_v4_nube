@@ -98,6 +98,45 @@ public class PesajeServiceTests : IAsyncLifetime
         Assert.Equal("Fija", salida.Pesada.BalanzaSalida);
     }
 
+    [Fact]
+    public async Task Peso_capturado_persiste_aunque_el_camion_se_retire_de_la_balanza()
+    {
+        _db.Configuraciones.Single(c => c.Clave == ConfigKeys.TaraConocida).Valor = "true";
+        await _db.SaveChangesAsync();
+
+        // Entrada: se captura con el camión arriba y enseguida el camión baja (0 kg, inestable).
+        _balanza.Marcar(43800, estable: true);
+        var (capEntrada, errCap1) = await _pesaje.CapturarAsync(null, Op);
+        Assert.Null(errCap1);
+
+        _balanza.Marcar(0, estable: false, "sin señal");
+        Assert.Contains("no está leyendo", (await _pesaje.RegistrarEntradaAsync(Entrada(), Op)).Error);
+
+        var entrada = await _pesaje.RegistrarEntradaAsync(Entrada() with { CapturaId = capEntrada!.Id }, Op);
+        Assert.Null(entrada.Error);
+        Assert.Equal(43800, entrada.Pesada!.PesoEntrada);
+        Assert.Equal("Fija", entrada.Pesada.Balanza);
+
+        // Salida: se captura la tara y el camión se retira antes de aceptar.
+        _balanza.Marcar(15340, estable: true);
+        var (capSalida, errCap2) = await _pesaje.CapturarAsync(null, Op);
+        Assert.Null(errCap2);
+
+        _balanza.Marcar(0, estable: false);
+        var salida = await _pesaje.RegistrarSalidaAsync(entrada.Pesada.Id, new SalidaRequest(null, null, CapturaId: capSalida!.Id), Op);
+        Assert.Null(salida.Error);
+        Assert.Equal(15340, salida.Pesada!.PesoSalida);
+        Assert.Equal(28460, salida.Pesada.Neto);
+
+        // Tomar tara también conserva el peso capturado aunque el vehículo ya se haya retirado.
+        _balanza.Marcar(14200, estable: true);
+        var (capTara, _) = await _pesaje.CapturarAsync(null, Op);
+        _balanza.Marcar(0, estable: false);
+        var (tara, errTara) = await _pesaje.TomarTaraAsync(new TomarTaraRequest("AA111AA", "Chasis", CapturaId: capTara!.Id), Op);
+        Assert.Null(errTara);
+        Assert.Equal(14200, tara!.Kilogramos);
+    }
+
     private sealed class BalanzaFija : IBalanzas
     {
         private LecturaBalanza _lectura = LecturaBalanza.Ninguna;

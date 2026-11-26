@@ -24,6 +24,13 @@ public static class PesadaEndpoints
         api.MapGet("/pesadas/pendientes", async (PesajeService pesaje) => Results.Ok(await pesaje.PendientesAsync()))
             .RequireAuthorization(Permisos.PesajeOperar);
 
+        api.MapGet("/pesadas/proximos-tickets", async (PesajeService pesaje) => Results.Ok(await pesaje.ProximosTicketsAsync()))
+            .RequireAuthorization(Permisos.PesajeOperar);
+
+        api.MapGet("/pesadas/capturas/{id:guid}", (Guid id, CapturasPeso capturas) =>
+            capturas.Buscar(id) is { } c ? Results.Ok(c) : Results.NotFound())
+            .RequireAuthorization(Permisos.PesajeOperar);
+
         // Congela el peso de la balanza; la entrada o salida se guarda después con el CapturaId.
         api.MapPost("/pesadas/capturar", async (CapturarRequest req, PesajeService pesaje, ClaimsPrincipal user) =>
         {
@@ -123,7 +130,8 @@ public record ParteRequest(Guid? CapturaId, int? Kilogramos = null, string? Etiq
 /// <param name="TaraManual">Solo si se quiere usar otra tara que la guardada (cuenta como ingreso manual).</param>
 public record TaraConocidaRequest(EntradaRequest Datos, int? TaraManual = null, string? ClaveManual = null);
 
-public record TomarTaraRequest(string? Identificador, string? Descripcion, Guid? BalanzaId = null, int? PesoManual = null, string? ClaveManual = null);
+public record TomarTaraRequest(string? Identificador, string? Descripcion, Guid? BalanzaId = null, int? PesoManual = null, string? ClaveManual = null,
+    Guid? CapturaId = null);
 
 public record AnularRequest(string? Motivo);
 

@@ -50,8 +50,9 @@ const state = {
   pagina: 1,
   dias: 30,
   pendientes: [],
+  proximosTickets: {},
   selectedPesadaId: null,
-  /** Peso capturado esperando que se acepte la pesada ({ id, kilogramos, balanza, en }). */
+  /** Peso capturado esperando que se acepte la pesada ({ id, kilogramos, balanza, balanzaId, en }). */
   captura: null,
   /** Cómo se toma el peso: "simple", "partes" (balanza corta) o "ejes" (balanza de ejes). */
   capturaModo: "simple",
@@ -89,6 +90,8 @@ async function api(path, options = {}) {
 function logout() {
   state.token = null;
   state.user = null;
+  guardarCapturaLocal(null);
+  state.partes = [];
   localStorage.removeItem("bfs_token");
   try { localStorage.removeItem("bfs_token_panel"); } catch {}
   render();
@@ -181,9 +184,23 @@ function empresaEnCurso() {
   return activas.some(e => e.id === id) ? id : activas[0]?.id || "";
 }
 
+function proximoTicketActual() {
+  return state.proximosTickets?.[empresaEnCurso()] || "";
+}
+
+function actualizarProximoTicketUI() {
+  if (state.selectedPesadaId) return;
+  const t = proximoTicketActual() || "-";
+  const box = document.getElementById("proximoTicketValor");
+  if (box) box.textContent = t;
+  const head = document.getElementById("formProximoTicket");
+  if (head) head.textContent = t;
+}
+
 function elegirEmpresa(id) {
   try { localStorage.setItem("bfs_empresa", id); } catch {}
   document.querySelectorAll(".empresa-btn").forEach(b => b.classList.toggle("active", b.dataset.id === id));
+  actualizarProximoTicketUI();
 }
 
 /** Con <fijaId> (salida de una pendiente) muestra la empresa de esa pesada y no deja cambiarla. */
@@ -261,15 +278,26 @@ function estadoDisplay(b) {
   return b.estable ? ["lcd-ok", "Estable"] : ["lcd-mov", "En movimiento"];
 }
 
+function capturaDeBalanza(b) {
+  const c = state.captura;
+  if (!c) return null;
+  if (c.balanzaId && b.balanzaId) return c.balanzaId === b.balanzaId ? c : null;
+  return state.balanzas.length <= 1 || c.balanza === (b.nombre || b.puerto) ? c : null;
+}
+
 function displayBalanza(b) {
   const [cls, estado] = estadoDisplay(b);
   const varias = state.balanzas.length > 1;
   const enUso = varias && b.balanzaId === balanzaActual().balanzaId;
-  return `<div class="lcd ${cls} ${enUso ? "en-uso" : ""}" data-balanza="${b.balanzaId || ""}"
+  const cap = capturaDeBalanza(b);
+  return `<div class="lcd ${cls} ${enUso ? "en-uso" : ""} ${cap ? "con-captura" : ""}" data-balanza="${b.balanzaId || ""}"
       ${varias ? `onclick="elegirBalanza('${b.balanzaId}')" title="Tocar para pesar con esta balanza"` : ""}>
     <div class="lcd-top">
       <span class="lcd-nombre">${esc(b.nombre || b.puerto || "Balanza")}</span>
-      ${enUso ? `<span class="lcd-chip">En uso</span>` : ""}
+      <span class="lcd-chips">
+        ${cap ? `<span class="lcd-chip lcd-chip-captura" title="Peso capturado: persiste aunque el camión se retire">Fijo ${cap.kilogramos.toLocaleString("es-AR")} kg</span>` : ""}
+        ${enUso ? `<span class="lcd-chip">En uso</span>` : ""}
+      </span>
     </div>
     <div class="lcd-num">${sieteSegmentos(cls === "lcd-err" ? "------" : String(b.kilogramos ?? 0))}<span class="lcd-kg">kg</span></div>
     <div class="lcd-pie"><span class="lcd-led"></span>${esc(estado)}${b.estado === "simulada" ? " · simulada" : ""}</div>
@@ -359,19 +387,21 @@ function go(view) {
 function renderLogin() {
   document.getElementById("app").innerHTML = `
     <div class="login-wrap">
-      <div class="login-card">
+      <form class="login-card" onsubmit="event.preventDefault();doLogin()">
         ${bfsLogo("login-logo")}
         <h2>Ingreso</h2>
         <p style="color:var(--muted);margin-top:0">${esc(state.branding.clienteNombre || "Sistema de pesaje")} · la configuración la hace BFS.</p>
-        <label>Usuario o email</label>
-        <input id="user" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" />
-        <label style="margin-top:12px">Contraseña</label>
+        <label for="user">Usuario o email</label>
+        <input id="user" type="text" autocomplete="username" autocapitalize="none" spellcheck="false"
+          onkeydown="if(event.key==='Enter'&&!val('pass')){event.preventDefault();document.getElementById('pass')?.focus()}" />
+        <label for="pass" style="margin-top:12px">Contraseña</label>
         <input id="pass" type="password" autocomplete="current-password" />
         <p class="error" id="err"></p>
-        <button class="btn-primary" style="width:100%;margin-top:8px" onclick="doLogin()">Entrar</button>
-      </div>
+        <button type="submit" class="btn-primary" style="width:100%;margin-top:8px">Entrar</button>
+      </form>
     </div>
   `;
+  document.getElementById("user")?.focus();
 }
 
 async function doLogin() {
@@ -407,7 +437,7 @@ async function boot() {
   state.branding = branding;
   state.campos = campos?.length ? campos : DEFAULT_FIELDS;
   state.licencia = licencia;
-  await actualizarNube();
+  await Promise.all([actualizarNube(), restaurarCapturaGuardada()]);
   render();
   if (can("pesaje.operar")) pollPeso();
   // Solo se actualiza el indicador: repintar la pantalla borraría lo que el operador está cargando.
@@ -652,6 +682,7 @@ function datosAduana() {
 async function renderPesaje() {
   const pedidos = [
     api("/api/pesadas/pendientes"),
+    api("/api/pesadas/proximos-tickets"),
     api("/api/catalogos/clientes"),
     api("/api/catalogos/transportes"),
     api("/api/catalogos/productos"),
@@ -659,8 +690,9 @@ async function renderPesaje() {
     esInagro() ? api("/api/catalogos/tanques") : Promise.resolve([]),
     esInagro() ? api("/api/catalogos/sucursales") : Promise.resolve([])
   ];
-  const [pendientes, clientes, transportes, productos, exportadores, tanques, sucursales] = await Promise.all(pedidos);
+  const [pendientes, proximosTickets, clientes, transportes, productos, exportadores, tanques, sucursales] = await Promise.all(pedidos);
   state.pendientes = pendientes;
+  state.proximosTickets = proximosTickets || {};
   state.catalogos = { clientes, transportes, productos, exportadores, tanques, sucursales };
   const inagro = esInagro();
   const lugar = inagro ? { list: "dl_sucursales", alta: "sucursales" } : {};
@@ -672,6 +704,7 @@ async function renderPesaje() {
   if (!salida) state.selectedPesadaId = null;
   const f = (key, html) => visible(key) ? html : "";
   const lbl = (key, porDefecto) => field(key)?.label || porDefecto;
+  const proximoTicket = proximoTicketActual() || "-";
 
   const operacion = `
         ${inagro ? inagroOperacion() : f("tipo", inputField("tipo", lbl("tipo", "Tipo"), { type: "select", options: "<option>INGRESO</option><option>EGRESO</option>" }))}
@@ -697,10 +730,11 @@ async function renderPesaje() {
         ${f("nacionalidad", inputField("nacionalidad", lbl("nacionalidad", "Nacionalidad")))}
         ${inagro ? `<div><label>CUIL chofer</label><input id="in_cuilChofer" inputmode="numeric" maxlength="13" placeholder="11 números" /></div>` : ""}`;
 
+  // Primero Vehículo y chofer: el primer dato que carga el operador es la patente (que además autocompleta el resto).
   const datosVehiculo = `
+      ${seccion("Vehículo y chofer", vehiculo)}
       ${seccion("Operación", operacion)}
       ${seccion("Carga", carga)}
-      ${seccion("Vehículo y chofer", vehiculo)}
       ${bloqueAduana()}
       ${visible("observaciones") ? `<div style="margin-top:12px">${inputField("observaciones", lbl("observaciones", "Observaciones"), { type: "textarea" })}</div>` : ""}
       ${inagro ? `<div style="margin-top:12px"><label>Observaciones del remito</label><textarea id="in_observacionesRemito"></textarea></div>
@@ -713,7 +747,7 @@ async function renderPesaje() {
   const formulario = modo === "tomar" ? `
     <div class="card">
       <h3 style="margin-top:0">Tomar tara</h3>
-      <p>Subí el vehículo vacío a la balanza. La tara queda guardada para pesar después con "Tara conocida".</p>
+      <p>Subí el vehículo vacío a la balanza (o capturá primero el peso). La tara queda guardada para pesar después con "Tara conocida".</p>
       <div class="grid2">
         <div><label>Patente / carro *</label><input id="tt_id" autocomplete="off" /></div>
         <div><label>Descripción</label><input id="tt_desc" placeholder="Batea, chasis, carro 12..." /></div>
@@ -729,7 +763,10 @@ async function renderPesaje() {
         <div><h3 style="margin:0">Salida del ticket ${esc(salida.ticketNumero)}</h3>
           <p style="margin:4px 0 0">${esc(empresaName(salida.empresaId))} · entrada ${esc(hora(salida.entradaEn))} · ${salida.pesoEntrada} kg${salida.entradaManualPor ? " (manual)" : ""}</p></div>
         <span class="pill pill-warn">Pesada de salida</span>
-      </div>` : `<h3 style="margin-top:0">${modo === "tara" ? "Pesar con tara conocida" : "Datos del ticket"}</h3>`}
+      </div>` : `<div class="form-head">
+        <h3 style="margin:0">${modo === "tara" ? "Pesar con tara conocida" : "Datos del ticket"}</h3>
+        <span class="pill pill-ticket">Próximo ticket: <strong id="formProximoTicket">${esc(proximoTicket)}</strong></span>
+      </div>`}
       ${datosVehiculo}
       ${modo === "tara" && puedeManual() ? `
       <details style="margin-top:12px"><summary>Usar otra tara (ingreso manual)</summary>
@@ -749,31 +786,37 @@ async function renderPesaje() {
     </div>`;
 
   document.getElementById("main").innerHTML = `
-    <div class="page-head">
+    <div class="page-head page-head-pesaje">
       <div>
         <h2>Pesaje</h2>
-        <p>${modo === "tara" ? "Capturá el bruto, completá los datos y aceptá: se descuenta la tara guardada." : modo === "tomar" ? "Guardá la tara de un vehículo o carro." : salida ? "Salida: capturá el peso y aceptá." : "Entrada: capturá el peso, completá los datos y aceptá. Para la salida, elegí el ticket en Pendientes."}</p>
+        <p>${modo === "tara" ? "Capturá el bruto, completá los datos y aceptá: se descuenta la tara guardada." : modo === "tomar" ? "Guardá la tara de un vehículo o carro." : salida ? "Salida: capturá el peso y aceptá." : "Entrada: capturá el peso, completá la patente y los datos, y aceptá. Para la salida, elegí el ticket en Pendientes."}</p>
       </div>
       <div id="scalePill">${pillForScale(state.scale.estado)}</div>
     </div>
     ${sinLicencia ? `
-    <div class="card" style="border-left:4px solid #c0392b">
+    <div class="card" style="border-left:4px solid #c0392b;margin-bottom:12px">
       <strong>${esc(state.licencia.mensaje)}</strong>
       <p style="margin:6px 0 0">ID de máquina: <code>${esc(state.licencia.maquina)}</code>. No se pueden registrar entradas nuevas; sí cerrar las salidas pendientes.</p>
     </div>` : ""}
-    <div class="card peso-card">
-      <div class="displays ${state.balanzas.length > 1 ? "dos" : ""}" id="displays">${balanzasEnPantalla().map(displayBalanza).join("")}</div>
-      ${state.funciones.automatizacion ? `<div id="auto" class="auto">${bloqueAutomatizacion()}</div><div id="camaras" class="camaras"></div>` : ""}
-      ${modo !== "tomar" ? `<div class="captura" id="captura">${bloqueCaptura()}</div>` : ""}
-      <div class="peso-pie">
-        <div class="status-box"><span>Empresa en curso</span>${selectorEmpresa(salida?.empresaId)}</div>
-        <div class="peso-ayuda">
-          ${state.balanzas.length > 1 ? `<button class="btn" onclick="intercambiarBalanzas()" title="Pasa la balanza de la izquierda a la derecha">⇄ Intercambiar lados</button>
-          <span>Tocá un display para pesar con esa balanza.</span>` : ""}
-          ${state.funciones.exigirEstable ? `<span>Se captura solo con el peso estable.</span>` : ""}
+    <div class="peso-fijo">
+      <div class="card peso-card">
+        <div class="displays ${state.balanzas.length > 1 ? "dos" : ""}" id="displays">${balanzasEnPantalla().map(displayBalanza).join("")}</div>
+        ${state.funciones.automatizacion ? `<div id="auto" class="auto">${bloqueAutomatizacion()}</div>` : ""}
+        <div class="captura" id="captura">${bloqueCaptura()}</div>
+        <div class="peso-pie">
+          <div class="peso-meta">
+            ${modo !== "tomar" ? `<div class="status-box"><span>Empresa en curso</span>${selectorEmpresa(salida?.empresaId)}</div>
+            <div class="status-box status-ticket"><span>${salida ? "Ticket en salida" : "Próximo ticket"}</span><strong id="proximoTicketValor">${esc(salida ? salida.ticketNumero : proximoTicket)}</strong></div>` : `<div class="status-box"><span>Modo</span><strong>Tomar tara</strong></div>`}
+          </div>
+          <div class="peso-ayuda">
+            ${state.balanzas.length > 1 ? `<button class="btn" onclick="intercambiarBalanzas()" title="Pasa la balanza de la izquierda a la derecha">⇄ Intercambiar lados</button>
+            <span>Tocá un display para elegir balanza.</span>` : ""}
+            ${state.funciones.exigirEstable ? `<span>Solo con peso estable.</span>` : ""}
+          </div>
         </div>
       </div>
     </div>
+    ${state.funciones.automatizacion ? `<div id="camaras" class="camaras" style="margin-bottom:12px"></div>` : ""}
     ${modosPesaje().length > 1 ? `<div class="tabs">${modosPesaje().map(([id, label]) =>
       `<button class="tab ${modo === id ? "active" : ""}" onclick="cambiarModoPesaje('${id}')">${label}</button>`).join("")}</div>` : ""}
     ${formulario}
@@ -1029,14 +1072,36 @@ function bloqueCaptura() {
   return selector + bloqueCapturaSimple();
 }
 
+function guardarCapturaLocal(c) {
+  state.captura = c;
+  try {
+    if (c) localStorage.setItem("bfs_captura", JSON.stringify(c));
+    else localStorage.removeItem("bfs_captura");
+  } catch {}
+}
+
+async function restaurarCapturaGuardada() {
+  if (!can("pesaje.operar") || state.modo === "Nube") return;
+  let raw = null;
+  try { raw = localStorage.getItem("bfs_captura"); } catch {}
+  if (!raw) return;
+  try {
+    const guardada = JSON.parse(raw);
+    if (!guardada?.id) return guardarCapturaLocal(null);
+    state.captura = await api(`/api/pesadas/capturas/${encodeURIComponent(guardada.id)}`);
+  } catch {
+    guardarCapturaLocal(null);
+  }
+}
+
 function bloqueCapturaSimple() {
   const c = state.captura;
   if (!c) {
     return `${botonesCaptura("btn-primary btn-capturar", "Capturar peso")}
-      <span class="captura-ayuda">Capturá el peso con el camión quieto y después completá los datos.</span>`;
+      <span class="captura-ayuda">Capturá el peso con el camión quieto; queda guardado aunque se retire.</span>`;
   }
   return `<div class="captura-ok"><span>Peso capturado</span><strong>${c.kilogramos.toLocaleString("es-AR")} kg</strong>
-      <small>${esc(c.balanza || "")} · ${esc(hora(c.en))}</small></div>
+      <small>${esc(c.balanza || "")} · ${esc(hora(c.en))} · fijo aunque se retire el camión</small></div>
     ${botonesCaptura("btn", "Volver a capturar")}
     <button class="btn" onclick="descartarCaptura()">Descartar</button>`;
 }
@@ -1050,11 +1115,17 @@ function pintarCaptura() {
 async function capturarPeso(balanzaId) {
   if (balanzaId && balanzaId !== balanzaActual().balanzaId) elegirBalanza(balanzaId);
   try {
-    state.captura = await api("/api/pesadas/capturar", {
+    const c = await api("/api/pesadas/capturar", {
       method: "POST",
       body: JSON.stringify({ balanzaId: balanzaId || balanzaActual().balanzaId || null })
     });
+    guardarCapturaLocal(c);
     pintarCaptura();
+    pintarPeso();
+    api("/api/pesadas/proximos-tickets").then(t => {
+      state.proximosTickets = t || {};
+      actualizarProximoTicketUI();
+    }).catch(() => {});
     const err = document.getElementById("err");
     if (err) err.textContent = "";
   } catch (e) {
@@ -1063,16 +1134,18 @@ async function capturarPeso(balanzaId) {
 }
 
 function descartarCaptura() {
-  state.captura = null;
+  guardarCapturaLocal(null);
   pintarCaptura();
+  pintarPeso();
 }
 
 function cambiarCapturaModo(modo) {
   if (state.partes.length && modo !== state.capturaModo && !confirm("Se descartan las partes ya capturadas. ¿Seguir?")) return;
   state.capturaModo = modo;
   state.partes = [];
-  state.captura = null;
+  guardarCapturaLocal(null);
   pintarCaptura();
+  pintarPeso();
 }
 
 /** Balanza corta: chasis, acoplado y, si hiciera falta, más partes. Vale la suma. */
@@ -1238,7 +1311,7 @@ function pesoParaGuardar() {
 
 /** Después de guardar: se limpia lo capturado (el modo y el vehículo quedan para el próximo camión). */
 function limpiarCapturas() {
-  state.captura = null;
+  guardarCapturaLocal(null);
   state.partes = [];
 }
 
@@ -1249,7 +1322,7 @@ function revisarCaptura(e) {
 
 document.addEventListener("keydown", e => {
   const i = TECLAS_CAPTURA.indexOf(e.key);
-  if (i < 0 || state.view !== "pesaje" || state.modoPesaje === "tomar" || !document.getElementById("captura")) return;
+  if (i < 0 || state.view !== "pesaje" || !document.getElementById("captura")) return;
   const lista = balanzasEnPantalla();
   if (lista.length <= 1 && i > 0) return;
   e.preventDefault();
@@ -1360,7 +1433,7 @@ async function guardarTaraConocida() {
       method: "POST",
       body: JSON.stringify({ datos, taraManual, claveManual: datos.claveManual })
     });
-    state.captura = null;
+    limpiarCapturas();
     toast(`Ticket ${pesada.ticketNumero} · neto ${pesada.neto} kg`);
     ticketAlCerrar(pesada);
     await renderPesaje();
@@ -1382,13 +1455,16 @@ async function tomarTara() {
         descripcion: val("tt_desc") || null,
         balanzaId: balanzaActual().balanzaId || null,
         pesoManual: m.peso,
-        claveManual: m.clave
+        claveManual: m.clave,
+        capturaId: m.peso == null ? (state.captura?.id || null) : null
       })
     });
+    limpiarCapturas();
     toast(`Tara de ${tara.identificador}: ${tara.kilogramos} kg`);
     await renderPesaje();
     document.getElementById("ultimo").textContent = `Tara guardada: ${tara.identificador} · ${tara.kilogramos} kg`;
   } catch (e) {
+    revisarCaptura(e);
     mostrarError(e);
   }
 }
@@ -2528,6 +2604,12 @@ async function renderReportes() {
 
 /** Campos que se pueden corregir (los pesos, fechas, empresa y número de ticket nunca). */
 const CORREGIBLES = [
+  ["patenteChasis", "Patente chasis", p => p.patenteChasis],
+  ["patenteAcoplado", "Patente acoplado", p => p.patenteAcoplado],
+  ["conductor", "Conductor", p => p.conductor],
+  ["tipoDocumento", "Tipo de documento", p => p.tipoDocumento, "tipoDoc"],
+  ["documento", "Documento", p => p.documento],
+  ["nacionalidad", "Nacionalidad", p => p.nacionalidad],
   ["tipo", "Tipo", p => p.tipo, "tipo"],
   ["producto", "Producto", p => p.producto, "dl_productos"],
   ["cliente", "Cliente", p => p.cliente, "dl_clientes"],
@@ -2535,12 +2617,6 @@ const CORREGIBLES = [
   ["procedencia", "Procedencia", p => p.procedencia],
   ["destino", "Destino", p => p.destino],
   ["comprobante", "Remito", p => p.comprobante],
-  ["patenteChasis", "Patente chasis", p => p.patenteChasis],
-  ["patenteAcoplado", "Patente acoplado", p => p.patenteAcoplado],
-  ["conductor", "Conductor", p => p.conductor],
-  ["tipoDocumento", "Tipo de documento", p => p.tipoDocumento, "tipoDoc"],
-  ["documento", "Documento", p => p.documento],
-  ["nacionalidad", "Nacionalidad", p => p.nacionalidad],
   ["observaciones", "Observaciones", p => p.observaciones],
   ["aduana.exportador", "Exportador / importador", p => p.aduana?.exportador],
   ["aduana.exportadorCuit", "CUIT exportador", p => p.aduana?.exportadorCuit],

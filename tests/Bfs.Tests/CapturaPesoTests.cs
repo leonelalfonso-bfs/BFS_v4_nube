@@ -64,6 +64,86 @@ public class CapturaPesoTests
     }
 
     [Fact]
+    public async Task La_captura_persiste_en_disco_y_se_consulta_por_api()
+    {
+        using var tmp = new TempDir();
+        var archivo = tmp.File("capturas.json");
+        var reloj = new Reloj(new DateTimeOffset(2026, 11, 26, 12, 0, 0, TimeSpan.Zero));
+        var balanzaId = Guid.NewGuid();
+
+        Guid id;
+        {
+            var c1 = new CapturasPeso(reloj, archivo).Guardar(32450, "Balanza 1", balanzaId: balanzaId);
+            id = c1.Id;
+        }
+
+        // Reinicio del proceso: sigue estando hasta que se use.
+        var recargadas = new CapturasPeso(reloj, archivo);
+        var recuperada = recargadas.Buscar(id);
+        Assert.NotNull(recuperada);
+        Assert.Equal((32450, "Balanza 1", balanzaId), (recuperada.Kilogramos, recuperada.Balanza, recuperada.BalanzaId));
+        recargadas.Usar(id);
+        Assert.Null(new CapturasPeso(reloj, archivo).Buscar(id));
+
+        // Por API: se puede verificar al recargar la página y desaparece al guardar la pesada.
+        await using var api = await TestApi.Iniciar();
+        using var admin = await api.LoginAdmin();
+        var cap = await Capturar(admin);
+        var capId = cap.GetProperty("id").GetGuid();
+        var consulta = await admin.GetAsync($"/api/pesadas/capturas/{capId}");
+        Assert.Equal(HttpStatusCode.OK, consulta.StatusCode);
+
+        (await admin.PostAsJsonAsync("/api/pesadas/entrada", new { empresaId = TestApi.Empresa1, patenteChasis = "AB123CD", capturaId = capId })).EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.NotFound, (await admin.GetAsync($"/api/pesadas/capturas/{capId}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Proximos_tickets_por_empresa_puesto_e_inagro()
+    {
+        await using (var api = await TestApi.Iniciar())
+        {
+            using var admin = await api.LoginAdmin();
+            var emp2 = Guid.Parse("22222222-2222-2222-2222-222222222222");
+
+            var t0 = await admin.GetFromJsonAsync<Dictionary<Guid, string>>("/api/pesadas/proximos-tickets");
+            Assert.Equal("01-000001", t0![TestApi.Empresa1]);
+            Assert.Equal("01-000001", t0[emp2]);
+
+            (await admin.PostAsJsonAsync("/api/pesadas/entrada", new { empresaId = TestApi.Empresa1, patenteChasis = "AB123CD", pesoEntrada = 30000 })).EnsureSuccessStatusCode();
+            var t1 = await admin.GetFromJsonAsync<Dictionary<Guid, string>>("/api/pesadas/proximos-tickets");
+            Assert.Equal("01-000002", t1![TestApi.Empresa1]);
+            Assert.Equal("01-000001", t1[emp2]);
+
+            await api.Configurar(new() { [ConfigKeys.Puesto] = "2" });
+            var t2 = await admin.GetFromJsonAsync<Dictionary<Guid, string>>("/api/pesadas/proximos-tickets");
+            Assert.Equal("02-000001", t2![TestApi.Empresa1]);
+
+            await api.Configurar(new() { [ConfigKeys.Puesto] = "1", [ConfigKeys.TicketSoloNumero] = "true" });
+            var tSolo = await admin.GetFromJsonAsync<Dictionary<Guid, string>>("/api/pesadas/proximos-tickets");
+            Assert.Equal("2", tSolo![TestApi.Empresa1]);
+        }
+
+        // Edición INAGRO: numeración compartida entre todas las sociedades.
+        await using (var apiInagro = await TestApi.Iniciar(extra: "--Bfs:Edicion=Inagro"))
+        {
+            using var admin = await apiInagro.LoginAdmin();
+            var srl = Guid.Parse("22222222-2222-2222-2222-222222222222");
+            var antes = await admin.GetFromJsonAsync<Dictionary<Guid, string>>("/api/pesadas/proximos-tickets");
+            Assert.Equal("01-000001", antes![TestApi.Empresa1]);
+            Assert.Equal("01-000001", antes[srl]);
+
+            (await admin.PostAsJsonAsync("/api/pesadas/entrada", new
+            {
+                empresaId = TestApi.Empresa1, patenteChasis = "NWZ336", pesoEntrada = 40000, inagro = new { movimiento = 1 }
+            })).EnsureSuccessStatusCode();
+
+            var despues = await admin.GetFromJsonAsync<Dictionary<Guid, string>>("/api/pesadas/proximos-tickets");
+            Assert.Equal("01-000002", despues![TestApi.Empresa1]);
+            Assert.Equal("01-000002", despues[srl]);
+        }
+    }
+
+    [Fact]
     public async Task El_tipo_queda_oculto_salvo_con_worms()
     {
         await using var api = await TestApi.Iniciar();

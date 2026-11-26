@@ -74,7 +74,7 @@ public static class ApiHost
         builder.Services.AddScoped<TenantActual>();
         builder.Services.AddSingleton<PasswordHasher<Usuario>>();
         builder.Services.AddScoped<ConfigService>();
-        builder.Services.AddSingleton<CapturasPeso>();
+        builder.Services.AddSingleton(_ => new CapturasPeso(archivo: options.Modo == ModoDespliegue.Nodo ? Path.Combine(paths.Root, "capturas.json") : null));
         builder.Services.AddScoped<PesajeService>();
         builder.Services.AddScoped<DocumentosService>();
         builder.Services.AddScoped<ReportesService>();
