@@ -118,7 +118,44 @@ public class PesajeService
         var peso = TomarPeso(null, null, balanzaId, op, configs, parcial: parcial);
         if (peso.Error != null) return (null, peso.Error);
         var fotos = _auto != null ? await _auto.FotosAsync() : [];
-        return (_capturas.Guardar(peso.Kg, peso.Balanza, fotos), null);
+        return (_capturas.Guardar(peso.Kg, peso.Balanza, fotos, peso.BalanzaId), null);
+    }
+
+    /// <summary>
+    /// Próximo número de ticket que le tocaría a cada empresa activa en este puesto, sin consumir el contador.
+    /// </summary>
+    public async Task<Dictionary<Guid, string>> ProximosTicketsAsync()
+    {
+        var configs = await _config.GlobalAsync();
+        var puesto = int.TryParse(configs.GetValueOrDefault(ConfigKeys.Puesto), out var p) && p is >= 1 and <= 99 ? p : 1;
+        var soloNumero = Si(configs, ConfigKeys.TicketSoloNumero);
+
+        var empresas = await _db.Empresas.AsNoTracking().Where(e => e.Activa).ToListAsync();
+        var contadores = await _db.ContadoresTicket.AsNoTracking().Where(c => c.Puesto == puesto).ToListAsync();
+        var usados = await _db.Pesadas.IgnoreQueryFilters().AsNoTracking()
+            .Select(x => new { x.EmpresaId, x.TicketNumero })
+            .ToListAsync();
+
+        string LibreDesde(int inicial, HashSet<string> ocupados)
+        {
+            for (var n = Math.Max(1, inicial); ; n++)
+            {
+                var t = Tickets.Formatear(puesto, n, soloNumero);
+                if (!ocupados.Contains(t)) return t;
+            }
+        }
+
+        var resultado = new Dictionary<Guid, string>();
+        var porEmpresa = usados.GroupBy(u => u.EmpresaId)
+            .ToDictionary(g => g.Key, g => g.Select(u => u.TicketNumero).ToHashSet(StringComparer.Ordinal));
+        foreach (var e in empresas)
+        {
+            var inicial = contadores.FirstOrDefault(c => c.EmpresaId == e.Id)?.Proximo
+                ?? (puesto == 1 ? Math.Max(1, e.ProximoTicket) : 1);
+            var ocupados = porEmpresa.GetValueOrDefault(e.Id) ?? [];
+            resultado[e.Id] = LibreDesde(inicial, ocupados);
+        }
+        return resultado;
     }
 
     /// <summary>
@@ -232,7 +269,7 @@ public class PesajeService
         var id = Patente.Normalizar(req.Identificador);
         if (id.Length == 0) return (null, ResultadoPesaje.Invalida("Falta la patente o el número de carro"));
 
-        var peso = TomarPeso(req.PesoManual, req.ClaveManual, req.BalanzaId, op, configs);
+        var peso = TomarPeso(req.PesoManual, req.ClaveManual, req.BalanzaId, op, configs, req.CapturaId);
         if (peso.Error != null) return (null, peso.Error);
 
         var tara = await _db.Taras.IgnoreQueryFilters().FirstOrDefaultAsync(t => t.Identificador == id);
@@ -246,6 +283,7 @@ public class PesajeService
         tara.TomadaEn = DateTimeOffset.UtcNow;
         if (!string.IsNullOrWhiteSpace(req.Descripcion)) tara.Descripcion = req.Descripcion.Trim();
         await _db.SaveChangesAsync();
+        UsarCaptura(req.CapturaId, req.PesoManual);
         return (tara, null);
     }
 
@@ -518,7 +556,7 @@ public class PesajeService
         }
     }
 
-    private readonly record struct Peso(int Kg, string? Balanza, bool Manual, ResultadoPesaje? Error);
+    private readonly record struct Peso(int Kg, string? Balanza, bool Manual, ResultadoPesaje? Error, Guid? BalanzaId = null);
 
     /// <summary>
     /// El peso escrito a mano necesita el permiso, que el ingreso manual esté habilitado y la clave si hay una.
@@ -537,7 +575,7 @@ public class PesajeService
         if (capturaId is { } id)
         {
             return _capturas.Buscar(id) is { } c
-                ? new Peso(c.Kilogramos, c.Balanza, false, null)
+                ? new Peso(c.Kilogramos, c.Balanza, false, null, c.BalanzaId)
                 : new Peso(0, null, false, ResultadoPesaje.Invalida("El peso capturado venció o ya se usó: capturalo de nuevo"));
         }
 
@@ -557,8 +595,8 @@ public class PesajeService
         }
         if (errorLectura == null && l.Kilogramos <= 0) errorLectura = $"La balanza {l.Nombre} marca {l.Kilogramos} kg";
         return errorLectura == null
-            ? new Peso(l.Kilogramos, l.Nombre, false, null)
-            : new Peso(0, l.Nombre, false, ResultadoPesaje.Invalida(errorLectura));
+            ? new Peso(l.Kilogramos, l.Nombre, false, null, l.BalanzaId)
+            : new Peso(0, l.Nombre, false, ResultadoPesaje.Invalida(errorLectura), l.BalanzaId);
     }
 
     /// <summary>
