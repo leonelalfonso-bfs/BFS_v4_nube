@@ -57,6 +57,7 @@ public static class ConfigKeys
 
     public const string AduanaCodigo = "aduana_codigo";
     public const string AduanaLot = "aduana_lot";
+    public const string AduanaHabilitacion = "aduana_habilitacion";
     public const string AduanaCertificado1 = "aduana_certificado_1";
     public const string AduanaCertificado1Vence = "aduana_certificado_1_vence";
     public const string AduanaCertificado2 = "aduana_certificado_2";

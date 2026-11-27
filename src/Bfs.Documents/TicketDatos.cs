@@ -6,7 +6,7 @@ namespace Bfs.Documents;
 public record EmpresaTicket(string RazonSocial, string? Cuit, string? Direccion, string? Localidad, string? Provincia, string? Telefono, string? Email);
 
 /// <summary>Configuración de aduana de la planta (Planta → Aduana).</summary>
-public record AduanaTicket(string? Codigo, string? Lot, string? Certificado, string? CertificadoVence);
+public record AduanaTicket(string? Codigo, string? Lot, string? Certificado, string? CertificadoVence, string? Habilitacion = null);
 
 /// <summary>Una foto de cámara para el ticket: momento (entrada / salida), nombre de la cámara y la imagen.</summary>
 public record FotoTicket(string Momento, string Camara, byte[] Imagen);
@@ -33,6 +33,12 @@ public record TicketDatos(
 
     /// <summary>Configuración "marcar el exceso por eje en el ticket"; si no, el ticket muestra los pesos sin comparar.</summary>
     public bool MarcarExcesoEjes { get; init; }
+
+    /// <summary>CUIT del exportador y del ATA resueltos desde el catálogo si en la pesada habían quedado vacíos.</summary>
+    public string? ExportadorCuit { get; init; }
+    public string? AtaCuit { get; init; }
+    public string? AtaCodigo { get; init; }
+    public string ComprobanteLabel { get; init; } = "Remito";
 
     public Bfs.Core.PartesPesada Partes => Bfs.Core.PartesPesada.Leer(Pesada.PartesJson);
     public bool EsControlEjes => Pesada.Modo == Bfs.Core.ModosPesaje.ControlEjes;

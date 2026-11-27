@@ -50,6 +50,14 @@ public static class TicketTermico
         if (p.Transporte != null) Campo(o, "Transp.", p.Transporte, ancho);
         if (p.Producto != null) Campo(o, "Producto", p.Producto, ancho);
         if (p.Comprobante != null) Campo(o, "Remito", p.Comprobante, ancho);
+        if (p.Aduana is { } ad)
+        {
+            if (!string.IsNullOrWhiteSpace(ad.DestinacionAduanera)) Campo(o, "Destinacion", ad.DestinacionAduanera, ancho);
+            if (!string.IsNullOrWhiteSpace(ad.Ata)) Campo(o, "ATA", ad.Ata, ancho);
+            var cuitAta = ad.AtaCuit ?? t.AtaCuit;
+            if (!string.IsNullOrWhiteSpace(cuitAta)) Campo(o, "CUIT ATA", cuitAta, ancho);
+            if (!string.IsNullOrWhiteSpace(ad.ContenedorId)) Campo(o, "Contenedor", ad.ContenedorId, ancho);
+        }
         Linea(o, new string('-', ancho), ancho);
 
         var partes = t.Partes;

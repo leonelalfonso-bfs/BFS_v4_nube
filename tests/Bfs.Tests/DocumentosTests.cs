@@ -40,8 +40,34 @@ public class DocumentosTests
 
         var aduana = Cerrada();
         aduana.TipoOperacion = TiposOperacion.Aduana;
-        aduana.Aduana = new DatosAduana { Escenario = EscenariosAduana.IngresaConContenedor, ContenedorId = "MSKU1", ContenedorTara = 2000, ContenedorNeto = 34180, ContenedorBruto = 36180 };
-        AssertPdf(TicketPdf.Generar(Datos(aduana) with { Aduana = new AduanaTicket("017", "LOT", "C-1", "31/03/2027") }));
+        aduana.Comprobante = "0001-00054321";
+        aduana.Aduana = new DatosAduana
+        {
+            Escenario = EscenariosAduana.IngresaConContenedor,
+            Exportador = "EGNITRADE S.L.",
+            ExportadorCuit = "30-71201396-2",
+            DestinacionAduanera = "26052EC01001234A",
+            OperacionId = "OP-9988",
+            Ata = "ATA DEL LITORAL SRL",
+            AtaCuit = "30-71534221-5",
+            ChoferTipoDocumento = "DNI",
+            ChoferNacionalidad = "ARGENTINO",
+            ContenedorId = "IHOU105786-2",
+            ContenedorTara = 3610,
+            ContenedorNeto = 21000,
+            ContenedorBruto = 24610
+        };
+        var pdfAduana = TicketPdf.Generar(Datos(aduana) with
+        {
+            AtaCodigo = "ATA-09",
+            Aduana = new AduanaTicket("052", "5301M", "INTI-4455", "17/06/2028", "RES-AFIP-2026/88")
+        });
+        AssertPdf(pdfAduana);
+        Assert.Equal(1, Paginas(pdfAduana));
+        if (Environment.GetEnvironmentVariable("BFS_PDF_SALIDA") is { Length: > 0 } dirAduana)
+        {
+            File.WriteAllBytes(Path.Combine(dirAduana, "ticket-aduana.pdf"), pdfAduana);
+        }
     }
 
     [Fact]

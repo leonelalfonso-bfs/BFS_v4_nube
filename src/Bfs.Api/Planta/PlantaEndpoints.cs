@@ -96,12 +96,13 @@ public static class PlantaEndpoints
                 c.GetValueOrDefault(ConfigKeys.AduanaCertificado1),
                 Fecha(c.GetValueOrDefault(ConfigKeys.AduanaCertificado1Vence)),
                 c.GetValueOrDefault(ConfigKeys.AduanaCertificado2),
-                Fecha(c.GetValueOrDefault(ConfigKeys.AduanaCertificado2Vence))));
+                Fecha(c.GetValueOrDefault(ConfigKeys.AduanaCertificado2Vence)),
+                c.GetValueOrDefault(ConfigKeys.AduanaHabilitacion)));
         }).RequireAuthorization(Permisos.ConfigPlanta);
 
         api.MapPut("/planta/aduana", async (AduanaDto dto, ConfigService config) =>
         {
-            await config.GuardarAsync(new Dictionary<string, string>
+            var valores = new Dictionary<string, string>
             {
                 [ConfigKeys.AduanaCodigo] = dto.Codigo?.Trim() ?? "",
                 [ConfigKeys.AduanaLot] = dto.Lot?.Trim() ?? "",
@@ -109,7 +110,9 @@ public static class PlantaEndpoints
                 [ConfigKeys.AduanaCertificado1Vence] = dto.Certificado1Vence?.ToString("yyyy-MM-dd") ?? "",
                 [ConfigKeys.AduanaCertificado2] = dto.Certificado2?.Trim() ?? "",
                 [ConfigKeys.AduanaCertificado2Vence] = dto.Certificado2Vence?.ToString("yyyy-MM-dd") ?? ""
-            });
+            };
+            if (dto.Habilitacion != null) valores[ConfigKeys.AduanaHabilitacion] = dto.Habilitacion.Trim();
+            await config.GuardarAsync(valores);
             return Results.Ok(dto);
         }).RequireAuthorization(Permisos.ConfigPlanta);
 
@@ -187,5 +190,5 @@ public static class PlantaEndpoints
 public record EmpresaDto(string? Nombre, string? Cuit, string? Direccion, string? Localidad, string? Provincia,
     string? Telefono, string? Email, bool? Activa = null, string? CodigoSociedad = null);
 public record AduanaDto(string? Codigo, string? Lot, string? Certificado1, DateOnly? Certificado1Vence,
-    string? Certificado2, DateOnly? Certificado2Vence);
+    string? Certificado2, DateOnly? Certificado2Vence, string? Habilitacion = null);
 public record ClaveManualDto(string? Clave);

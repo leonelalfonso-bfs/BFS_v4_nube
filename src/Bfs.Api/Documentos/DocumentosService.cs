@@ -45,13 +45,31 @@ public class DocumentosService
             : await PorNombre(_db.Clientes, x => x.RazonSocial, p.Cliente, x => x.Cuit);
         var transporteCuit = await PorNombre(_db.Transportes, x => x.RazonSocial, p.Transporte, x => x.Cuit);
         var productoCodigo = await PorNombre(_db.Productos, x => x.Nombre, p.Producto, x => x.Codigo);
+        var comprobanteLabel = FieldCatalog.Parse(c.GetValueOrDefault(ConfigKeys.FieldsJson))
+            .FirstOrDefault(f => f.Key == "comprobante")?.Label ?? "Remito";
 
         AduanaTicket? aduana = null;
+        string? exportadorCuit = null;
+        string? ataCuit = null;
+        string? ataCodigo = null;
         if (p.TipoOperacion == TiposOperacion.Aduana)
         {
-            var vence = DateOnly.TryParse(c.GetValueOrDefault(ConfigKeys.AduanaCertificado1Vence), out var v) ? v.ToString("dd/MM/yyyy") : null;
-            aduana = new AduanaTicket(c.GetValueOrDefault(ConfigKeys.AduanaCodigo), c.GetValueOrDefault(ConfigKeys.AduanaLot),
-                c.GetValueOrDefault(ConfigKeys.AduanaCertificado1), vence);
+            exportadorCuit = !string.IsNullOrWhiteSpace(p.Aduana?.ExportadorCuit)
+                ? p.Aduana!.ExportadorCuit
+                : await PorNombre(_db.Exportadores, x => x.RazonSocial, p.Aduana?.Exportador, x => x.Cuit);
+            ataCuit = !string.IsNullOrWhiteSpace(p.Aduana?.AtaCuit)
+                ? p.Aduana!.AtaCuit
+                : await PorNombre(_db.Transportes, x => x.RazonSocial, p.Aduana?.Ata, x => x.Cuit);
+            ataCodigo = await PorNombre(_db.Transportes, x => x.RazonSocial, p.Aduana?.Ata, x => x.CodigoAta);
+
+            var (certificado, venceRaw) = await CertificadoDeBalanzaAsync(c, p.BalanzaSalida ?? p.Balanza);
+            var vence = DateOnly.TryParse(venceRaw, out var v) ? v.ToString("dd/MM/yyyy") : null;
+            aduana = new AduanaTicket(
+                c.GetValueOrDefault(ConfigKeys.AduanaCodigo),
+                c.GetValueOrDefault(ConfigKeys.AduanaLot),
+                certificado,
+                vence,
+                c.GetValueOrDefault(ConfigKeys.AduanaHabilitacion));
         }
 
         return new TicketDatos(
@@ -67,6 +85,10 @@ public class DocumentosService
             productoCodigo,
             aduana)
         {
+            ExportadorCuit = exportadorCuit,
+            AtaCuit = ataCuit,
+            AtaCodigo = ataCodigo,
+            ComprobanteLabel = comprobanteLabel,
             MarcarExcesoEjes = c.GetValueOrDefault(ConfigKeys.EjesExceso) == "ticket",
             // Las fotos están en el puesto que pesó; en la nube (o si se borraron) el ticket sale sin ellas.
             Fotos = _fotos == null ? [] : Automatizacion.AutomatizacionPesaje.Leer(p)
@@ -105,6 +127,28 @@ public class DocumentosService
         var path = Path.Combine(_tenant.CarpetaBranding(_paths), Path.GetFileName(archivo));
         // QuestPDF no dibuja SVG como imagen: el logo en SVG solo se usa en la pantalla.
         return File.Exists(path) && !path.EndsWith(".svg", StringComparison.OrdinalIgnoreCase) ? await File.ReadAllBytesAsync(path) : null;
+    }
+
+    private async Task<(string? Certificado, string? Vence)> CertificadoDeBalanzaAsync(Dictionary<string, string> c, string? nombreBalanza)
+    {
+        static string? NoVacio(string? a, string? b) => !string.IsNullOrWhiteSpace(a) ? a : (!string.IsNullOrWhiteSpace(b) ? b : null);
+
+        var c1 = c.GetValueOrDefault(ConfigKeys.AduanaCertificado1);
+        var v1 = c.GetValueOrDefault(ConfigKeys.AduanaCertificado1Vence);
+        var c2 = c.GetValueOrDefault(ConfigKeys.AduanaCertificado2);
+        var v2 = c.GetValueOrDefault(ConfigKeys.AduanaCertificado2Vence);
+
+        var usarSegunda = false;
+        if (!string.IsNullOrWhiteSpace(nombreBalanza))
+        {
+            var nombres = await _db.Balanzas.AsNoTracking().OrderBy(b => b.Orden).Select(b => b.Nombre).ToListAsync();
+            var idx = nombres.FindIndex(n => string.Equals(n, nombreBalanza.Trim(), StringComparison.OrdinalIgnoreCase));
+            usarSegunda = idx == 1;
+        }
+
+        return usarSegunda
+            ? (NoVacio(c2, c1), NoVacio(v2, v1))
+            : (NoVacio(c1, c2), NoVacio(v1, v2));
     }
 
     private static async Task<string?> PorNombre<T>(IQueryable<T> set, System.Linq.Expressions.Expression<Func<T, string>> nombre,

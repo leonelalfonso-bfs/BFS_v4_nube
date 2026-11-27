@@ -37,8 +37,8 @@ public static class TicketPdf
             if (t.EsAduana)
             {
                 page.MarginHorizontal(36);
-                page.MarginVertical(28);
-                page.Content().Element(c => Aduana(c, t));
+                page.MarginVertical(24);
+                page.Content().ScaleToFit().Element(c => Aduana(c, t));
                 return;
             }
 
@@ -250,22 +250,38 @@ public static class TicketPdf
                 Par(s, "Fecha:", t.EntradaLocal.ToString("dd/MM/yyyy"));
                 Par(s, "Hora:", t.EntradaLocal.ToString("HH:mm:ss"));
                 Par(s, "Exportador/Importador Razón Social:", Texto(a.Exportador));
-                Par(s, "CUIT:", Texto(a.ExportadorCuit));
+                Par(s, "CUIT:", Texto(a.ExportadorCuit ?? t.ExportadorCuit));
                 Par(s, "Escenario:", a.Escenario);
             });
             Seccion(col, "Destinación/Operación Aduanera", s =>
             {
-                Par(s, "Número:", Texto(a.OperacionId));
+                Par(s, "Destinación Aduanera:", Texto(a.DestinacionAduanera));
+                Par(s, "Número de Operación:", Texto(a.OperacionId));
+                if (!string.IsNullOrWhiteSpace(p.Comprobante)) Par(s, $"{t.ComprobanteLabel}:", Texto(p.Comprobante));
                 Par(s, "Mercadería:", Texto(p.Producto));
                 Par(s, "Cód. Prod.:", Texto(t.ProductoCodigo));
                 Par(s, "Código Aduana:", Texto(t.Aduana?.Codigo));
-                Par(s, "Código LOT:", Texto(t.Aduana?.Lot));
+                Par(s, "Código LOT:", Texto(!string.IsNullOrWhiteSpace(a.Lot) ? a.Lot : t.Aduana?.Lot));
+                if (!string.IsNullOrWhiteSpace(t.Aduana?.Habilitacion)) Par(s, "N° de Habilitación:", Texto(t.Aduana.Habilitacion));
                 Par(s, "Certificado de Habilitación N°:", $"{Texto(t.Aduana?.Certificado)}   Vencimiento: {Texto(t.Aduana?.CertificadoVence)}");
             });
-            Seccion(col, "Transportista", s =>
+            col.Item().Row(r =>
             {
-                Par(s, "Razón Social:", Texto(p.Transporte));
-                Par(s, "CUIT:", Texto(t.TransporteCuit));
+                r.Spacing(8);
+                r.RelativeItem().Border(0.5f).Padding(6).Column(s =>
+                {
+                    s.Item().Text("Transportista").Bold().FontSize(8);
+                    Par(s, "Razón Social:", Texto(p.Transporte));
+                    Par(s, "CUIT:", Texto(t.TransporteCuit));
+                });
+                r.RelativeItem().Border(0.5f).Padding(6).Column(s =>
+                {
+                    s.Item().Text("Agente de Transporte Aduanero (ATA)").Bold().FontSize(8);
+                    var ataRazon = Texto(a.Ata);
+                    if (!string.IsNullOrWhiteSpace(t.AtaCodigo)) ataRazon = ataRazon.Length > 0 ? $"{ataRazon} ({t.AtaCodigo})" : t.AtaCodigo;
+                    Par(s, "Razón Social:", ataRazon);
+                    Par(s, "CUIT:", Texto(a.AtaCuit ?? t.AtaCuit));
+                });
             });
             Seccion(col, "Chofer", s =>
             {
