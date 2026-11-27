@@ -2649,12 +2649,12 @@ async function renderSistema() {
       const d = await api("/api/sistema/importar-3x");
       importar = `
     <div class="card">
-      <h3 style="margin-top:0">Importar desde la 3.x</h3>
+      <h3 style="margin-top:0">Importar desde versión anterior (1.x o 3.x)</h3>
       <p>${d.existe
         ? `Se encontró <code>${esc(d.ruta)}</code>: ${Object.entries(d.contenido).map(([k, v]) => `${esc(k)} ${v}`).join(" · ")}.`
-        : `No se encontró la base de la 3.x en <code>${esc(d.ruta)}</code>. Podés subir una copia.`}
-        La base de la 3.x no se modifica; lo que ya existe en la 4.0 se omite y antes se guarda un backup.</p>
-      <div class="grid2"><div><label>O subir otra truckscale.db</label><input id="imp_archivo" type="file" accept=".db" /></div></div>
+        : `No se encontró una base 3.x en <code>${esc(d.ruta)}</code>. Podés subir un backup <code>.sql</code> de la 1.x o un <code>truckscale.db</code> de la 3.x.`}
+        El archivo original no se modifica; lo que ya existe en la 4.0 se omite y antes se guarda un backup.</p>
+      <div class="grid2"><div><label>Subir archivo (.sql de la 1.x o truckscale.db de la 3.x)</label><input id="imp_archivo" type="file" accept=".db,.sql" /></div></div>
       <div class="btn-row"><button class="btn-primary" onclick="importar3x()">Importar</button></div>
       <div id="imp_resultado"></div>
     </div>`;
@@ -2761,7 +2761,8 @@ function fijarTicket(empresaId) {
 
 async function importar3x() {
   const file = document.getElementById("imp_archivo")?.files?.[0];
-  if (!confirm("¿Importar los datos de la 3.x a esta instalación?")) return;
+  const origen = file ? file.name : "la base 3.x local";
+  if (!confirm(`¿Importar los datos de ${origen} a esta instalación?`)) return;
   const body = new FormData();
   if (file) body.append("file", file);
   const out = document.getElementById("imp_resultado");

@@ -5,7 +5,7 @@
 # Requisitos: .NET 10 SDK y WiX (dotnet tool install --global wix).
 # (Sin acentos a proposito: Windows PowerShell 5.1 lee los .ps1 sin BOM como ANSI.)
 param(
-    [string]$Version = "4.0.20",
+    [string]$Version = "4.0.21",
     [ValidateSet("Completa", "Estandar")]
     [string]$Edicion = "Completa"
 )
