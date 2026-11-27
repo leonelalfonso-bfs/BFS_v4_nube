@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Bfs.Api.Sistema;
 
-/// <summary>Importación de una base de la 3.x. La hace BFS al instalar; antes se guarda un backup de la base 4.0.</summary>
+/// <summary>Importación de una base anterior (1.x <c>.sql</c> o 3.x <c>truckscale.db</c>). Antes se guarda un backup de la base 4.0.</summary>
 public static class ImportacionEndpoints
 {
     public static string RutaPorDefecto3x()
@@ -28,9 +28,11 @@ public static class ImportacionEndpoints
             if (!File.Exists(archivo)) return Results.Ok(new { ruta = archivo, existe = false });
             try
             {
-                return Results.Ok(new { ruta = archivo, existe = true, contenido = Importador3x.Contar(archivo) });
+                var es1x = Importador1x.EsBase1x(archivo);
+                var contenido = es1x ? Importador1x.Contar(archivo) : Importador3x.Contar(archivo);
+                return Results.Ok(new { ruta = archivo, existe = true, version = es1x ? "1.x" : "3.x", contenido });
             }
-            catch (SqliteException ex)
+            catch (Exception ex) when (ex is SqliteException or InvalidOperationException or IOException)
             {
                 return Results.BadRequest($"No se pudo leer {archivo}: {ex.Message}");
             }
@@ -50,7 +52,8 @@ public static class ImportacionEndpoints
                 var form = await request.ReadFormAsync(new FormOptions { MultipartBodyLengthLimit = SistemaEndpoints.MaxRestaurar });
                 if (form.Files.FirstOrDefault() is { Length: > 0 } subido)
                 {
-                    temporal = Path.Combine(Path.GetTempPath(), $"truckscale-{Guid.NewGuid():N}.db");
+                    var ext = string.Equals(Path.GetExtension(subido.FileName), ".sql", StringComparison.OrdinalIgnoreCase) ? ".sql" : ".db";
+                    temporal = Path.Combine(Path.GetTempPath(), $"bfs-import-{Guid.NewGuid():N}{ext}");
                     await using (var f = File.Create(temporal)) await subido.CopyToAsync(f);
                     archivo = temporal;
                 }
@@ -71,10 +74,14 @@ public static class ImportacionEndpoints
                 var empresa = await db.Empresas.OrderBy(e => e.CreadoEn).ThenBy(e => e.Id).FirstAsync();
                 Backup? backup = options.Modo == ModoDespliegue.Nodo ? sistema.CrearBackup() : null;
 
-                var resultado = await new Importador3x(db, hasher, options.ZonaHoraria, tenant.CarpetaBranding(paths)).ImportarAsync(archivo, empresa.Id);
-                log.LogInformation("Importación 3.x desde {Archivo}: {@Conteos}", archivo, resultado.Conteos);
+                var es1x = Importador1x.EsBase1x(archivo);
+                var carpetaBranding = tenant.CarpetaBranding(paths);
+                var resultado = es1x
+                    ? await new Importador1x(db, hasher, options.ZonaHoraria, carpetaBranding).ImportarAsync(archivo, empresa.Id)
+                    : await new Importador3x(db, hasher, options.ZonaHoraria, carpetaBranding).ImportarAsync(archivo, empresa.Id);
+                log.LogInformation("Importación {Version} desde {Archivo}: {@Conteos}", es1x ? "1.x" : "3.x", archivo, resultado.Conteos);
                 await Balanzas.BalanzaEndpoints.AplicarAsync(db, balanzas);
-                return Results.Ok(new { resultado.Conteos, resultado.Avisos, backupPrevio = backup?.Archivo });
+                return Results.Ok(new { resultado.Conteos, resultado.Avisos, backupPrevio = backup?.Archivo, version = es1x ? "1.x" : "3.x" });
             }
             catch (Exception ex) when (ex is InvalidOperationException or SqliteException or IOException)
             {
