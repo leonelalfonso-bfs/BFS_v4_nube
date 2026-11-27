@@ -38,6 +38,9 @@ public static class Inagro
 
     public const string PlantaPorDefecto = "1: Alvear";
 
+    /// <summary>Webhook productivo de Centum que tenía fijo <c>PesajeScene.java</c> en la 3.x de INAGRO.</summary>
+    public const string WebhookCentumPorDefecto = "https://automate.gauchocode.com/webhook/balanzas-inagro-fbd8-4ad3-95d5-f9c5df8d6885";
+
     /// <summary>Sociedad de Centum que no se envía (en la 3.x: "4: No Vincula Centum").</summary>
     public const string SociedadNoVincula = "4";
 

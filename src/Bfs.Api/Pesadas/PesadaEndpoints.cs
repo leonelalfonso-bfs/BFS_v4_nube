@@ -58,6 +58,10 @@ public static class PesadaEndpoints
             ToResult(await pesaje.CorregirAsync(id, req, user.Email())))
             .RequireAuthorization(Permisos.PesajeCorregir);
 
+        api.MapPost("/pesadas/{id:guid}/centum", async (Guid id, PesajeService pesaje) =>
+            ToResult(await pesaje.EnviarCentumAsync(id)))
+            .RequireAuthorization(Permisos.PesajeCorregir);
+
         api.MapPost("/taras/tomar", async (TomarTaraRequest req, PesajeService pesaje, ClaimsPrincipal user) =>
         {
             var (tara, error) = await pesaje.TomarTaraAsync(req, Operador(user));
@@ -114,8 +118,9 @@ public record DatosInagroDto(
     string? ObservacionesRemito = null);
 
 /// <param name="CapturaId">Peso capturado antes con /pesadas/capturar (si no viene ni peso manual, se lee la balanza ahora).</param>
+/// <param name="Datos">Edición Inagro: permite completar o ajustar en la salida los datos comerciales, laboratorio y peso de origen.</param>
 public record SalidaRequest(int? PesoSalida, int? TaraPallets, Guid? BalanzaId = null, string? ClaveManual = null, Guid? CapturaId = null,
-    string? ModoCaptura = null, List<ParteRequest>? Partes = null);
+    string? ModoCaptura = null, List<ParteRequest>? Partes = null, EntradaRequest? Datos = null);
 
 /// <param name="Parcial">Una parte del camión o un eje: no se exige que el camión entero esté sobre la balanza (sensores).</param>
 public record CapturarRequest(Guid? BalanzaId, bool Parcial = false);

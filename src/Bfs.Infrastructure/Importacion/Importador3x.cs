@@ -135,6 +135,15 @@ public class Importador3x
         if (Str(f, "thermal_printer_name") is { } impresora) config[ConfigKeys.TermicaImpresora] = impresora;
         if (Str(f, "thermal_paper_width") is { } ancho) config[ConfigKeys.TermicaAncho] = ancho.StartsWith("58") ? "58" : "80";
         if (Str(f, "clave_manual") is { } clave) config[ConfigKeys.ClaveManualHash] = _hasher.HashPassword(new Usuario(), clave);
+        if (Str(f, "print_mode_preference") is { } modoImp)
+        {
+            config[ConfigKeys.InagroImpresion] = modoImp.ToLowerInvariant() switch
+            {
+                "ticket" => "ticket",
+                "remito" => "remito",
+                _ => "preguntar"
+            };
+        }
 
         // El logo: la 3.x guardaba la ruta absoluta; si el archivo sigue ahí (o al lado de la base) se copia.
         if (Str(f, "logo_path") is { } logo)
@@ -330,10 +339,12 @@ public class Importador3x
             .GroupBy(e => e.CodigoSociedad!.Trim()).ToDictionary(g => g.Key, g => g.First());
         var usadas = new HashSet<Empresa> { empresa };
         var conInagro = false;
+        var soloNumeros = true;
 
         foreach (var f in Filas(conn, "weighings"))
         {
             var ticket = Str(f, "ticket_numero") ?? Str(f, "id")!;
+            if (ticket.Contains('-')) soloNumeros = false;
             var entrada = Fecha(Str(f, "fecha"));
             if (entrada == null)
             {
@@ -368,7 +379,7 @@ public class Importador3x
                 PatenteChasis = Patente.Normalizar(Str(f, "patente_chasis") ?? Str(f, "carro_id")),
                 PatenteAcoplado = Str(f, "patente_acoplado") is { } acoplado ? Patente.Normalizar(acoplado) : null,
                 Conductor = Str(f, "nombre_chofer"),
-                Documento = Str(f, "dni_chofer"),
+                Documento = Str(f, "dni_chofer") ?? Str(f, "cuil_chofer"),
                 Cliente = Str(f, "client_razon"),
                 Transporte = Str(f, "transport_razon"),
                 Producto = Str(f, "producto") ?? Str(f, "mercaderia"),
@@ -446,6 +457,11 @@ public class Importador3x
             }
             foreach (var e in usadas) e.ProximoTicket = Math.Max(e.ProximoTicket, maximo + 1);
             await _db.SaveChangesAsync();
+        }
+        // En la 3.x de INAGRO los tickets eran números correlativos simples ("8282"), sin prefijo de puesto.
+        if (conInagro && soloNumeros && importadas > 0)
+        {
+            await GuardarConfig(new() { [ConfigKeys.TicketSoloNumero] = "true" });
         }
         if (conFotos > 0) _avisos.Add($"{conFotos} pesadas tenían fotos: la 4.0 todavía no las importa (quedan en la carpeta de la 3.x).");
         if (sinFecha > 0) _avisos.Add($"{sinFecha} pesadas no tenían una fecha legible y quedaron con fecha 01/01/1970.");

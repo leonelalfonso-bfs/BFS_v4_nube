@@ -206,19 +206,62 @@ public class InagroTests
         Assert.Equal("2", payload.GetProperty("planta").GetString());
         Assert.Equal("20286677814", payload.GetProperty("chofer_dni").GetString());
 
-        // Ticket y remito preimpreso.
+        // Ticket, remito preimpreso y Excel con Peso de origen y Diferencia vs. origen.
         var id1 = p1.GetProperty("id").GetGuid();
         var remito = await admin.GetAsync($"/api/pesadas/{id1}/remito");
         Assert.Equal(HttpStatusCode.OK, remito.StatusCode);
         Assert.Equal("application/pdf", remito.Content.Headers.ContentType?.MediaType);
         Assert.StartsWith("%PDF", System.Text.Encoding.ASCII.GetString((await remito.Content.ReadAsByteArrayAsync())[..4]));
         Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync($"/api/pesadas/{id1}/ticket")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync("/api/pesadas/excel")).StatusCode);
+        var excelBytes = await admin.GetByteArrayAsync("/api/pesadas/excel");
+        using (var wb = new ClosedXML.Excel.XLWorkbook(new MemoryStream(excelBytes)))
+        {
+            var ws = wb.Worksheet("Pesadas");
+            int Col(string n) => ws.Row(3).CellsUsed().First(c => c.GetString() == n).Address.ColumnNumber;
+            var colNeto = Col("Neto (kg)");
+            var colOrigen = Col("Peso de origen (kg)");
+            var colDif = Col("Diferencia vs. origen (kg)");
+            Assert.Equal(colNeto + 1, colOrigen);
+            Assert.Equal(colNeto + 2, colDif);
+            Assert.Equal(28460, ws.Cell(4, colOrigen).GetDouble());
+            Assert.Equal(0, ws.Cell(4, colDif).GetDouble());
+        }
 
-        // Corrección de un campo de INAGRO, con historial.
-        var corr = await admin.PostAsJsonAsync($"/api/pesadas/{id1}/corregir", new { motivo = "Tanque equivocado", datos = new Dictionary<string, string?> { ["inagro.tanque"] = "TK 306", ["inagro.analisis"] = "70864" } });
+        // Corrección de un campo de INAGRO (incluyendo Peso de origen) y reenvío explícito a Centum.
+        var corr = await admin.PostAsJsonAsync($"/api/pesadas/{id1}/corregir", new
+        {
+            motivo = "Tanque y peso origen corregidos",
+            datos = new Dictionary<string, string?> { ["inagro.tanque"] = "TK 306", ["inagro.analisis"] = "70864", ["inagro.pesoOrigen"] = "28500" }
+        });
         Assert.True(corr.IsSuccessStatusCode, await corr.Content.ReadAsStringAsync());
         Assert.Equal("TK 306", (await corr.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("inagro").GetProperty("tanque").GetString());
+        var reenvio = await admin.PostAsync($"/api/pesadas/{id1}/centum", null);
+        Assert.True(reenvio.IsSuccessStatusCode, await reenvio.Content.ReadAsStringAsync());
+        var outboxActualizado = LeerOutbox(api.DataPath);
+        Assert.Contains(outboxActualizado, o => o.Destino == CentumDestino.Destino && o.Payload.Contains("00028,50") && o.Payload.Contains("TK 306"));
+
+        // Entrada mínima (solo patente e Id de operación, como en portería) y completado de datos + Peso de origen recién en la salida.
+        var rMin = await admin.PostAsJsonAsync("/api/pesadas/entrada", new
+        {
+            empresaId = TestApi.Empresa1, patenteChasis = "EXW450", patenteAcoplado = "GDC538", conductor = "PIAZZA", documento = "22302575",
+            pesoEntrada = 42840, inagro = new { movimiento = 1 }
+        });
+        Assert.True(rMin.IsSuccessStatusCode, await rMin.Content.ReadAsStringAsync());
+        var idMin = (await rMin.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        var salMin = await admin.PostAsJsonAsync($"/api/pesadas/{idMin}/salida", new
+        {
+            pesoSalida = 14840,
+            datos = new
+            {
+                empresaId = TestApi.Empresa1, patenteChasis = "EXW450", patenteAcoplado = "GDC538", conductor = "PIAZZA", documento = "22302575",
+                cliente = "PATAGONIA", transporte = "Inagro SRL", producto = "Borras Vegetales", comprobante = "00012-00000123",
+                inagro = new { movimiento = 1, pesoOrigen = 27900, tanque = "TK 12", analisis = "91234" }
+            }
+        });
+        Assert.True(salMin.IsSuccessStatusCode, await salMin.Content.ReadAsStringAsync());
+        var outboxFinal = LeerOutbox(api.DataPath);
+        Assert.Contains(outboxFinal, o => o.Destino == CentumDestino.Destino && o.Payload.Contains("00027,90") && o.Payload.Contains("00028,00") && o.Payload.Contains("91234"));
+
         var malCorr = await admin.PostAsJsonAsync($"/api/pesadas/{id1}/corregir", new { motivo = "x", datos = new Dictionary<string, string?> { ["inagro.movimiento"] = "7" } });
         Assert.Equal(HttpStatusCode.BadRequest, malCorr.StatusCode);
     }
@@ -278,9 +321,11 @@ public class InagroTests
         var noVincula = await db.Empresas.SingleAsync(e => e.CodigoSociedad == Inagro.SociedadNoVincula);
         Assert.Equal(noVincula.Id, pesadas["8354"].EmpresaId);
 
-        // La numeración compartida sigue después del último ticket de la 3.x.
+        // La numeración compartida sigue después del último ticket de la 3.x y respeta tickets de solo número.
         var contador = await db.ContadoresTicket.SingleAsync(c => c.EmpresaId == ContadoresCompartidos.Empresa && c.Puesto == 1);
         Assert.Equal(8355, contador.Proximo);
+        Assert.Equal("true", (await db.Configuraciones.SingleAsync(c => c.Clave == ConfigKeys.TicketSoloNumero)).Valor);
+        Assert.Equal(Inagro.WebhookCentumPorDefecto, (await db.Configuraciones.SingleAsync(c => c.Clave == ConfigKeys.CentumEndpoint)).Valor);
     }
 
     private static void CrearBaseInagro(string archivo)

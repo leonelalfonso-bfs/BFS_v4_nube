@@ -800,6 +800,15 @@ async function renderPesaje() {
       <strong>${esc(state.licencia.mensaje)}</strong>
       <p style="margin:6px 0 0">ID de máquina: <code>${esc(state.licencia.maquina)}</code>. No se pueden registrar entradas nuevas; sí cerrar las salidas pendientes.</p>
     </div>` : ""}
+    ${inagro && state.funciones.centumErrores > 0 ? `
+    <div class="card" style="border-left:4px solid #c0392b;margin-bottom:12px">
+      <strong>Hay ${state.funciones.centumErrores} envío(s) rechazado(s) por Centum.</strong>
+      <p style="margin:4px 0 0">Corregí los datos faltantes en <strong>Pesadas</strong> (y tocá <em>Enviar a Centum</em>) o revisá el detalle en <strong>Configuración → API</strong>.</p>
+    </div>` : inagro && !state.funciones.centumActivo ? `
+    <div class="card" style="border-left:4px solid #d97706;margin-bottom:12px">
+      <strong>Envío automático a Centum desactivado.</strong>
+      <p style="margin:4px 0 0">Activalo en <strong>Configuración → API → Centum</strong> para transmitir cada salida cerrada (también podés enviarlas manualmente desde <strong>Pesadas</strong>).</p>
+    </div>` : ""}
     <div class="peso-fijo">
       <div class="card peso-card">
         <div class="displays ${state.balanzas.length > 1 ? "dos" : ""}" id="displays">${balanzasEnPantalla().map(displayBalanza).join("")}</div>
@@ -807,7 +816,7 @@ async function renderPesaje() {
         <div class="captura" id="captura">${bloqueCaptura()}</div>
         <div class="peso-pie">
           <div class="peso-meta">
-            ${modo !== "tomar" ? `<div class="status-box"><span>Empresa en curso</span>${selectorEmpresa(salida?.empresaId)}</div>
+            ${modo !== "tomar" ? `<div class="status-box"><span>Empresa en curso</span>${selectorEmpresa(salida && !inagro ? salida.empresaId : null)}</div>
             <div class="status-box status-ticket"><span>${salida ? "Ticket en salida" : "Próximo ticket"}</span><strong id="proximoTicketValor">${esc(salida ? salida.ticketNumero : proximoTicket)}</strong></div>` : `<div class="status-box"><span>Modo</span><strong>Tomar tara</strong></div>`}
           </div>
           <div class="peso-ayuda">
@@ -953,7 +962,7 @@ function togglePesoOrigen() {
   const lleva = ["1", "3"].includes(val("in_movimiento"));
   const el = document.getElementById("in_pesoOrigen");
   if (!el) return;
-  el.disabled = !lleva || state.selectedPesadaId != null;
+  el.disabled = !lleva || (!esInagro() && state.selectedPesadaId != null);
   if (!lleva) el.value = "";
 }
 
@@ -997,18 +1006,22 @@ const CAMPOS_PANTALLA = [
   ["in_cuilChofer", p => p.inagro?.cuilChofer], ["in_observacionesRemito", p => p.inagro?.observacionesRemito]
 ];
 
-/** Carga en pantalla los datos de la entrada y los deja de solo lectura (salvo la tara de pallets, que se ajusta al salir). */
+/**
+ * Carga en pantalla los datos de la entrada. En general quedan de solo lectura (salvo la tara de pallets);
+ * en INAGRO quedan editables salvo la patente chasis porque análisis, tanque, precintos, remito y peso de origen
+ * suelen completarse recién al salir, justo antes del envío a Centum.
+ */
 function mostrarEntrada(p) {
+  const inagro = esInagro();
   for (const [id, leer] of CAMPOS_PANTALLA) {
     const el = document.getElementById(id);
     if (!el) continue;
     el.value = leer(p) ?? "";
-    if (id !== "taraPallets") el.disabled = true;
+    if (inagro ? id === "patenteChasis" : id !== "taraPallets") el.disabled = true;
   }
-  // En la salida los datos son los de la entrada: no se cambian ni se agregan.
-  document.querySelectorAll(".btn-alta").forEach(b => b.disabled = true);
+  if (!inagro) document.querySelectorAll(".btn-alta").forEach(b => b.disabled = true);
   toggleAduana();
-  if (esInagro()) togglePesoOrigen();
+  if (inagro) togglePesoOrigen();
   document.querySelector(".salida-head")?.scrollIntoView({ block: "center" });
 }
 
@@ -1413,14 +1426,19 @@ document.addEventListener("keydown", e => {
 
 function selectPesada(id) {
   state.selectedPesadaId = state.selectedPesadaId === id ? null : id;
+  if (state.selectedPesadaId && esInagro()) {
+    const p = state.pendientes.find(x => x.id === state.selectedPesadaId);
+    if (p?.empresaId) {
+      try { localStorage.setItem("bfs_empresa", p.empresaId); } catch {}
+    }
+  }
   renderPesaje();
 }
 
-function collectPesaje() {
+function datosFormularioPesaje() {
   // En INAGRO el tipo (ingreso / egreso) sale del Id de operación: no está en el formulario.
   const missing = fields().filter(f => f.visible && f.required && !val(f.key) && f.key !== "taraPallets" && !(esInagro() && f.key === "tipo"));
   if (missing.length) throw new Error("Completá: " + missing.map(f => f.label).join(", "));
-  const m = pesoParaGuardar();
   return {
     empresaId: empresaEnCurso(),
     balanzaId: balanzaActual().balanzaId || null,
@@ -1439,13 +1457,21 @@ function collectPesaje() {
     comprobante: val("comprobante") || null,
     observaciones: val("observaciones") || null,
     taraPallets: visible("taraPallets") ? num("taraPallets") : 0,
+    ...datosAduana(),
+    inagro: datosInagro()
+  };
+}
+
+function collectPesaje() {
+  const base = datosFormularioPesaje();
+  const m = pesoParaGuardar();
+  return {
+    ...base,
     pesoEntrada: m.peso,
     claveManual: m.clave,
     capturaId: m.capturaId,
     modoCaptura: m.modoCaptura || null,
-    partes: m.partes || null,
-    ...datosAduana(),
-    inagro: datosInagro()
+    partes: m.partes || null
   };
 }
 
@@ -1478,6 +1504,7 @@ async function guardarSalida() {
     return;
   }
   try {
+    const datos = esInagro() ? datosFormularioPesaje() : null;
     const m = pesoParaGuardar();
     const pesada = await api(`/api/pesadas/${state.selectedPesadaId}/salida`, {
       method: "POST",
@@ -1488,7 +1515,8 @@ async function guardarSalida() {
         claveManual: m.clave,
         capturaId: m.capturaId,
         modoCaptura: m.modoCaptura || null,
-        partes: m.partes || null
+        partes: m.partes || null,
+        datos
       })
     });
     state.selectedPesadaId = null;
@@ -2654,7 +2682,7 @@ async function renderReportes() {
     </div>
     <div class="card" style="overflow-x:auto">
       <table>
-        <tr><th>Ticket</th><th>Fecha</th><th>Empresa</th><th>Patente</th><th>Cliente</th><th>Producto</th><th>Estado</th><th>Entrada</th><th>Salida</th><th>Neto</th><th></th></tr>
+        <tr><th>Ticket</th><th>Fecha</th><th>Empresa</th><th>Patente</th><th>Cliente</th><th>Producto</th><th>Estado</th><th>Entrada</th><th>Salida</th><th>Neto</th>${esInagro() ? "<th>Origen</th>" : ""}<th></th></tr>
         ${r.items.length ? r.items.map(p => `<tr>
           <td>${esc(p.ticketNumero)}${p.modo === "TaraConocida" ? ` <span class="pill pill-info">Tara conocida</span>` : ""}${p.tipoOperacion === "Aduana" ? ` <span class="pill pill-info">Aduana</span>` : ""}</td>
           <td>${esc(hora(p.entradaEn))}</td>
@@ -2666,13 +2694,15 @@ async function renderReportes() {
           <td>${p.pesoEntrada}${p.entradaManualPor ? " ✎" : ""}</td>
           <td>${p.pesoSalida ?? "-"}${p.salidaManualPor ? " ✎" : ""}</td>
           <td>${p.estado === "ANULADA" ? "-" : (p.neto ?? "-")}</td>
+          ${esInagro() ? `<td>${p.estado === "ANULADA" ? "-" : (p.inagro?.pesoOrigen ?? "-")}</td>` : ""}
           <td><div class="btn-row" style="margin:0">
             ${botonesTicket(p.id)}
             ${p.estado === "ENTRADA" && can("pesaje.operar") ? `<button class="btn" onclick="retomarPesada('${p.id}')">Retomar</button>` : ""}
             ${p.estado !== "ANULADA" && can("pesaje.corregir") ? `<button class="btn" onclick="corregirPesada('${p.id}')">Corregir</button>` : ""}
+            ${p.estado === "SALIDA" && esInagro() && can("pesaje.corregir") ? `<button class="btn" onclick="enviarCentum('${p.id}')" title="Encolar/reenviar esta pesada a Centum">Centum</button>` : ""}
             ${p.estado !== "ANULADA" && can("pesaje.anular") ? `<button class="btn-danger" onclick="anularPesada('${p.id}')">Anular</button>` : ""}
           </div></td>
-        </tr>`).join("") : `<tr><td colspan="11">No hay pesadas con esos filtros.</td></tr>`}
+        </tr>`).join("") : `<tr><td colspan="${esInagro() ? 12 : 11}">No hay pesadas con esos filtros.</td></tr>`}
       </table>
       <div class="btn-row">
         <button class="btn" ${state.pagina <= 1 ? "disabled" : ""} onclick="state.pagina--;renderReportes()">Anterior</button>
@@ -2763,14 +2793,15 @@ async function corregirPesada(id) {
       </div>
       <p class="error" id="err"></p>
       <div class="btn-row">
-        <button class="btn-primary" onclick="guardarCorreccion('${p.id}')">Guardar corrección</button>
+        <button class="btn-primary" onclick="guardarCorreccion('${p.id}', false)">Guardar corrección</button>
+        ${p.estado === "SALIDA" && p.inagro ? `<button class="btn-primary" onclick="guardarCorreccion('${p.id}', true)">Guardar y enviar a Centum</button>` : ""}
         <button class="btn" onclick="renderReportes()">Volver</button>
       </div>
     </div>
     <div class="card"><h3 style="margin-top:0">Historial</h3>${historialCorrecciones(p)}</div>`;
 }
 
-async function guardarCorreccion(id) {
+async function guardarCorreccion(id, reenviarACentum = false) {
   const p = state.reporteItems.find(x => x.id === id);
   const datos = {};
   for (const [key, , leer] of CORREGIBLES) {
@@ -2782,10 +2813,27 @@ async function guardarCorreccion(id) {
       method: "POST",
       body: JSON.stringify({ motivo: val("co_motivo"), clave: val("co_clave") || null, datos })
     });
-    toast(`Ticket ${r.ticketNumero} corregido`);
+    if (reenviarACentum) {
+      await api(`/api/pesadas/${id}/centum`, { method: "POST" });
+      toast(`Ticket ${r.ticketNumero} corregido y encolado para Centum`);
+    } else {
+      toast(`Ticket ${r.ticketNumero} corregido`);
+    }
     await renderReportes();
   } catch (e) {
     mostrarError(e);
+  }
+}
+
+async function enviarCentum(id) {
+  const p = (state.reporteItems || []).find(x => x.id === id);
+  if (!confirm(`¿Enviar el ticket ${p?.ticketNumero || ""} a Centum con sus datos actuales?`)) return;
+  try {
+    await api(`/api/pesadas/${id}/centum`, { method: "POST" });
+    state.funciones = await api("/api/funciones");
+    toast("Pesada encolada/enviada a Centum");
+  } catch (e) {
+    toast(limpiarError(e), "err");
   }
 }
 

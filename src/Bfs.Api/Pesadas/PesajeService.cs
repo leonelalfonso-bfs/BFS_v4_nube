@@ -41,12 +41,15 @@ public class PesajeService
     private readonly BfsOptions _opciones;
     private readonly CapturasPeso _capturas;
     private readonly AutomatizacionPesaje? _auto;
+    private readonly Bfs.Integrations.DespachadorOutbox? _despachador;
 
     public PesajeService(BfsDbContext db, IBalanzas balanzas, ConfigService config, LicenciaService licencia, PasswordHasher<Usuario> hasher,
-        BfsOptions? opciones = null, CapturasPeso? capturas = null, AutomatizacionPesaje? automatizacion = null)
+        BfsOptions? opciones = null, CapturasPeso? capturas = null, AutomatizacionPesaje? automatizacion = null,
+        Bfs.Integrations.DespachadorOutbox? despachador = null)
     {
         _opciones = opciones ?? new BfsOptions();
         _auto = automatizacion;
+        _despachador = despachador;
         _capturas = capturas ?? new CapturasPeso();
         _edicion = opciones?.Edicion ?? Ediciones.Compilada;
         _db = db;
@@ -194,6 +197,11 @@ public class PesajeService
         if (pesada.Estado == EstadosPesada.Anulada) return ResultadoPesaje.Invalida("La pesada está anulada");
 
         var configs = await _config.GlobalAsync();
+        if (_edicion == Edicion.Inagro && req.Datos is { } datosSalida)
+        {
+            var errorDatos = await AplicarDatosSalidaInagro(pesada, datosSalida, configs);
+            if (errorDatos != null) return errorDatos;
+        }
         var (peso, detalle) = TomarPesoCompuesto(req.ModoCaptura, req.Partes, req.PesoSalida, req.ClaveManual, req.BalanzaId, op, configs, req.CapturaId);
         if (peso.Error != null) return peso.Error;
         if (detalle != null) pesada.PartesJson = (PartesPesada.Leer(pesada.PartesJson) with { Salida = detalle }).Escribir();
@@ -420,6 +428,13 @@ public class PesajeService
         if (faltan.Count > 0) return ResultadoPesaje.Invalida("No se puede dejar vacío: " + string.Join(", ", faltan));
 
         if (req.Datos!.ContainsKey("cliente")) pesada.ClienteId = await ResolverCliente(null, pesada.Cliente);
+        if (_edicion == Edicion.Inagro && pesada.Inagro != null)
+        {
+            await RefrescarCatalogosInagro(pesada,
+                actualizarCliente: req.Datos.ContainsKey("cliente"),
+                actualizarTransporte: req.Datos.ContainsKey("transporte"),
+                actualizarProducto: req.Datos.ContainsKey("producto") && !req.Datos.ContainsKey("inagro.productoCodigo"));
+        }
 
         var historial = JsonSerializer.Deserialize<List<CorreccionPesada>>(pesada.CorreccionesJson, JsonWeb) ?? [];
         historial.Add(new CorreccionPesada(DateTimeOffset.UtcNow, usuario, req.Motivo.Trim(), cambios));
@@ -916,6 +931,104 @@ public class PesajeService
         if (_edicion != Edicion.Inagro || pesada.Inagro == null) return;
         var sociedad = await _db.Empresas.AsNoTracking().Where(e => e.Id == pesada.EmpresaId).Select(e => e.CodigoSociedad).FirstOrDefaultAsync();
         CentumOutbox.Encolar(_db, configs, pesada, sociedad, _opciones.HoraLocal(pesada.EntradaEn));
+    }
+
+    /// <summary>
+    /// En INAGRO muchos datos del viaje (cliente, tanque, análisis de laboratorio, precintos, remito y peso de origen)
+    /// se completan o confirman recién al cerrar la salida, justo antes de disparar el envío a Centum.
+    /// </summary>
+    private async Task<ResultadoPesaje?> AplicarDatosSalidaInagro(Pesada pesada, EntradaRequest d, Dictionary<string, string> configs)
+    {
+        if (d.EmpresaId != Guid.Empty && d.EmpresaId != pesada.EmpresaId)
+        {
+            if (!await _db.Empresas.AnyAsync(e => e.Id == d.EmpresaId)) return ResultadoPesaje.Invalida("Empresa inexistente");
+            pesada.EmpresaId = d.EmpresaId;
+        }
+
+        var clienteId = await ResolverCliente(d.ClienteId, d.Cliente);
+        var (inagro, errorInagro) = await ArmarInagro(d, clienteId, configs);
+        if (errorInagro != null) return ResultadoPesaje.Invalida(errorInagro);
+
+        pesada.PatenteAcoplado = string.IsNullOrWhiteSpace(d.PatenteAcoplado) ? null : Patente.Normalizar(d.PatenteAcoplado);
+        pesada.Conductor = Vacio(d.Conductor);
+        pesada.Documento = Vacio(d.Documento);
+        pesada.TipoDocumento = Vacio(d.TipoDocumento);
+        pesada.Nacionalidad = Vacio(d.Nacionalidad);
+        pesada.Cliente = Vacio(d.Cliente);
+        pesada.ClienteId = clienteId;
+        pesada.Transporte = Vacio(d.Transporte);
+        pesada.Producto = Vacio(d.Producto);
+        pesada.Procedencia = Vacio(d.Procedencia);
+        pesada.Destino = Vacio(d.Destino);
+        pesada.Comprobante = Vacio(d.Comprobante);
+        pesada.Observaciones = Vacio(d.Observaciones);
+        pesada.Inagro = inagro;
+        pesada.Tipo = MovimientosInagro.Tipo(inagro!.Movimiento);
+        await RecordarVehiculo(pesada);
+        return null;
+    }
+
+    private async Task RefrescarCatalogosInagro(Pesada pesada, bool actualizarCliente, bool actualizarTransporte, bool actualizarProducto)
+    {
+        var i = pesada.Inagro!;
+        if (actualizarCliente)
+        {
+            var cliente = pesada.ClienteId.HasValue
+                ? await _db.Clientes.AsNoTracking().FirstOrDefaultAsync(c => c.Id == pesada.ClienteId)
+                : null;
+            i.ClienteCuit = cliente?.Cuit;
+            i.ClienteDireccion = cliente?.Direccion;
+            i.ClienteLocalidad = cliente?.Localidad;
+            i.ClienteCondicionIva = cliente?.CondicionIva;
+        }
+        if (actualizarTransporte)
+        {
+            var tr = await PorNombre(_db.Transportes, pesada.Transporte, t => t.RazonSocial);
+            i.TransporteCuit = tr?.Cuit;
+            i.TransporteDireccion = tr?.Direccion;
+            i.TransporteLocalidad = tr?.Localidad;
+            i.TransporteCondicionIva = tr?.CondicionIva;
+        }
+        if (actualizarProducto)
+        {
+            var prod = await PorNombre(_db.Productos, pesada.Producto, p => p.Nombre);
+            if (prod?.Codigo != null) i.ProductoCodigo = prod.Codigo;
+        }
+    }
+
+    /// <summary>
+    /// Reenvía (o envía por primera vez) una pesada cerrada a Centum con sus datos actuales: útil si se pesó con Centum
+    /// desactivado o si se corrigió el remito, análisis, producto o peso de origen después de cerrar.
+    /// </summary>
+    public async Task<ResultadoPesaje> EnviarCentumAsync(Guid id)
+    {
+        if (_edicion != Edicion.Inagro) return ResultadoPesaje.Inexistente();
+        var pesada = await _db.Pesadas.FirstOrDefaultAsync(p => p.Id == id);
+        if (pesada == null) return ResultadoPesaje.Inexistente();
+        if (pesada.Estado != EstadosPesada.Salida) return ResultadoPesaje.Invalida("Solo se envían a Centum las pesadas cerradas");
+        if (pesada.Inagro == null) return ResultadoPesaje.Invalida("La pesada no tiene datos de INAGRO");
+
+        var sociedad = await _db.Empresas.AsNoTracking().Where(e => e.Id == pesada.EmpresaId).Select(e => e.CodigoSociedad).FirstOrDefaultAsync();
+        if (!Inagro.SociedadEnvia(sociedad)) return ResultadoPesaje.Invalida("La empresa de esta pesada está configurada como 'No vincula Centum'");
+
+        var configs = await _config.GlobalAsync();
+        if (string.IsNullOrWhiteSpace(configs.GetValueOrDefault(ConfigKeys.CentumEndpoint)))
+            return ResultadoPesaje.Invalida("Falta configurar la dirección del webhook en Configuración → API → Centum");
+
+        var previos = await _db.Outbox
+            .Where(o => o.Destino == CentumDestino.Destino && o.PesadaId == pesada.Id
+                        && (o.Estado == Bfs.Integrations.EstadosOutbox.Pendiente || o.Estado == Bfs.Integrations.EstadosOutbox.Error))
+            .ToListAsync();
+        foreach (var m in previos) m.Estado = Bfs.Integrations.EstadosOutbox.Descartado;
+
+        CentumOutbox.EncolarDirecto(_db, pesada, sociedad, _opciones.HoraLocal(pesada.EntradaEn));
+        await _db.SaveChangesAsync();
+
+        if (_despachador != null && Si(configs, ConfigKeys.CentumEnabled))
+        {
+            await _despachador.ProcesarAsync(_db);
+        }
+        return ResultadoPesaje.Ok(pesada);
     }
 
     private static bool Si(Dictionary<string, string> c, string clave, string porDefecto = "false") =>

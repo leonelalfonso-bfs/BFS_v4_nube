@@ -96,7 +96,7 @@ public class DocumentosService
         };
         // Filtrado por empresa, el título lo dice: los informes de cada empresa quedan separados.
         var empresa = filtro.EmpresaId is { } id && empresas.TryGetValue(id, out var nombre) ? $" de {nombre}" : "";
-        return PesadasExcel.Generar(filas, $"Pesadas{empresa} {rango}", _options.HoraLocal);
+        return PesadasExcel.Generar(filas, $"Pesadas{empresa} {rango}", _options.HoraLocal, incluirInagro: _options.Edicion == Edicion.Inagro);
     }
 
     private async Task<byte[]?> Logo(string? archivo)

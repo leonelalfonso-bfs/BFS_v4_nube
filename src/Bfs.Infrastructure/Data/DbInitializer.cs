@@ -93,6 +93,11 @@ public static class DbInitializer
         await EnsureConfig(db, ConfigKeys.TicketTitulo, "Comprobante de pesaje");
         await EnsureConfig(db, ConfigKeys.TicketPie, "");
         await EnsureConfig(db, ConfigKeys.LogoFile, "");
+        if (sociedades is { Count: > 0 })
+        {
+            await EnsureConfig(db, ConfigKeys.CentumEnabled, "false");
+            await EnsureConfig(db, ConfigKeys.CentumEndpoint, Inagro.WebhookCentumPorDefecto);
+        }
 
         await db.SaveChangesAsync();
         await OcultarTipoUnaVez(db);

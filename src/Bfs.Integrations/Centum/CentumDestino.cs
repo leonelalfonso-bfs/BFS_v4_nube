@@ -58,6 +58,12 @@ public static class CentumOutbox
     public static void Encolar(BfsDbContext db, IReadOnlyDictionary<string, string> configs, Pesada pesada, string? codigoSociedad, DateTime entradaLocal)
     {
         if (!Envia(configs, codigoSociedad)) return;
+        EncolarDirecto(db, pesada, codigoSociedad, entradaLocal);
+    }
+
+    /// <summary>Encola manualmente una pesada cerrada (ej. tras corregir datos o activar Centum después de pesar).</summary>
+    public static void EncolarDirecto(BfsDbContext db, Pesada pesada, string? codigoSociedad, DateTime entradaLocal)
+    {
         var now = DateTimeOffset.UtcNow;
         db.Outbox.Add(new OutboxMessage
         {

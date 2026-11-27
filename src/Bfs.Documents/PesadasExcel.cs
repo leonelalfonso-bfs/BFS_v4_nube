@@ -14,11 +14,10 @@ public record FilaExcel(Pesada Pesada, string Empresa, DateTime EntradaLocal, Da
 /// </summary>
 public static class PesadasExcel
 {
-    /// <summary>Edición Inagro: van después de "Remito", solo si alguna pesada del Excel tiene esos datos.</summary>
+    /// <summary>Edición Inagro: metadatos que van después de "Remito".</summary>
     private static readonly (string Nombre, Func<FilaExcel, XLCellValue> Valor)[] ColumnasInagro =
     [
         ("Id de operación", f => T(MovimientosInagro.Ticket(f.Pesada.Inagro?.Movimiento))),
-        ("Peso de origen (kg)", f => Num(f.Pesada.Inagro?.PesoOrigen)),
         ("Tanque", f => T(f.Pesada.Inagro?.Tanque)),
         ("Análisis", f => T(f.Pesada.Inagro?.Analisis)),
         ("Precintos", f => T(f.Pesada.Inagro?.Precintos)),
@@ -30,11 +29,28 @@ public static class PesadasExcel
         ("Planta", f => T(f.Pesada.Inagro?.Planta))
     ];
 
-    private static (string Nombre, Func<FilaExcel, XLCellValue> Valor)[] ColumnasDe(IReadOnlyList<FilaExcel> filas)
+    /// <summary>Edición Inagro: pesos en origen al lado de "Neto (kg)" para comparar mermas/diferencias con totales.</summary>
+    private static readonly (string Nombre, Func<FilaExcel, XLCellValue> Valor)[] ColumnasInagroPesos =
+    [
+        ("Peso de origen (kg)", f => f.Pesada.Estado == EstadosPesada.Anulada ? Blank.Value : Num(f.Pesada.Inagro?.PesoOrigen)),
+        ("Diferencia vs. origen (kg)", f => f.Pesada.Estado == EstadosPesada.Salida && f.Pesada.Neto is { } neto && f.Pesada.Inagro?.PesoOrigen is { } orig
+            ? neto - orig
+            : Blank.Value)
+    ];
+
+    private static (string Nombre, Func<FilaExcel, XLCellValue> Valor)[] ColumnasDe(IReadOnlyList<FilaExcel> filas, bool incluirInagro)
     {
-        if (!filas.Any(f => f.Pesada.Inagro != null)) return Columnas;
-        var despues = Array.FindIndex(Columnas, c => c.Nombre == "Remito") + 1;
-        return [.. Columnas[..despues], .. ColumnasInagro, .. Columnas[despues..]];
+        if (!incluirInagro && !filas.Any(f => f.Pesada.Inagro != null)) return Columnas;
+        var despuesRemito = Array.FindIndex(Columnas, c => c.Nombre == "Remito") + 1;
+        var despuesNeto = Array.FindIndex(Columnas, c => c.Nombre == "Neto (kg)") + 1;
+        return
+        [
+            .. Columnas[..despuesRemito],
+            .. ColumnasInagro,
+            .. Columnas[despuesRemito..despuesNeto],
+            .. ColumnasInagroPesos,
+            .. Columnas[despuesNeto..]
+        ];
     }
 
     private static readonly (string Nombre, Func<FilaExcel, XLCellValue> Valor)[] Columnas =
@@ -98,10 +114,10 @@ public static class PesadasExcel
     private static readonly JsonSerializerOptions JsonWeb = new(JsonSerializerDefaults.Web);
 
     /// <param name="horaLocal">Para las fechas de las correcciones (las de entrada y salida ya vienen en la fila).</param>
-    public static byte[] Generar(IReadOnlyList<FilaExcel> filas, string titulo, Func<DateTimeOffset, DateTime>? horaLocal = null)
+    public static byte[] Generar(IReadOnlyList<FilaExcel> filas, string titulo, Func<DateTimeOffset, DateTime>? horaLocal = null, bool incluirInagro = false)
     {
         horaLocal ??= d => d.LocalDateTime;
-        var columnas = ColumnasDe(filas);
+        var columnas = ColumnasDe(filas, incluirInagro);
         int Col(string nombre) => Array.FindIndex(columnas, c => c.Nombre == nombre) + 1;
         using var wb = new XLWorkbook();
         var ws = wb.Worksheets.Add("Pesadas");
@@ -125,8 +141,13 @@ public static class PesadasExcel
             var total = fila + 1;
             ws.Cell(total, colNeto - 1).Value = "Total neto";
             ws.Cell(total, colNeto - 1).Style.Font.Bold = true;
-            ws.Cell(total, colNeto).FormulaA1 = $"SUM({ws.Cell(encabezado + 1, colNeto).Address}:{ws.Cell(fila, colNeto).Address})";
-            ws.Cell(total, colNeto).Style.Font.Bold = true;
+            foreach (var nombreSuma in new[] { "Neto (kg)", "Peso de origen (kg)", "Diferencia vs. origen (kg)" })
+            {
+                var colSuma = Col(nombreSuma);
+                if (colSuma <= 0) continue;
+                ws.Cell(total, colSuma).FormulaA1 = $"SUM({ws.Cell(encabezado + 1, colSuma).Address}:{ws.Cell(fila, colSuma).Address})";
+                ws.Cell(total, colSuma).Style.Font.Bold = true;
+            }
             ws.Range(encabezado, 1, fila, columnas.Length).SetAutoFilter();
         }
 

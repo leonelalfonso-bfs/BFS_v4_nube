@@ -45,10 +45,14 @@ public static class PlantaEndpoints
         }).RequireAuthorization(Permisos.ConfigPlanta);
 
         // Lo que necesita saber la pantalla de pesaje. Sin datos sensibles: la clave manual solo dice si existe.
-        api.MapGet("/funciones", async (ConfigService config, BfsOptions opciones) =>
+        api.MapGet("/funciones", async (ConfigService config, BfsOptions opciones, BfsDbContext db) =>
         {
             var c = await config.GlobalAsync();
             bool Si(string k, string def = "false") => c.GetValueOrDefault(k, def) == "true";
+            var esInagro = opciones.Edicion == Edicion.Inagro;
+            var centumErrores = esInagro
+                ? await db.Outbox.CountAsync(o => o.Destino == "centum" && o.Estado == "error")
+                : 0;
             return Results.Ok(new
             {
                 aduana = Si(ConfigKeys.Aduana),
@@ -73,9 +77,11 @@ public static class PlantaEndpoints
                 tiposEje = TiposEje.Todos.Select(t => new { t.Id, t.Nombre, t.Ejes, limite = TiposEje.Limites(c.GetValueOrDefault(ConfigKeys.EjesLimites))[t.Id] }),
                 puesto = int.TryParse(c.GetValueOrDefault(ConfigKeys.Puesto), out var puesto) ? puesto : 1,
                 // Edición Inagro: campos de Centum, tanques, sucursales y remito preimpreso.
-                inagro = opciones.Edicion == Edicion.Inagro,
+                inagro = esInagro,
                 inagroPlanta = c.GetValueOrDefault(ConfigKeys.InagroPlanta, Inagro.PlantaPorDefecto),
                 inagroImpresion = c.GetValueOrDefault(ConfigKeys.InagroImpresion, "preguntar"),
+                centumActivo = esInagro && Si(ConfigKeys.CentumEnabled) && !string.IsNullOrWhiteSpace(c.GetValueOrDefault(ConfigKeys.CentumEndpoint)),
+                centumErrores,
                 // Automatización (semáforos, barreras, sensores y cámaras): la pantalla de pesaje solo la muestra si está habilitada.
                 automatizacion = ConfigAutomatizacion.Parse(c.GetValueOrDefault(ConfigKeys.AutomatizacionJson)).Habilitada
             });
