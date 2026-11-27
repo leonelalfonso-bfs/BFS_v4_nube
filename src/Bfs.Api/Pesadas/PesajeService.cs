@@ -440,7 +440,7 @@ public class PesajeService
         if (tipoOperacion == TiposOperacion.Aduana)
         {
             if (!Si(configs, ConfigKeys.Aduana)) return (null, ResultadoPesaje.Prohibida("Las operaciones de aduana no están habilitadas"));
-            var (datos, errorAduana) = ArmarAduana(req.Aduana, req, configs);
+            var (datos, errorAduana) = await ArmarAduanaAsync(req.Aduana, req, configs);
             if (errorAduana != null) return (null, ResultadoPesaje.Invalida(errorAduana));
             aduana = datos;
         }
@@ -502,7 +502,7 @@ public class PesajeService
         _ => null
     };
 
-    private static (DatosAduana? Datos, string? Error) ArmarAduana(DatosAduanaDto? dto, EntradaRequest req, Dictionary<string, string> configs)
+    private async Task<(DatosAduana? Datos, string? Error)> ArmarAduanaAsync(DatosAduanaDto? dto, EntradaRequest req, Dictionary<string, string> configs)
     {
         // BFS puede dejar fijo el escenario (ej. un cliente que nunca ingresa con contenedor).
         if (configs.GetValueOrDefault(ConfigKeys.AduanaEscenario) is { Length: > 0 } fijo && EscenariosAduana.Todos.Contains(fijo))
@@ -519,13 +519,26 @@ public class PesajeService
         var (ataCuit, errorAta) = Cuit.Normalizar(dto.AtaCuit);
         if (errorAta != null) return (null, "ATA: " + errorAta);
 
+        var exportador = Vacio(dto.Exportador);
+        if (cuit == null && exportador != null)
+        {
+            var buscado = exportador.ToLower();
+            cuit = await _db.Exportadores.AsNoTracking().Where(x => x.RazonSocial.ToLower() == buscado).Select(x => x.Cuit).FirstOrDefaultAsync();
+        }
+        var ata = Vacio(dto.Ata);
+        if (ataCuit == null && ata != null)
+        {
+            var buscado = ata.ToLower();
+            ataCuit = await _db.Transportes.AsNoTracking().Where(x => x.RazonSocial.ToLower() == buscado).Select(x => x.Cuit).FirstOrDefaultAsync();
+        }
+
         return (new DatosAduana
         {
             Escenario = dto.Escenario,
-            Exportador = Vacio(dto.Exportador),
+            Exportador = exportador,
             ExportadorCuit = cuit,
             OperacionId = Vacio(dto.OperacionId),
-            Ata = Vacio(dto.Ata),
+            Ata = ata,
             AtaCuit = ataCuit,
             DestinacionAduanera = Vacio(dto.DestinacionAduanera),
             ProcedenciaDestino = Vacio(dto.ProcedenciaDestino),

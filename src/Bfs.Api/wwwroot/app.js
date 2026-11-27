@@ -624,10 +624,10 @@ function bloqueAduana() {
             : `<div><label>Escenario *</label><select id="ad_escenario"><option value="">Elegir...</option>${opciones(ESCENARIOS_ADUANA)}</select></div>`}
           <div><label>N° de operación</label><input id="ad_operacionId" /></div>
           <div><label>LOT</label><input value="${esc(state.funciones.aduanaLot || "")}" disabled title="Sale de Planta → Aduana" /></div>
-          <div><label>Exportador / importador</label>${conAlta(`<input id="ad_exportador" list="dl_exportadores" autocomplete="off" onchange="completarCuit('ad_exportador', 'ad_exportadorCuit', state.catalogos.exportadores)" />`, "exportadores", "ad_exportador")}</div>
+          <div><label>Exportador / importador</label>${conAlta(`<input id="ad_exportador" list="dl_exportadores" autocomplete="off" onchange="completarCuit('ad_exportador', 'ad_exportadorCuit', state.catalogos.exportadores)" onblur="completarCuit('ad_exportador', 'ad_exportadorCuit', state.catalogos.exportadores)" />`, "exportadores", "ad_exportador")}</div>
           <div><label>CUIT</label><input id="ad_exportadorCuit" /></div>
           <div><label>Destinación aduanera</label><input id="ad_destinacion" /></div>
-          <div><label>Agente de transporte (ATA)</label>${conAlta(`<input id="ad_ata" list="dl_atas" autocomplete="off" onchange="completarCuit('ad_ata', 'ad_ataCuit', state.catalogos.transportes)" />`, "atas", "ad_ata")}</div>
+          <div><label>Agente de transporte (ATA)</label>${conAlta(`<input id="ad_ata" list="dl_atas" autocomplete="off" onchange="completarCuit('ad_ata', 'ad_ataCuit', state.catalogos.transportes)" onblur="completarCuit('ad_ata', 'ad_ataCuit', state.catalogos.transportes)" />`, "atas", "ad_ata")}</div>
           <div><label>CUIT ATA</label><input id="ad_ataCuit" /></div>
           <div></div>
           <div><label>Contenedor N°</label><input id="ad_contenedorId" /></div>
@@ -648,10 +648,12 @@ function toggleAduana() {
   if (box) box.style.display = val("tipoOperacion") === "Aduana" ? "" : "none";
 }
 
-/** Al elegir del catálogo, completa el CUIT si estaba vacío. */
+/** Al elegir o escribir un registro del catálogo, actualiza su CUIT asociado. */
 function completarCuit(campo, campoCuit, catalogo) {
-  const x = (catalogo || []).find(e => e.razonSocial === val(campo));
-  if (x?.cuit && !val(campoCuit)) document.getElementById(campoCuit).value = x.cuit;
+  const buscado = val(campo).trim().toLowerCase();
+  if (!buscado) return;
+  const x = (catalogo || []).find(e => (e.razonSocial || "").trim().toLowerCase() === buscado);
+  if (x?.cuit) document.getElementById(campoCuit).value = x.cuit;
 }
 
 function datosAduana() {
@@ -1603,10 +1605,11 @@ async function renderPlanta() {
       <div class="grid2">
         <div><label>Código de aduana</label><input id="ad_codigo" value="${esc(aduana.codigo ?? "")}" /></div>
         <div><label>Código LOT</label><input id="ad_lot" value="${esc(aduana.lot ?? "")}" /></div>
-        <div><label>Certificado balanza 1</label><input id="ad_c1" value="${esc(aduana.certificado1 ?? "")}" /></div>
-        <div><label>Vence</label><input id="ad_c1v" type="date" value="${fecha(aduana.certificado1Vence)}" /></div>
-        <div><label>Certificado balanza 2</label><input id="ad_c2" value="${esc(aduana.certificado2 ?? "")}" /></div>
-        <div><label>Vence</label><input id="ad_c2v" type="date" value="${fecha(aduana.certificado2Vence)}" /></div>
+        <div style="grid-column:1/-1"><label>N° de habilitación aduanera (resolución / disposición, opcional)</label><input id="ad_hab" value="${esc(aduana.habilitacion ?? "")}" placeholder="Si aplica además del certificado de la balanza" /></div>
+        <div><label>Certificado de habilitación N° (balanza 1)</label><input id="ad_c1" value="${esc(aduana.certificado1 ?? "")}" /></div>
+        <div><label>Vencimiento (balanza 1)</label><input id="ad_c1v" type="date" value="${fecha(aduana.certificado1Vence)}" /></div>
+        <div><label>Certificado de habilitación N° (balanza 2)</label><input id="ad_c2" value="${esc(aduana.certificado2 ?? "")}" /></div>
+        <div><label>Vencimiento (balanza 2)</label><input id="ad_c2v" type="date" value="${fecha(aduana.certificado2Vence)}" /></div>
       </div>
       <div class="btn-row"><button class="btn-primary" onclick="guardarAduana()">Guardar aduana</button></div>
     </div>` : ""}
@@ -1680,6 +1683,7 @@ async function guardarAduana() {
     await api("/api/planta/aduana", { method: "PUT", body: JSON.stringify({
       codigo: val("ad_codigo"),
       lot: val("ad_lot"),
+      habilitacion: val("ad_hab"),
       certificado1: val("ad_c1"),
       certificado1Vence: val("ad_c1v") || null,
       certificado2: val("ad_c2"),
